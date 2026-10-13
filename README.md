@@ -193,7 +193,8 @@ only.
    file at its absolute offset. Each range request asks for the raw bytes.
    With more than one connection the requests use HTTP/1.1, so each connection
    has its own socket. A worker that finishes early takes over half of the
-   largest remaining chunk.
+   largest remaining chunk. Bytes past that chunk's new end are left for the
+   connection that took them.
 4. **Finish.** The `.odmpart` file is renamed to the final name.
 
 Each chunk's progress (`{id,start,end,done}`) is saved as JSON, so a restart

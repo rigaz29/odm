@@ -19,6 +19,8 @@ All notable changes to ODM are documented here. The format is based on
 - An idle connection takes the tail of the chunk that will take the longest
   to finish, once that chunk is at least twice as slow as the fastest one.
   Until a pace is known, the largest remainder is used.
+- Connections open one at a time. The next connection starts after every
+  connection already open has stored file bytes, up to the configured limit.
 
 ### Fixed
 

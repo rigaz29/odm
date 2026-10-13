@@ -6,6 +6,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- A download that uses several connections fetches each part over HTTP/1.1,
+  so each connection has its own socket. A single stream can still use HTTP/2.
+
 ### Fixed
 
 - The size probe requests the first byte (`Range: bytes=0-0`). A server that

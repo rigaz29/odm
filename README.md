@@ -21,6 +21,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - Range requests ask for the raw bytes (`Accept-Encoding: identity`), so a
   compressed response is not written in place of the file. A header set on
   the download itself is left as it is.
+- A connection that closes before its chunk is finished retries from the
+  last byte written, and stops after the retry limit.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
   window.

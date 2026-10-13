@@ -19,6 +19,9 @@ All notable changes to ODM are documented here. The format is based on
 - Range requests send `Accept-Encoding: identity`, so the bytes written to
   disk are the file itself. An `Accept-Encoding` header set on the download
   is left as it is.
+- A connection that closes before its chunk is finished retries from the
+  last byte written. The retry uses the usual pause and stops after the
+  retry limit.
 
 ## [0.2.0] - 2026-10-13
 

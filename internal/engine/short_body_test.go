@@ -15,9 +15,9 @@ import (
 	"time"
 )
 
-// shortServer answers Range requests. The probe (an open-ended range) is
-// served whole. The first shortTries transfer responses contain only the
-// first 1024 bytes, then the connection ends.
+// shortServer answers Range requests. The one-byte size probe is served
+// whole and is not counted. The first shortTries transfer responses contain
+// only the first 1024 bytes, then the connection ends.
 func shortServer(t *testing.T, data []byte, shortTries int64, xfers *int64) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -30,7 +30,7 @@ func shortServer(t *testing.T, data []byte, shortTries int64, xfers *int64) *htt
 			end = len(data) - 1
 		}
 		body := data[start : end+1]
-		if !open {
+		if !open && !oneByteProbe(r) {
 			n := atomic.AddInt64(xfers, 1)
 			if n <= shortTries && len(body) > 1024 {
 				body = body[:1024]

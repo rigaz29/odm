@@ -222,8 +222,8 @@ func TestStalledConnectionRetriesFromLastByte(t *testing.T) {
 		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(data)))
 		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 		w.WriteHeader(http.StatusPartialContent)
-		// The size probe uses an open-ended range and does not read the body.
-		if !explicit {
+		// The size probe asks for the first byte only and does not read a body.
+		if !explicit || (start == 0 && end == 0) {
 			return
 		}
 		if transfers.Add(1) == 1 {
@@ -271,6 +271,10 @@ func TestHeaderStallRetries(t *testing.T) {
 			http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
+		if oneByteProbe(r) {
+			writeTestRange(w, data, start, end)
+			return
+		}
 		if explicit && transfers.Add(1) == 1 {
 			<-r.Context().Done()
 			return
@@ -313,6 +317,10 @@ func TestPauseDuringHeaderWaitIsPaused(t *testing.T) {
 			http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
 			return
 		}
+		if oneByteProbe(r) {
+			writeTestRange(w, data, start, end)
+			return
+		}
 		if explicit {
 			d.Pause()
 			<-release
@@ -335,6 +343,12 @@ func TestPauseDuringHeaderWaitIsPaused(t *testing.T) {
 	if info.Status != StatusPaused {
 		t.Fatalf("status=%s err=%q", info.Status, info.Error)
 	}
+}
+
+// oneByteProbe reports the size probe, Range: bytes=0-0. It is a closed
+// range, so tests must not treat it as a file transfer.
+func oneByteProbe(r *http.Request) bool {
+	return r.Header.Get("Range") == "bytes=0-0"
 }
 
 func testRange(r *http.Request, total int) (start, end int, explicit bool) {

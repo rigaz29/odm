@@ -46,7 +46,7 @@ func TestConnectionsRampAfterFileBytes(t *testing.T) {
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start, end, ok := explicitRange(r)
-		if !ok {
+		if !ok || oneByteProbe(r) {
 			writeProbe(w, len(data))
 			return
 		}
@@ -152,7 +152,7 @@ func TestRefusedResponseDoesNotOpenMoreConnections(t *testing.T) {
 	var explicit atomic.Int32
 	started := make(chan struct{}, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if _, _, ok := explicitRange(r); !ok {
+		if _, _, ok := explicitRange(r); !ok || oneByteProbe(r) {
 			writeProbe(w, len(data))
 			return
 		}

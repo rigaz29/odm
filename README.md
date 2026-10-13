@@ -194,7 +194,10 @@ only.
    With more than one connection the requests use HTTP/1.1, so each connection
    has its own socket. A worker that finishes early takes over half of the
    largest remaining chunk. Bytes past that chunk's new end are left for the
-   connection that took them.
+   connection that took them. A connection that receives no bytes for 30
+   seconds, including while it waits for response headers, is closed and that
+   chunk is retried from the last byte written. The other connections keep
+   going.
 4. **Finish.** The `.odmpart` file is renamed to the final name.
 
 Each chunk's progress (`{id,start,end,done}`) is saved as JSON, so a restart

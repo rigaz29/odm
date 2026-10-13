@@ -70,6 +70,10 @@ type Download struct {
 	lastAt   time.Time
 	speed    int64
 	notifyAt time.Time
+
+	// stallTimeout overrides DefaultStallTimeout when set. Tests use a
+	// short value; a zero value means the default.
+	stallTimeout time.Duration
 }
 
 // New creates a queued download. Probing happens on the first Start.
@@ -436,7 +440,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		req.Header.Set("Cookie", cookieHeader(cookies))
 	}
 
-	resp, err := client.Do(req)
+	resp, err := d.exchange(ctx, client, req)
 	if err != nil {
 		return err
 	}
@@ -460,7 +464,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		n, rerr := resp.Body.Read(buf)
+		n, rerr := readWithIdle(ctx, resp.Body, buf, d.readStall())
 		if n > 0 {
 			if d.beforeWrite != nil {
 				d.beforeWrite()
@@ -570,6 +574,88 @@ func ownedSpan(pos int64, n int, limit int64) int {
 		return 0
 	}
 	return int(remain)
+}
+
+// errStalled means a connection produced no bytes within the idle limit,
+// while waiting for response headers or while reading the body. The chunk
+// is retried from the last byte written. A pause is not a stall: the caller
+// returns the context error before counting a retry.
+var errStalled = errors.New("connection stalled")
+
+// exchange sends req and returns when the response headers arrive. The stall
+// limit bounds that wait, then it is stopped so a long body is not cut short.
+// Pausing cancels ctx and is reported as ctx.Err(). client is the connection
+// that should send req, so a segmented download keeps its HTTP/1.1 transport.
+func (d *Download) exchange(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
+	headerCtx, cancel := context.WithCancel(ctx)
+	timer := time.AfterFunc(d.readStall(), cancel)
+	resp, err := client.Do(req.WithContext(headerCtx))
+	if timer.Stop() {
+		if err != nil {
+			cancel()
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			return nil, err
+		}
+		resp.Body = &cancelOnClose{ReadCloser: resp.Body, cancel: cancel}
+		return resp, nil
+	}
+	cancel()
+	if resp != nil && resp.Body != nil {
+		_ = resp.Body.Close()
+	}
+	if ctx.Err() != nil {
+		return nil, ctx.Err()
+	}
+	return nil, errStalled
+}
+
+// cancelOnClose releases the header context once the body is finished.
+type cancelOnClose struct {
+	io.ReadCloser
+	cancel context.CancelFunc
+}
+
+func (b *cancelOnClose) Close() error {
+	err := b.ReadCloser.Close()
+	b.cancel()
+	return err
+}
+
+func (d *Download) readStall() time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.stallTimeout > 0 {
+		return d.stallTimeout
+	}
+	return DefaultStallTimeout
+}
+
+// readWithIdle returns the next read, or errStalled when idle elapses with
+// no bytes. Closing the body unblocks a Read left behind in that case.
+func readWithIdle(ctx context.Context, body io.ReadCloser, buf []byte, idle time.Duration) (int, error) {
+	type result struct {
+		n   int
+		err error
+	}
+	done := make(chan result, 1)
+	go func() {
+		n, err := body.Read(buf)
+		done <- result{n, err}
+	}()
+	timer := time.NewTimer(idle)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		_ = body.Close()
+		return 0, ctx.Err()
+	case <-timer.C:
+		_ = body.Close()
+		return 0, errStalled
+	case res := <-done:
+		return res.n, res.err
+	}
 }
 
 func (d *Download) finish() error {

@@ -484,6 +484,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 				counted := ownedSpan(pos, writeN, ch.End)
 				if counted > 0 {
 					ch.Done += int64(counted)
+					ch.notePace(int64(counted), time.Now())
 				}
 				limit = ch.End
 				d.mu.Unlock()

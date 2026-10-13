@@ -20,13 +20,16 @@ const (
 	MinChunkSize       = 64 << 10 // small enough to split mid-size files, large enough that per-request overhead stays negligible
 	DefaultFileLimit   = 3
 	DefaultChunkStep   = 1 << 21
-	MaxRetries         = 8
+	MaxRetries = 8
 	// DefaultStallTimeout is how long one connection may go without a byte,
 	// including the wait for response headers, before that connection is
 	// closed and its chunk is retried. The other connections of the same
 	// file keep transferring.
 	DefaultStallTimeout = 30 * time.Second
 	DefaultUserAgent    = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) ODM/0.1"
+	// paceWindow is how long a chunk's writes are collected before its pace
+	// is updated. One fast read does not decide that a connection is quick.
+	paceWindow = 200 * time.Millisecond
 )
 
 // Chunk is one contiguous, inclusive byte range of the target file.
@@ -37,6 +40,11 @@ type Chunk struct {
 	Done  int64 `json:"done"`
 
 	claimed bool
+	// pace is the recent bytes per second. Zero means it is not known yet,
+	// so a split falls back to the largest remainder.
+	pace      int64
+	paceBytes int64
+	paceAt    time.Time
 }
 
 // Size is the number of bytes the chunk covers.
@@ -50,6 +58,33 @@ func (c *Chunk) Complete() bool { return c.Done >= c.Size() }
 
 // Next is the absolute file offset the next read should write to.
 func (c *Chunk) Next() int64 { return c.Start + c.Done }
+
+// notePace folds n newly written bytes into the chunk's recent pace.
+func (c *Chunk) notePace(n int64, now time.Time) {
+	if n <= 0 {
+		return
+	}
+	if c.paceAt.IsZero() {
+		c.paceAt = now
+		c.paceBytes = n
+		return
+	}
+	c.paceBytes += n
+	dt := now.Sub(c.paceAt)
+	if dt < paceWindow {
+		return
+	}
+	secs := dt.Seconds()
+	if secs <= 0 {
+		return
+	}
+	c.pace = int64(float64(c.paceBytes) / secs)
+	if c.pace < 1 {
+		c.pace = 1
+	}
+	c.paceAt = now
+	c.paceBytes = 0
+}
 
 // ChunkInfo is the read-only projection handed to the UI.
 type ChunkInfo struct {

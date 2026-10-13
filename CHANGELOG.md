@@ -11,6 +11,10 @@ All notable changes to ODM are documented here. The format is based on
 - A connection that receives no bytes for 30 seconds is closed and its chunk
   is retried from the last written offset. The same limit covers the wait
   for response headers. Other connections of the same file keep going.
+- Resumed downloads send the saved `ETag` or `Last-Modified` as `If-Range`.
+  When the file on the server has changed, the partial file is discarded and
+  the download starts again from the first byte. A `200` response whose range
+  already covers the whole file is kept when that validator still matches.
 
 ### Changed
 

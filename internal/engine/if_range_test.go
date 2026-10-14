@@ -240,7 +240,7 @@ func TestFullFileOKWithSameETagCompletes(t *testing.T) {
 	}
 }
 
-func TestSubrangeOKWithSameETagDoesNotWrite(t *testing.T) {
+func TestSubrangeOKWithSameETagKeepsPrefix(t *testing.T) {
 	data := payload(128 * 1024)
 	const etag = `"same"`
 	const half = 64 * 1024
@@ -277,21 +277,18 @@ func TestSubrangeOKWithSameETagDoesNotWrite(t *testing.T) {
 	d.Start(context.Background())
 
 	info := d.Info()
-	if info.Status != StatusError {
+	if info.Status != StatusComplete {
 		t.Fatalf("status=%s err=%q", info.Status, info.Error)
 	}
-	if info.Error != errRepresentationChanged.Error() {
-		t.Fatalf("error=%q", info.Error)
+	if !d.alone {
+		t.Fatal("same-etag subrange 200 did not continue on one connection")
 	}
-	if _, err := os.Stat(filepath.Join(dir, "part.bin")); !os.IsNotExist(err) {
-		t.Fatal("partial file was renamed after a subrange 200")
-	}
-	got, err := os.ReadFile(filepath.Join(dir, "part.bin.odmpart"))
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(got[:half], data[:half]) {
-		t.Fatal("bytes already stored were overwritten")
+	if !bytes.Equal(got, data) {
+		t.Fatal("prefix was not kept when the range was ignored")
 	}
 }
 

@@ -43,6 +43,9 @@ All notable changes to ODM are documented here. The format is based on
   retry limit.
 - Splitting a chunk while its connection is still reading no longer counts
   those bytes twice. Progress stays within the file size.
+- A server that answers a smaller range with the whole file no longer fails
+  that chunk. Bytes already stored are kept, and the rest of the file is
+  fetched on one connection.
 
 ## [0.2.0] - 2026-10-13
 

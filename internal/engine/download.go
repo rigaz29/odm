@@ -81,6 +81,9 @@ type Download struct {
 	limiter *Limiter
 	shared  *Limiter
 	cancel  context.CancelFunc
+	// transferCancel stops the connections of the current pass. It is separate
+	// from cancel so one answered range can end the pass without pausing.
+	transferCancel context.CancelFunc
 	// pauseReq records a Pause that arrived while no transfer context exists
 	// yet (the manager has dispatched the download but Start has not run), so
 	// Start honours it instead of the pause being silently dropped.
@@ -105,6 +108,16 @@ type Download struct {
 	connOpened int
 	connReady  int
 	connWg     *sync.WaitGroup
+
+	// alone is set once a ranged request is answered with the whole file.
+	// Later passes and a resumed download use one connection.
+	alone bool
+	// sawIgnored is set for the pass that noticed that answer, so Start
+	// fetches the remainder after the other connections have stopped.
+	sawIgnored bool
+	// pass changes when that answer is noticed. A read still holding the
+	// previous plan does not write those bytes into the replacement chunk.
+	pass int
 
 	lastDone int64
 	lastAt   time.Time
@@ -131,10 +144,9 @@ type Download struct {
 	// partial file was discarded. One Start does this only once.
 	restarted bool
 
-	conflicted     bool
-	conflictAt     int64
-	witnesses      []witness
-	transferCancel context.CancelFunc
+	conflicted bool
+	conflictAt int64
+	witnesses  []witness
 }
 
 // New creates a queued download. Probing happens on the first Start.
@@ -244,7 +256,7 @@ func (d *Download) Start(parent context.Context) {
 	// if that also mismatches, fetches once more from the first byte.
 	changes := 0
 	prepareNext := true
-	for pass := 0; pass < 4; pass++ {
+	for pass := 0; pass < 5; pass++ {
 		if prepareNext {
 			if err := d.prepare(ctx); err != nil {
 				// A cancelled context means pause (or shutdown) during the probe, not
@@ -267,8 +279,9 @@ func (d *Download) Start(parent context.Context) {
 		d.transferCancel = transferCancel
 		d.witnesses = nil
 		d.conflicted = false
+		d.sawIgnored = false
 		limit := d.Connections
-		if !d.RangeOK || d.single || limit < 1 {
+		if !d.RangeOK || d.single || d.alone || limit < 1 {
 			limit = 1
 		}
 		var wg sync.WaitGroup
@@ -293,13 +306,16 @@ func (d *Download) Start(parent context.Context) {
 		at := d.conflictAt
 		single := d.single
 		restarted := d.restarted
+		again := d.sawIgnored
 		d.conflicted = false
 		d.mu.Unlock()
 
 		if paused {
 			// A disagreement noticed as the user pauses still sticks: the
 			// resume keeps the matching prefix and uses one connection.
-			if conflicted && !single && !changed {
+			if again && !changed {
+				d.planAlone()
+			} else if conflicted && !single && !changed {
 				d.adoptSingle(at)
 			}
 			d.mu.Lock()
@@ -321,9 +337,28 @@ func (d *Download) Start(parent context.Context) {
 			// use every connection again.
 			d.single = false
 			d.restarted = false
+			d.alone = false
 			d.Status = StatusDownloading
 			d.Err = ""
 			d.mu.Unlock()
+			continue
+		}
+		if again && status != StatusError {
+			d.planAlone()
+			d.mu.Lock()
+			complete = d.allCompleteLocked()
+			d.mu.Unlock()
+			if complete {
+				if err := d.finish(); err != nil {
+					d.fail(err)
+				} else {
+					d.mu.Lock()
+					d.Status = StatusComplete
+					d.mu.Unlock()
+				}
+				d.notify(true)
+				return
+			}
 			continue
 		}
 		if conflicted {
@@ -578,6 +613,13 @@ func (d *Download) worker(ctx context.Context) {
 			d.mu.Unlock()
 			return
 		}
+		if errors.Is(err, errIgnoredRange) {
+			d.mu.Lock()
+			ch.claimed = false
+			d.mu.Unlock()
+			d.noteIgnoredRange()
+			return
+		}
 		d.mu.Lock()
 		ch.claimed = false
 		d.mu.Unlock()
@@ -617,6 +659,9 @@ func (d *Download) takeChunk() *Chunk {
 func (d *Download) trySplit() *Chunk {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.alone {
+		return nil
+	}
 	nc, ok := Split(d.Chunks, MinChunkSize)
 	if !ok {
 		return nil
@@ -634,10 +679,7 @@ func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk, ready *bool) e
 			return ctx.Err()
 		}
 		err = d.fetch(ctx, ch, ready)
-		if err == nil {
-			return nil
-		}
-		if errors.Is(err, errRepresentationChanged) || errors.Is(err, errConflict) {
+		if err == nil || errors.Is(err, errIgnoredRange) || errors.Is(err, errRepresentationChanged) || errors.Is(err, errConflict) {
 			return err
 		}
 		if ctx.Err() != nil {
@@ -670,6 +712,8 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	etag, modified := d.ETag, d.LastModified
 	total := d.Total
 	reqStart, overlap := d.overlapLocked(ch, start, end, rangeOK)
+	alone := d.alone
+	pass := d.pass
 	d.mu.Unlock()
 	client := d.segmentClient(rangeOK, conns)
 	validator := etag
@@ -712,24 +756,42 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	defer resp.Body.Close()
 
 	if rangeOK {
-		// If-Range failed: the server is sending the whole new representation.
-		// Do not write those bytes into the old range. A 200 for a range that
-		// already covers the whole file is the same representation when the
-		// validator still matches, so that body is kept.
-		if resp.StatusCode == http.StatusOK && validator != "" {
-			if !wholeFileOK(start, end, total, etag, modified, resp) {
+		switch resp.StatusCode {
+		case http.StatusPartialContent:
+			if cs, _, _, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok && cs != reqStart {
+				return fmt.Errorf("range mismatch: asked %d, got %d", reqStart, cs)
+			}
+		case http.StatusOK:
+			// A 200 is the whole file. A shorter length is not that file.
+			if resp.ContentLength >= 0 && total > 0 && resp.ContentLength != total {
+				return fmt.Errorf("server ignored Range (status %s)", resp.Status)
+			}
+			// A different validator means the file itself changed. A 200
+			// for the whole file is kept only when the validator still matches.
+			if validator != "" && wholeFileRange(start, end, total) && !wholeFileOK(start, end, total, etag, modified, resp) {
 				return errRepresentationChanged
 			}
-		} else if resp.StatusCode != http.StatusPartialContent {
+			if validatorMismatch(etag, modified, resp) {
+				return errRepresentationChanged
+			}
+			if !wholeFileRange(start, end, total) {
+				if !alone {
+					return errIgnoredRange
+				}
+				// This connection is already the only one. Skip the prefix
+				// that is already stored and write the rest at its offset.
+				if err := discardPrefix(ctx, resp.Body, start); err != nil {
+					return err
+				}
+			}
+		default:
 			return fmt.Errorf("server ignored Range (status %s)", resp.Status)
-		} else if cs, _, _, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok && cs != reqStart {
-			return fmt.Errorf("range mismatch: asked %d, got %d", reqStart, cs)
 		}
 	} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
 		return fmt.Errorf("unexpected status: %s", resp.Status)
 	}
 
-	if overlap > 0 {
+	if overlap > 0 && resp.StatusCode == http.StatusPartialContent {
 		sample := make([]byte, overlap)
 		gotN := 0
 		for gotN < overlap {
@@ -768,6 +830,10 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 			// connection already read for this offset is compared before
 			// and after the write.
 			d.mu.Lock()
+			if d.pass != pass {
+				d.mu.Unlock()
+				return errIgnoredRange
+			}
 			limit := ch.End
 			writeN := ownedSpan(pos, n, limit)
 			var mismatchAt int64
@@ -1032,6 +1098,85 @@ func (d *Download) noteChanged() {
 	}
 }
 
+// validatorMismatch reports whether the response names a different
+// representation than the one this download stored. A missing response
+// validator does not count.
+func validatorMismatch(etag, modified string, resp *http.Response) bool {
+	if etag != "" {
+		got := resp.Header.Get("ETag")
+		return got != "" && got != etag
+	}
+	if modified != "" {
+		got := resp.Header.Get("Last-Modified")
+		return got != "" && got != modified
+	}
+	return false
+}
+
+// errIgnoredRange means the server answered a smaller range with the whole
+// file. The body is not written at the range offset. Finished bytes stay,
+// and the download continues on one connection.
+var errIgnoredRange = errors.New("server returned the whole file for a range")
+
+// wholeFileRange reports whether [start, end] already covers the whole file.
+// end < 0 is an open-ended range.
+func wholeFileRange(start, end, total int64) bool {
+	if start != 0 {
+		return false
+	}
+	if total <= 0 {
+		return end < 0
+	}
+	return end < 0 || end >= total-1
+}
+
+// discardPrefix reads n bytes and drops them. A 200 body starts at byte 0,
+// so the single connection skips the prefix already stored.
+func discardPrefix(ctx context.Context, body io.Reader, n int64) error {
+	buf := make([]byte, 64*1024)
+	var dropped int64
+	for dropped < n {
+		if err := ctx.Err(); err != nil {
+			return err
+		}
+		want := n - dropped
+		if want > int64(len(buf)) {
+			want = int64(len(buf))
+		}
+		nr, err := body.Read(buf[:want])
+		dropped += int64(nr)
+		if err != nil {
+			if errors.Is(err, io.EOF) && dropped >= n {
+				return nil
+			}
+			if errors.Is(err, io.EOF) {
+				return fmt.Errorf("whole-file response ended before byte %d", n)
+			}
+			return err
+		}
+	}
+	return nil
+}
+
+// noteIgnoredRange records that a range was answered with the whole file
+// and stops the other connections of this pass. The plan is rebuilt after
+// they have stopped.
+func (d *Download) noteIgnoredRange() {
+	d.mu.Lock()
+	if d.alone {
+		d.mu.Unlock()
+		return
+	}
+	d.alone = true
+	d.sawIgnored = true
+	d.pass++
+	cancel := d.transferCancel
+	d.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	}
+}
+
 // overlapLocked decides whether this request should re-read the bytes just
 // before start. The caller holds d.mu. A chunk's first request always does.
 // A resumed request does only when those bytes are already stored, which is
@@ -1278,6 +1423,48 @@ func differAt(off int64, got, want []byte) int64 {
 	return off
 }
 
+// planAlone keeps the contiguous prefix and leaves one chunk for the rest.
+// Every connection has stopped, so chunk progress is stable.
+func (d *Download) planAlone() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.Total <= 0 {
+		return
+	}
+	gap := contiguousDone(d.Chunks, d.Total)
+	if gap > d.Total {
+		gap = d.Total
+	}
+	d.Chunks = []*Chunk{{ID: 0, Start: 0, End: d.Total - 1, Done: gap}}
+}
+
+// contiguousDone is the first offset, starting at 0, that no chunk has stored.
+func contiguousDone(chunks []*Chunk, total int64) int64 {
+	off := int64(0)
+	for {
+		if total > 0 && off >= total {
+			return total
+		}
+		next := off
+		for _, c := range chunks {
+			if c == nil || c.Start > off {
+				continue
+			}
+			have := c.Start + c.Done
+			if c.End >= 0 && have > c.End+1 {
+				have = c.End + 1
+			}
+			if have > next {
+				next = have
+			}
+		}
+		if next == off {
+			return off
+		}
+		off = next
+	}
+}
+
 func (d *Download) finish() error {
 	d.mu.Lock()
 	f := d.file
@@ -1412,6 +1599,7 @@ type State struct {
 	ETag         string            `json:"etag,omitempty"`
 	LastModified string            `json:"last_modified,omitempty"`
 	Single       bool              `json:"single,omitempty"`
+	Alone        bool              `json:"alone,omitempty"`
 	CategoryName string            `json:"category_name,omitempty"`
 	Queue        string            `json:"queue,omitempty"`
 	Description  string            `json:"description,omitempty"`
@@ -1443,7 +1631,7 @@ func (d *Download) State() State {
 		OpenWhenDone: d.OpenWhenDone, CategoryName: d.CategoryName,
 		Queue: d.Queue, Description: d.Description, Order: d.Order,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
-		Single: d.single, Status: status, Err: d.Err,
+		Single: d.single, Alone: d.alone, Status: status, Err: d.Err,
 		Chunks: chunks, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
@@ -1466,6 +1654,7 @@ func Restore(s State, client *http.Client) *Download {
 	d.ETag = s.ETag
 	d.LastModified = s.LastModified
 	d.single = s.Single
+	d.alone = s.Alone
 	d.OpenWhenDone = s.OpenWhenDone
 	d.CategoryName = s.CategoryName
 	d.Queue = s.Queue

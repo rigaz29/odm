@@ -35,7 +35,7 @@ func TestProbeFirstByteStillSegments(t *testing.T) {
 			_, _ = w.Write(data[:1])
 			return
 		}
-		start, end, whole := wholeFileRange(rng, len(data))
+		start, end, whole := requestedSpan(rng, len(data))
 		if whole {
 			w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 			w.WriteHeader(http.StatusOK)
@@ -89,9 +89,9 @@ func TestProbeFirstByteStillSegments(t *testing.T) {
 	}
 }
 
-// wholeFileRange reports the requested span. An empty range, an open end, or
+// requestedSpan reports the requested span. An empty range, an open end, or
 // a span that covers every byte counts as the whole file.
-func wholeFileRange(h string, total int) (start, end int, whole bool) {
+func requestedSpan(h string, total int) (start, end int, whole bool) {
 	if h == "" {
 		return 0, total - 1, true
 	}

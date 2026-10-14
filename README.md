@@ -34,6 +34,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
   copies differ, the rest of the file is fetched on one connection. If that
   copy still differs, the partial file is discarded and the download starts
   again from the first byte.
+- A server that answers a smaller range with the whole file keeps bytes
+  already stored. The remainder is fetched on one connection.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
   window.
@@ -211,7 +213,9 @@ only.
    that chunk's new end are left for the connection that took them. A
    connection that receives no bytes for 30 seconds, including while it waits
    for response headers, is closed and that chunk is retried from the last
-   byte written. The other connections keep going.
+   byte written. The other connections keep going. If the server answers a
+   smaller range with the whole file, bytes already stored are kept and the
+   remainder is fetched on one connection.
 4. **Finish.** The `.odmpart` file is renamed to the final name.
 
 Each chunk's progress (`{id,start,end,done}`) is saved as JSON, together with

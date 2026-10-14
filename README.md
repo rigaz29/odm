@@ -30,6 +30,10 @@ queues. It runs as a desktop app, or headless with a JSON API.
   file on the server has changed, the partial download is discarded and
   started again from the first byte. A `200` for a range that already covers
   the whole file is kept when that validator still matches.
+- A later chunk re-reads a short stretch of the chunk before it. If the two
+  copies differ, the rest of the file is fetched on one connection. If that
+  copy still differs, the partial file is discarded and the download starts
+  again from the first byte.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
   window.
@@ -215,9 +219,14 @@ the `ETag` and `Last-Modified` from the probe, so a restart continues from
 the exact byte while the file on the server is unchanged. If `If-Range` fails,
 or a later probe reports a different validator or size, ODM deletes the partial
 file and downloads the new one. A `200` for a range that already covers the
-whole file is kept when the validator still matches. Segmented ranges, byte-offset resume and chunk
-splitting are standard download-manager techniques. ODM implements them in
-its own code.
+whole file is kept when the validator still matches. A chunk that starts after
+another one also reads 64 bytes of that earlier chunk and compares the two
+copies. When they differ, the other connections stop and one connection
+finishes from the last matching byte. If that copy differs as well, the
+partial file is deleted and downloaded again from the first byte, still on
+one connection. A resume after this fallback stays on one connection.
+Segmented ranges, byte-offset resume and chunk splitting are standard
+download-manager techniques. ODM implements them in its own code.
 
 ## Project layout
 

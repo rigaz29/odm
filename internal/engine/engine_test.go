@@ -191,6 +191,9 @@ func TestSegmentedDownloadMultiConnection(t *testing.T) {
 	if !info.RangeOK {
 		t.Fatal("expected range support to be detected")
 	}
+	if d.State().Single {
+		t.Fatal("consistent ranges should keep using every connection")
+	}
 }
 
 func TestStalledConnectionRetriesFromLastByte(t *testing.T) {

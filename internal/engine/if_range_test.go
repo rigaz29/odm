@@ -244,9 +244,10 @@ func TestSubrangeOKWithSameETagDoesNotWrite(t *testing.T) {
 	data := payload(128 * 1024)
 	const etag = `"same"`
 	const half = 64 * 1024
-	remainder := fmt.Sprintf("bytes=%d-", half)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if strings.HasPrefix(r.Header.Get("Range"), remainder) && r.Header.Get("If-Range") == etag {
+		// A resumed chunk re-reads a few bytes before its next offset, so the
+		// range does not start exactly at the stored prefix.
+		if r.Header.Get("If-Range") == etag && strings.Contains(r.Header.Get("Range"), "-") && !strings.HasPrefix(r.Header.Get("Range"), "bytes=0-") {
 			w.Header().Set("ETag", etag)
 			w.Header().Set("Content-Length", strconv.Itoa(len(data)))
 			w.WriteHeader(http.StatusOK)

@@ -15,6 +15,10 @@ All notable changes to ODM are documented here. The format is based on
   When the file on the server has changed, the partial file is discarded and
   the download starts again from the first byte. A `200` response whose range
   already covers the whole file is kept when that validator still matches.
+- When two connections receive different bytes for the same offset, the
+  download continues on one connection from the last matching byte. If that
+  copy still differs, the partial file is discarded and the download starts
+  again from the first byte.
 
 ### Changed
 

@@ -18,6 +18,14 @@ All notable changes to ODM are documented here. The format is based on
   the file dialog, the copy and paste menu) follow too. Category and queue
   names, which are the user's own, and messages from the download engine
   stay as they are.
+- A download can be given the checksum its publisher lists (SHA-256,
+  SHA-1, SHA-512 or MD5, with or without the type: the length of the hex
+  tells). The finished file is hashed before it takes its name; a file
+  that does not match stays a `.odmpart`, the download ends with an error
+  naming both hashes, and Resume fetches every byte again. The New
+  Download window, the web UI, `POST /api/downloads` (`checksum`) and
+  `-add` with `-checksum` take one; the complete dialog says whether it
+  matched.
 - The web UI looks and works like the desktop window: the same colours,
   icons, toolbar, category and queue tree, columns, search box, status
   bar and keys (Ctrl+N, Ctrl+F, Ctrl+A, Enter, Space, Del, Shift+Del), a

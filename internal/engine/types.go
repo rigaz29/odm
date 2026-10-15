@@ -112,28 +112,32 @@ type ChunkInfo struct {
 
 // Info is the read-only projection of a download.
 type Info struct {
-	ID           string      `json:"id"`
-	URL          string      `json:"url"`
-	FinalURL     string      `json:"final_url"`
-	FileName     string      `json:"file_name"`
-	FilePath     string      `json:"file_path"`
-	Dir          string      `json:"dir"`
-	Status       Status      `json:"status"`
-	Error        string      `json:"error,omitempty"`
-	Total        int64       `json:"total"`
-	Done         int64       `json:"done"`
-	Progress     float64     `json:"progress"`
-	Speed        int64       `json:"speed"`
-	Connections  int         `json:"connections"`
-	Active       int         `json:"active"`
-	RangeOK      bool        `json:"range_ok"`
-	Category     string      `json:"category"`
-	Queue        string      `json:"queue"`
-	Description  string      `json:"description"`
-	Order        int         `json:"order"`
-	SpeedLimit   int64       `json:"speed_limit"`
-	OpenWhenDone bool        `json:"open_when_done"`
-	Chunks       []ChunkInfo `json:"chunks"`
+	ID           string  `json:"id"`
+	URL          string  `json:"url"`
+	FinalURL     string  `json:"final_url"`
+	FileName     string  `json:"file_name"`
+	FilePath     string  `json:"file_path"`
+	Dir          string  `json:"dir"`
+	Status       Status  `json:"status"`
+	Error        string  `json:"error,omitempty"`
+	Total        int64   `json:"total"`
+	Done         int64   `json:"done"`
+	Progress     float64 `json:"progress"`
+	Speed        int64   `json:"speed"`
+	Connections  int     `json:"connections"`
+	Active       int     `json:"active"`
+	RangeOK      bool    `json:"range_ok"`
+	Category     string  `json:"category"`
+	Queue        string  `json:"queue"`
+	Description  string  `json:"description"`
+	Order        int     `json:"order"`
+	SpeedLimit   int64   `json:"speed_limit"`
+	OpenWhenDone bool    `json:"open_when_done"`
+	// Checksum is the hash the file must have ("sha256:…"), or "".
+	// Verifying is set while the finished file is hashed.
+	Checksum  string      `json:"checksum,omitempty"`
+	Verifying bool        `json:"verifying,omitempty"`
+	Chunks    []ChunkInfo `json:"chunks"`
 	// Stream is "hls" or "dash" for a segmented download, "" for a file.
 	Stream string `json:"stream,omitempty"`
 	// Segments and SegmentsDone count a stream's media segments across

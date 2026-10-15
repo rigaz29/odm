@@ -931,6 +931,9 @@ func displayName(d engine.Info) string {
 // state plus how far it got otherwise, so a stopped download still shows its
 // progress now that the list has no progress bar.
 func statusText(d engine.Info) string {
+	if d.Verifying {
+		return T("Verifying checksum")
+	}
 	pct := ""
 	if d.Total > 0 && d.Progress > 0 && !d.Live {
 		pct = fmt.Sprintf(" · %.0f%%", d.Progress)

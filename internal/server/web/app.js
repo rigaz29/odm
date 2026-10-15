@@ -96,6 +96,7 @@ function etaText(d) {
   return m > 0 ? `${m}m ${Math.floor(s % 60)}s` : `${Math.floor(s)}s`;
 }
 function statusText(d) {
+  if (d.verifying) return "Verifying checksum";
   const pct = d.total > 0 && d.progress > 0 && !d.live ? ` · ${d.progress.toFixed(0)}%` : "";
   switch (d.status) {
     case "downloading":
@@ -586,6 +587,7 @@ function openAdd() {
   $("url").value = "";
   $("fname").value = "";
   $("desc").value = "";
+  $("checksum").value = "";
   $("dir").value = s.dir || "";
   $("conns").value = s.connections || 8;
   fillSelect($("category"), s.category_list || [], "Other");
@@ -635,6 +637,7 @@ $("addForm").addEventListener("submit", async (e) => {
     connections: parseInt($("conns").value, 10) || 0,
     category: $("category").value,
     queue: $("queue").value,
+    checksum: $("checksum").value.trim(),
     start: kind === "ok",
   };
   if (!body.url) { $("url").focus(); return; }
@@ -705,6 +708,7 @@ function renderProgress() {
   $("pgUrl").textContent = d.url;
   let status = { queued: "Queued", downloading: "Receiving data…", paused: "Paused", complete: "Complete", error: "Error" }[d.status] || d.status;
   if (rec) status = "Recording live stream…";
+  if (d.verifying) status = "Verifying checksum…";
   if (d.error) status += " — " + d.error;
   $("pgStatus").textContent = status;
   $("pgSize").textContent = humanBytes(d.total) || "-";

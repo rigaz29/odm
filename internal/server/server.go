@@ -151,6 +151,9 @@ type addRequest struct {
 	FileName     string            `json:"file_name"`
 	Queue        string            `json:"queue"`
 	Description  string            `json:"description"`
+	// Checksum is the hash the file must have: "sha256:<hex>", sha1,
+	// sha512, md5, or the hex alone.
+	Checksum string `json:"checksum"`
 	// Prompt marks a request a person started in the browser: the desktop
 	// UI may confirm it in the New Download window (202) rather than add it.
 	Prompt bool `json:"prompt"`
@@ -170,6 +173,11 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
 		return
 	}
+	sum, err := engine.ParseChecksum(req.Checksum)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 	start := true
 	if req.Start != nil {
 		start = *req.Start
@@ -181,6 +189,7 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		FileName:    engine.SanitizeName(req.FileName),
 		Queue:       strings.TrimSpace(req.Queue),
 		Description: strings.TrimSpace(req.Description),
+		Checksum:    sum,
 	}
 	if req.Stream != "" {
 		k := media.Kind(req.Stream)

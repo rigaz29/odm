@@ -63,6 +63,9 @@ type Download struct {
 	Queue        string
 	Description  string
 	Order        int
+	// Checksum is the hash the finished file must have, "algo:hex" as
+	// ParseChecksum gives it, or "".
+	Checksum string
 
 	Total   int64
 	RangeOK bool
@@ -143,6 +146,7 @@ type Download struct {
 
 	discardPart bool
 	changed     bool
+	verifying   bool // the finished file is being hashed
 	// replace makes finish overwrite the file at the final name: set while a
 	// synchronization queue fetches a changed file again.
 	replace bool
@@ -1628,6 +1632,11 @@ func (d *Download) finish() error {
 	}
 	final := filepath.Join(dir, name)
 	tmp := final + ".odmpart"
+	// Checked before it takes its name, so a file that is not the one
+	// asked for never looks finished.
+	if err := d.verifyChecksum(tmp); err != nil {
+		return err
+	}
 	d.mu.Lock()
 	replace := d.replace
 	d.mu.Unlock()
@@ -1869,6 +1878,7 @@ type State struct {
 	Queue        string            `json:"queue,omitempty"`
 	Description  string            `json:"description,omitempty"`
 	Order        int               `json:"order,omitempty"`
+	Checksum     string            `json:"checksum,omitempty"`
 	Status       Status            `json:"status"`
 	Err          string            `json:"error,omitempty"`
 	Chunks       []*Chunk          `json:"chunks"`
@@ -1902,7 +1912,7 @@ func (d *Download) State() State {
 		ID: d.ID, URL: d.URL, FinalURL: d.FinalURL, FileName: d.FileName, Dir: d.Dir,
 		BaseDir: d.BaseDir, Headers: d.Headers, Connections: d.Connections, SpeedLimit: d.SpeedLimit,
 		OpenWhenDone: d.OpenWhenDone, CategoryName: d.CategoryName,
-		Queue: d.Queue, Description: d.Description, Order: d.Order,
+		Queue: d.Queue, Description: d.Description, Order: d.Order, Checksum: d.Checksum,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
 		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
 		Chunks: chunks, Stream: stream, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
@@ -1934,6 +1944,7 @@ func Restore(s State, client *http.Client) *Download {
 	d.Queue = s.Queue
 	d.Description = s.Description
 	d.Order = s.Order
+	d.Checksum = s.Checksum
 	d.Chunks = s.Chunks
 	d.Stream = s.Stream
 	if s.Stream != nil {
@@ -2018,6 +2029,7 @@ func (d *Download) infoLocked() Info {
 		Progress: pct, Speed: d.speed, Connections: d.Connections, Active: active,
 		RangeOK: d.RangeOK, Category: d.category(), Queue: d.Queue, Description: d.Description, Order: d.Order, Chunks: chunks,
 		SpeedLimit: d.SpeedLimit, OpenWhenDone: d.OpenWhenDone,
+		Checksum: d.Checksum, Verifying: d.verifying,
 		Stream: stream, Segments: d.streamSegs, SegmentsDone: d.streamHave,
 		Live:      d.Stream != nil && d.Stream.Live,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,

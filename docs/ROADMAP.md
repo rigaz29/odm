@@ -53,7 +53,8 @@ dikerjakan.
       folder default kalau folder itu hilang atau default diganti; bisa
       dimatikan di Options → Save to.
 - [ ] Folder sementara terpisah. **K**
-- [ ] Verifikasi checksum SHA-256/MD5 setelah selesai. **K–S**
+- [x] Verifikasi checksum SHA-256/MD5 setelah selesai. **K–S** Dikerjakan
+      di Fase 5.
 - [ ] Jalankan pemindai antivirus setelah selesai (program dan argumen bisa
       diatur). **K** Sebagian: Attachment Services (Fase 5) sudah memicu
       antivirus yang terdaftar di Windows; program pilihan sendiri belum.
@@ -153,7 +154,10 @@ setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
 - [x] Validasi akhir dan total ukuran di `Content-Range`, bukan hanya byte
       awal. **K** Total yang berubah = file di server berganti → unduh ulang
       dari awal. Akhir range yang melebihi permintaan tetap diterima.
-- [ ] Verifikasi checksum SHA-256/SHA-1/MD5 setelah selesai (= item Fase 1). **S**
+- [x] Verifikasi checksum SHA-256/SHA-1/MD5 setelah selesai (= item Fase 1). **S**
+      Juga SHA-512. Dicek sebelum rename; tidak cocok → tetap `.odmpart`,
+      error menyebut kedua hash, Resume mengunduh ulang semua byte. Ada di
+      form desktop, web UI, API, dan `-add -checksum`.
 - [ ] Koneksi yang jauh lebih lambat dari yang lain diambil alih seluruh
       sisanya, agar tidak ada "ekor" di akhir unduhan. **S**
 

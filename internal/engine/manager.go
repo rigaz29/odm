@@ -871,6 +871,10 @@ type AddOptions struct {
 	FileName     string
 	Queue        string
 	Description  string
+	// Checksum is the hash the finished file must have, in any form
+	// ParseChecksum reads. One it cannot read is ignored: callers check it
+	// first to tell the person.
+	Checksum string
 	// Stream makes this a segmented (HLS/DASH) download; URL is then the
 	// manifest the stream was found at.
 	Stream *StreamJob
@@ -898,6 +902,7 @@ func (m *Manager) Create(o AddOptions) Info {
 	d.OpenWhenDone = o.OpenWhenDone
 	d.Queue = queue
 	d.Description = o.Description
+	d.Checksum, _ = ParseChecksum(o.Checksum)
 	if o.Stream != nil {
 		sj := *o.Stream
 		d.Stream = &sj

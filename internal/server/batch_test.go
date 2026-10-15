@@ -3,6 +3,7 @@ package server
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"odm/internal/engine"
@@ -42,5 +43,23 @@ func TestQueueStartStop(t *testing.T) {
 	}
 	if c := post("/api/queues/Main/jump"); c != http.StatusBadRequest {
 		t.Fatalf("unknown action: %d", c)
+	}
+}
+
+func TestAddChecksum(t *testing.T) {
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	h := New(mgr).Handler()
+	add := func(body string) *httptest.ResponseRecorder {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/downloads", strings.NewReader(body)))
+		return w
+	}
+	if w := add(`{"url":"http://127.0.0.1:1/a.bin","start":false,"checksum":"crc32:1234"}`); w.Code != http.StatusBadRequest {
+		t.Fatalf("an unreadable checksum: %d %s", w.Code, w.Body)
+	}
+	sha := strings.Repeat("ab", 32)
+	w := add(`{"url":"http://127.0.0.1:1/b.bin","start":false,"checksum":"SHA-256:` + sha + `"}`)
+	if w.Code != http.StatusCreated || !strings.Contains(w.Body.String(), `"checksum":"sha256:`+sha+`"`) {
+		t.Fatalf("add with checksum: %d %s", w.Code, w.Body)
 	}
 }

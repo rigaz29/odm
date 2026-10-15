@@ -40,6 +40,14 @@ func dialogConfirm(parent fyne.Window, title, msg string, fn func(bool)) {
 	dialog.NewConfirm(title, msg, fn, parent).Show()
 }
 
+// checksumText says how a finished download's file was checked.
+func checksumText(sum string) string {
+	if sum == "" {
+		return T("Not checked")
+	}
+	return Tf("%s matches", engine.ChecksumName(sum))
+}
+
 func dash(s string) string {
 	if s == "" {
 		return "-"
@@ -102,6 +110,9 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	if pre.Category != "" {
 		catSelect.SetSelected(pre.Category)
 	}
+	// The hash the publisher gives for the file; checked once it is down.
+	sumEntry := widget.NewEntry()
+	sumEntry.SetPlaceHolder(T("SHA-256, SHA-1 or MD5 (optional)"))
 	descEntry := widget.NewEntry()
 	descEntry.SetText(pre.Description)
 	connEntry := widget.NewEntry()
@@ -330,6 +341,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		widget.NewFormItem(T("Description"), descEntry),
 		widget.NewFormItem(T("Connections"), connEntry),
 		widget.NewFormItem(T("Queue"), queueSelect),
+		widget.NewFormItem(T("Checksum"), sumEntry),
 	)
 	urlEntry.SetText(pre.URL) // after OnChanged and the form, so a prefilled URL is probed
 	if pre.Stream != nil {
@@ -348,6 +360,11 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		fmt.Sscanf(connEntry.Text, "%d", &conns)
 		url := strings.TrimSpace(urlEntry.Text)
 		if url == "" {
+			return
+		}
+		sum, err := engine.ParseChecksum(sumEntry.Text)
+		if err != nil {
+			dialog.ShowError(err, parent)
 			return
 		}
 		var job *engine.StreamJob
@@ -382,6 +399,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			Dir:         folder,
 			FileName:    engine.SanitizeName(nameEntry.Text),
 			Description: strings.TrimSpace(descEntry.Text),
+			Checksum:    sum,
 			Connections: conns,
 			Category:    catSelect.Selected,
 			Queue:       queueSelect.Selected,
@@ -1718,6 +1736,9 @@ func (a *application) updateProgressWindow(id string) {
 	if v.live {
 		status = T("Recording live stream…")
 	}
+	if d.Verifying {
+		status = T("Verifying checksum…")
+	}
 	if d.Error != "" {
 		status += " — " + d.Error
 	}
@@ -1825,6 +1846,7 @@ func (a *application) showComplete(d engine.Info) {
 			caption(T("Address")), value(d.URL),
 			caption(T("File size")), value(dash(humanBytes(d.Total))),
 			caption(T("Saved to")), value(path),
+			caption(T("Checksum")), value(checksumText(d.Checksum)),
 		),
 		again,
 		container.NewHBox(layout.NewSpacer(), openBtn, folderBtn, closeBtn),

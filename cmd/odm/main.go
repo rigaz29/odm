@@ -51,6 +51,7 @@ func main() {
 	conns := flag.Int("conns", 0, "connections per download (0 = saved setting)")
 	files := flag.Int("files", 0, "simultaneous downloads (0 = saved setting)")
 	add := flag.String("add", "", "add a URL, wait for it to finish, then exit")
+	checksum := flag.String("checksum", "", "with -add: the hash the file must have (sha256:<hex>, sha1, sha512, md5, or the hex alone)")
 	nativeHost := flag.Bool("native-messaging", false, "run as a browser native-messaging host")
 	open := flag.Bool("open", true, "open the UI window on start")
 	noUI := flag.Bool("no-ui", false, "never open a UI window")
@@ -188,7 +189,13 @@ func main() {
 	}
 
 	if *add != "" {
-		info := mgr.Add(*add, settings.Dir, settings.Connections, nil, 0)
+		sum, err := engine.ParseChecksum(*checksum)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			stopServers()
+			os.Exit(2)
+		}
+		info := mgr.Create(engine.AddOptions{URL: *add, Dir: settings.Dir, Connections: settings.Connections, Checksum: sum, Start: true})
 		fmt.Printf("added %s (%s)\n", info.FileName, info.ID)
 		waitFor(ctx, mgr, info.ID)
 		stopServers()

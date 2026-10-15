@@ -9,6 +9,8 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -54,11 +56,13 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	a.fyneApp = app.NewWithID("com.ochi.odm")
 	a.fyneApp.Settings().SetTheme(newTheme())
 	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
-	a.win.Resize(fyne.NewSize(1080, 660))
+	a.win.Resize(fyne.NewSize(1140, 660)) // the toolbar and the search box fit
 	a.win.SetIcon(theme.DownloadIcon())
 	a.notify = a.fyneApp.SendNotification
 	a.beep = playSound
-	a.foreground.Store(!opts.Hidden)
+	// Not in front until a window gets the focus: Windows may start ODM
+	// behind the window that launched it.
+	a.foreground.Store(false)
 	a.fyneApp.Lifecycle().SetOnEnteredForeground(func() { a.foreground.Store(true) })
 	a.fyneApp.Lifecycle().SetOnExitedForeground(func() { a.foreground.Store(false) })
 
@@ -377,7 +381,7 @@ func (a *application) build() {
 	toolScroll := container.NewHScroll(container.New(layout.NewCustomPaddedLayout(2, 2, 4, 4), toolbar))
 	toolScroll.SetMinSize(fyne.NewSize(200, toolbar.MinSize().Height+4))
 	a.search = newSearchEntry(a.setSearch, func() { a.win.Canvas().Focus(a.table) })
-	searchBox := container.NewCenter(container.NewGridWrap(fyne.NewSize(240, a.search.MinSize().Height), a.search))
+	searchBox := container.NewCenter(container.NewGridWrap(fyne.NewSize(200, a.search.MinSize().Height), a.search))
 	top := container.NewVBox(
 		container.NewBorder(nil, nil, nil, container.New(layout.NewCustomPaddedLayout(0, 0, 4, 8), searchBox), toolScroll),
 		widget.NewSeparator(),
@@ -848,7 +852,7 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 
 	switch id.Col {
 	case colName:
-		c.setText(d.FileName)
+		c.setText(displayName(d))
 	case colQueue:
 		c.setText(d.Queue)
 	case colSize:
@@ -868,6 +872,24 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 	case colDescription:
 		c.setText(d.Description)
 	}
+}
+
+// displayName is the name shown for a download: its file name, or until the
+// first probe names it (and when that probe failed), the last part of its
+// address.
+func displayName(d engine.Info) string {
+	if d.FileName != "" {
+		return d.FileName
+	}
+	if u, err := url.Parse(d.URL); err == nil {
+		if base := path.Base(u.Path); base != "" && base != "/" && base != "." {
+			return base
+		}
+		if u.Host != "" {
+			return u.Host
+		}
+	}
+	return d.URL
 }
 
 // statusText is the Status column: the percentage while transferring, and the

@@ -37,6 +37,23 @@ func TestMatchesSearch(t *testing.T) {
 	}
 }
 
+func TestDisplayName(t *testing.T) {
+	cases := []struct {
+		d    engine.Info
+		want string
+	}{
+		{engine.Info{FileName: "a.zip", URL: "http://h/b.zip"}, "a.zip"},
+		{engine.Info{URL: "http://h/dir/missing-file.zip?x=1"}, "missing-file.zip"},
+		{engine.Info{URL: "http://h/"}, "h"},
+		{engine.Info{URL: "not a url\x7f"}, "not a url\x7f"},
+	}
+	for _, c := range cases {
+		if got := displayName(c.d); got != c.want {
+			t.Errorf("displayName(%+v) = %q, want %q", c.d, got, c.want)
+		}
+	}
+}
+
 func TestSearchFiltersTheList(t *testing.T) {
 	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
 	mgr.Create(engine.AddOptions{URL: "http://h/report-2026.pdf", FileName: "report-2026.pdf"})

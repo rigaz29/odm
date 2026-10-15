@@ -49,7 +49,10 @@ dikerjakan.
       antrean bentrok untuk download baru setelah restart.
 - [ ] Batch download dengan pola (`foto[001-120].jpg`, `[a-z]`) dan batch
       dari clipboard. **S**
-- [ ] Ingat folder simpan terakhir; folder sementara terpisah. **K**
+- [x] Ingat folder simpan terakhir di jendela New Download. **K** Kembali ke
+      folder default kalau folder itu hilang atau default diganti; bisa
+      dimatikan di Options → Save to.
+- [ ] Folder sementara terpisah. **K**
 - [ ] Verifikasi checksum SHA-256/MD5 setelah selesai. **K–S**
 - [ ] Jalankan pemindai antivirus setelah selesai (program dan argumen bisa
       diatur). **K**

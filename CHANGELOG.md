@@ -73,6 +73,10 @@ All notable changes to ODM are documented here. The format is based on
 - A speed limit below 64 KB/s no longer stops a download for good. One
   read can be larger than a second's worth of the limit; it is now let
   through and the next read waits until the limit is met again.
+- A download from a server without range support no longer ends up
+  corrupted after a dropped connection or a resume. Such a server always
+  sends the file from the first byte, so the download now starts counting
+  from zero again instead of writing that data after the bytes it had.
 
 ## [0.2.0] - 2026-10-13
 

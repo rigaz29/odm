@@ -834,7 +834,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 				}
 				// This connection is already the only one. Skip the prefix
 				// that is already stored and write the rest at its offset.
-				if err := discardPrefix(ctx, resp.Body, start); err != nil {
+				if err := discardPrefix(ctx, resp.Body, start, d.readStall()); err != nil {
 					return err
 				}
 			}
@@ -1185,8 +1185,9 @@ func wholeFileRange(start, end, total int64) bool {
 }
 
 // discardPrefix reads n bytes and drops them. A 200 body starts at byte 0,
-// so the single connection skips the prefix already stored.
-func discardPrefix(ctx context.Context, body io.Reader, n int64) error {
+// so the single connection skips the prefix already stored. Each read has
+// the stall limit, as the prefix can be most of a large file.
+func discardPrefix(ctx context.Context, body io.ReadCloser, n int64, idle time.Duration) error {
 	buf := make([]byte, 64*1024)
 	var dropped int64
 	for dropped < n {
@@ -1197,7 +1198,7 @@ func discardPrefix(ctx context.Context, body io.Reader, n int64) error {
 		if want > int64(len(buf)) {
 			want = int64(len(buf))
 		}
-		nr, err := body.Read(buf[:want])
+		nr, err := readWithIdle(ctx, body, buf[:want], idle)
 		dropped += int64(nr)
 		if err != nil {
 			if errors.Is(err, io.EOF) && dropped >= n {

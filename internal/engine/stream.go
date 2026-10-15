@@ -957,9 +957,9 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	case resp.StatusCode != http.StatusOK:
 		return fmt.Errorf("segment: %s", resp.Status)
 	}
-	var body io.Reader = resp.Body
+	var body io.ReadCloser = resp.Body
 	if p.rng != nil {
-		body = io.LimitReader(resp.Body, p.rng.Length)
+		body = limitedBody{io.LimitReader(resp.Body, p.rng.Length), resp.Body}
 	}
 
 	final := d.piecePath(j.track, j.name)
@@ -1001,15 +1001,24 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	return nil
 }
 
+// limitedBody reads at most a piece's length and closes the whole body.
+type limitedBody struct {
+	io.Reader
+	io.Closer
+}
+
 // copyCounted copies r to w, counting progress and honouring the limiter.
-func (d *Download) copyCounted(ctx context.Context, w io.Writer, r io.Reader) (int64, error) {
+// Each read has the stall limit of a file connection: a segment that stops
+// sending is closed and retried instead of holding its worker forever.
+func (d *Download) copyCounted(ctx context.Context, w io.Writer, r io.ReadCloser) (int64, error) {
 	buf := make([]byte, 64*1024)
+	idle := d.readStall()
 	var total int64
 	for {
 		if ctx.Err() != nil {
 			return total, ctx.Err()
 		}
-		n, rerr := r.Read(buf)
+		n, rerr := readWithIdle(ctx, r, buf, idle)
 		if n > 0 {
 			if _, werr := w.Write(buf[:n]); werr != nil {
 				return total, werr

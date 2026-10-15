@@ -84,6 +84,13 @@ All notable changes to ODM are documented here. The format is based on
   download cannot leave a state file that fails to load (the download
   used to disappear from the list).
 - Resume all no longer crashes when a download is removed at the same time.
+- Reading the settings (Options, the web UI, the browser extension) while
+  they are being saved can no longer crash ODM. Each reader now gets its
+  own copy of the lists and tables in the settings.
+- `settings.json` is written to a temporary file and renamed into place,
+  one save at a time. A half-written or interleaved file used to fail to
+  load, and ODM then started with default settings, without its logins,
+  queues and schedules.
 
 ## [0.2.0] - 2026-10-13
 

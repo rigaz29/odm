@@ -65,10 +65,13 @@ type Manager struct {
 	// while its last update is being saved is not written back. It is taken
 	// before mu.
 	saveMu sync.Mutex
+	// setMu serialises writes of settings.json. It is taken before mu.
+	setMu sync.Mutex
 }
 
 // NewManager builds a manager from persisted settings.
 func NewManager(settings Settings, settingsPath string) *Manager {
+	settings = settings.clone()
 	settings.normalize(settings.Dir)
 	setUserAgent(settings.UserAgent)
 	setFFmpegPath(settings.FFmpegPath)
@@ -281,21 +284,25 @@ func (m *Manager) swapInQueue(id string, delta int) (*Download, *Download) {
 	return a, b
 }
 
-// Settings returns a copy of the current settings.
+// Settings returns a copy of the current settings. It shares no map or
+// slice with the manager, so the caller may change it freely.
 func (m *Manager) Settings() Settings {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	return m.settings
+	return m.settings.clone()
 }
 
 // UpdateSettings validates, persists and applies new settings live.
 func (m *Manager) UpdateSettings(next Settings) Settings {
+	// normalize edits maps in place; work on a copy so the caller's maps,
+	// which may still be the ones an earlier Settings() returned, are left
+	// alone.
+	next = next.clone()
 	m.mu.Lock()
 	fallback := m.settings.Dir
 	proxyChanged := m.settings.Proxy != next.Proxy
 	next.normalize(fallback)
 	m.settings = next
-	path := m.setPath
 	if proxyChanged {
 		m.client = buildClient(next)
 	}
@@ -304,11 +311,24 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	m.limiter.SetRate(next.SpeedLimit)
 	setUserAgent(next.UserAgent)
 	setFFmpegPath(next.FFmpegPath)
-	if path != "" {
-		_ = SaveSettings(path, next)
-	}
+	m.saveSettings()
 	m.fire()
-	return next
+	return next.clone()
+}
+
+// saveSettings writes the settings as they are when it runs. Writers take
+// turns, so two saves cannot interleave in the file and the last one to
+// write holds the newest settings.
+func (m *Manager) saveSettings() {
+	if m.setPath == "" {
+		return
+	}
+	m.setMu.Lock()
+	defer m.setMu.Unlock()
+	m.mu.Lock()
+	cur := m.settings // never changed in place once published
+	m.mu.Unlock()
+	_ = SaveSettings(m.setPath, cur)
 }
 
 // credentials returns the stored Basic credentials for a host, if any.
@@ -347,13 +367,11 @@ func (m *Manager) AddQueue(name string) bool {
 			return false
 		}
 	}
-	m.settings.Queues = append(m.settings.Queues, name)
-	next := m.settings
-	path := m.setPath
+	next := m.settings.clone()
+	next.Queues = append(next.Queues, name)
+	m.settings = next
 	m.mu.Unlock()
-	if path != "" {
-		_ = SaveSettings(path, next)
-	}
+	m.saveSettings()
 	m.fire()
 	return true
 }
@@ -388,8 +406,10 @@ func (m *Manager) RemoveQueue(name string) bool {
 		m.mu.Unlock()
 		return false
 	}
-	m.settings.Queues = append(append([]string(nil), m.settings.Queues[:idx]...), m.settings.Queues[idx+1:]...)
-	delete(m.settings.Schedules, name)
+	next := m.settings.clone()
+	next.Queues = append(next.Queues[:idx], next.Queues[idx+1:]...)
+	delete(next.Schedules, name)
+	m.settings = next
 	delete(m.queueRun, name)
 	var moved []*Download
 	for _, d := range m.downloads {
@@ -397,7 +417,6 @@ func (m *Manager) RemoveQueue(name string) bool {
 			moved = append(moved, d)
 		}
 	}
-	next, path := m.settings, m.setPath
 	m.mu.Unlock()
 	for _, d := range moved {
 		d.mu.Lock()
@@ -405,9 +424,7 @@ func (m *Manager) RemoveQueue(name string) bool {
 		d.mu.Unlock()
 		m.changed(d)
 	}
-	if path != "" {
-		_ = SaveSettings(path, next)
-	}
+	m.saveSettings()
 	m.fire()
 	return true
 }

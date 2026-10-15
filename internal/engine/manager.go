@@ -61,6 +61,10 @@ type Manager struct {
 	// schedFired remembers the day each scheduler action last ran, so a
 	// one-minute HH:MM window triggers it once rather than on every tick.
 	schedFired map[string]string
+	// saveMu orders state writes against removal, so a download removed
+	// while its last update is being saved is not written back. It is taken
+	// before mu.
+	saveMu sync.Mutex
 }
 
 // NewManager builds a manager from persisted settings.
@@ -907,7 +911,9 @@ func (m *Manager) ResumeAll() {
 	ids := append([]string(nil), m.order...)
 	m.mu.Unlock()
 	for _, id := range ids {
-		m.resume(m.get(id))
+		if d := m.get(id); d != nil { // removed meanwhile
+			m.resume(d)
+		}
 	}
 }
 
@@ -948,6 +954,7 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 		_ = f.Close()
 	}
 
+	m.saveMu.Lock()
 	m.mu.Lock()
 	delete(m.downloads, id)
 	delete(m.running, id)
@@ -958,6 +965,10 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 		}
 	}
 	m.mu.Unlock()
+	if m.store != nil {
+		_ = m.store.Delete(id)
+	}
+	m.saveMu.Unlock()
 
 	if name != "" {
 		_ = os.Remove(filepath.Join(dir, name+".odmpart"))
@@ -966,9 +977,6 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 		if deleteFile {
 			_ = os.Remove(filepath.Join(dir, name))
 		}
-	}
-	if m.store != nil {
-		_ = m.store.Delete(id)
 	}
 	m.fire()
 	m.pump()
@@ -1137,7 +1145,16 @@ func (m *Manager) retryInQueue(d *Download) bool {
 
 func (m *Manager) changed(d *Download) {
 	if m.store != nil {
-		_ = m.store.Save(d.State())
+		m.saveMu.Lock()
+		// The run goroutine reports a download once more after Start
+		// returns, which can be after RemoveWithFile deleted its state.
+		// Saving it then would bring the download back at the next start.
+		// The snapshot is taken under the lock so the last write is the
+		// newest state.
+		if m.get(d.ID) == d {
+			_ = m.store.Save(d.State())
+		}
+		m.saveMu.Unlock()
 	}
 	m.fire()
 }

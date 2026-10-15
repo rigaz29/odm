@@ -77,6 +77,13 @@ All notable changes to ODM are documented here. The format is based on
   corrupted after a dropped connection or a resume. Such a server always
   sends the file from the first byte, so the download now starts counting
   from zero again instead of writing that data after the bytes it had.
+- A download removed while it was running no longer comes back the next
+  time ODM starts. Its last progress update could be saved after the
+  removal had deleted its state.
+- Saved download states are written one at a time, so two updates of one
+  download cannot leave a state file that fails to load (the download
+  used to disappear from the list).
+- Resume all no longer crashes when a download is removed at the same time.
 
 ## [0.2.0] - 2026-10-13
 

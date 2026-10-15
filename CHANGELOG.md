@@ -207,6 +207,12 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Right-clicking a download in the list opens its menu at once. The click
+  used to reach the list rather than the row, so the menu acted on what
+  was selected before, and a row had to be left-clicked first. Now a row
+  outside the selection becomes the selection, as in Explorer; within a
+  selection of several, the selection stays for the menu and the clicked
+  row becomes the current one.
 - The extension popup's connection test said "ODM is reachable" while ODM
   was closed: the native host answered it without asking ODM.
 - In Chrome, Edge and Brave the browser extension let the browser keep a

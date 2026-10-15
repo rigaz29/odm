@@ -296,7 +296,14 @@ func newDownloadTable(a *application) *downloadTable {
 		defer a.mu.Unlock()
 		return len(a.items), len(a.visibleCols)
 	}
-	t.CreateCell = func() fyne.CanvasObject { return newTableCell() }
+	t.CreateCell = func() fyne.CanvasObject {
+		c := newTableCell()
+		c.onSecondary = func(row int, pos fyne.Position) {
+			a.secondaryClickRow(row)
+			a.showRowMenu(pos)
+		}
+		return c
+	}
 	t.UpdateCell = a.updateCell
 	t.ShowHeaderRow = true
 	t.ExtendBaseWidget(t)
@@ -880,9 +887,11 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 		return
 	}
 
+	c.row = id.Row
 	a.mu.Lock()
 	if id.Row < 0 || id.Row >= len(a.items) {
 		a.mu.Unlock()
+		c.row = -1
 		c.setText("")
 		c.showIcon(false)
 		c.setSelected(false)
@@ -1402,6 +1411,31 @@ func (a *application) clickRow(row int, mods fyne.KeyModifier) {
 	a.table.Refresh()
 	a.updateToolbar()
 	a.updateStatus()
+}
+
+// secondaryClickRow readies a right-click on row, as Explorer does: a row
+// outside the selection becomes the selection; within it, the selection
+// stays (the menu acts on all of it) and the row becomes the current one,
+// which the menu's single-file items use. The list takes the keyboard
+// focus, as a left click gives it.
+func (a *application) secondaryClickRow(row int) {
+	a.mu.Lock()
+	if row < 0 || row >= len(a.items) {
+		a.mu.Unlock()
+		return
+	}
+	id := a.items[row].ID
+	if !a.selected[id] {
+		a.selected = map[string]bool{id: true}
+	}
+	a.focusID, a.selectedRow = id, row
+	a.mu.Unlock()
+	a.table.Refresh()
+	a.updateToolbar()
+	a.updateStatus()
+	if c := a.win.Canvas(); c != nil {
+		c.Focus(a.table)
+	}
 }
 
 func (a *application) selectAll() {

@@ -201,6 +201,11 @@ type tableCell struct {
 	hasIcon bool
 	// selected paints the selection colour behind the cell.
 	selected bool
+	// row is the table row the cell shows now (cells are reused as the
+	// list scrolls); onSecondary, when set, is told of a right-click on
+	// it, so the click can pick its row before a menu opens.
+	row         int
+	onSecondary func(row int, pos fyne.Position)
 }
 
 func newTableCell() *tableCell {
@@ -242,6 +247,15 @@ func (c *tableCell) setSelected(on bool) {
 	if c.selected != on {
 		c.selected = on
 		c.Refresh()
+	}
+}
+
+// TappedSecondary passes a right-click on with the cell's row. Without it
+// the click reached the table, which knows no row, and the menu acted on
+// whatever was selected before.
+func (c *tableCell) TappedSecondary(e *fyne.PointEvent) {
+	if c.onSecondary != nil {
+		c.onSecondary(c.row, e.AbsolutePosition)
 	}
 }
 

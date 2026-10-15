@@ -146,6 +146,24 @@ type Settings struct {
 // DefaultQueue is the queue used when none is specified.
 const DefaultQueue = "Main"
 
+// canonicalQueue is name as the queue it names is listed. Queue names
+// compare without regard to case, and a download carries its queue's
+// listed spelling, so everything keyed by queue (running queues,
+// schedules, positions) sees one queue. An empty name is the main queue; a
+// name no listed queue has is kept as given.
+func (s *Settings) canonicalQueue(name string) string {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return DefaultQueue
+	}
+	for _, q := range s.Queues {
+		if strings.EqualFold(q, name) {
+			return q
+		}
+	}
+	return name
+}
+
 // DefaultSettings returns settings for a fresh install.
 func DefaultSettings(dir string) Settings {
 	return Settings{
@@ -268,22 +286,38 @@ func (s *Settings) normalize(fallbackDir string) {
 	if s.DuplicateAuto != DuplicateAgain {
 		s.DuplicateAuto = DuplicateSkip
 	}
+	// Queue names compare without regard to case: of two spellings of a
+	// name the first listed stays, and the main queue is always Main, the
+	// name a download without a queue gets.
 	seen := map[string]bool{}
 	queues := make([]string, 0, len(s.Queues)+1)
 	for _, q := range s.Queues {
 		q = strings.TrimSpace(q)
-		if q == "" || seen[q] {
+		if q == "" || seen[strings.ToLower(q)] {
 			continue
 		}
-		seen[q] = true
+		if strings.EqualFold(q, DefaultQueue) {
+			q = DefaultQueue
+		}
+		seen[strings.ToLower(q)] = true
 		queues = append(queues, q)
 	}
-	if !seen[DefaultQueue] {
+	if !seen[strings.ToLower(DefaultQueue)] {
 		queues = append([]string{DefaultQueue}, queues...)
 	}
 	s.Queues = queues
 	if s.Schedules == nil {
 		s.Schedules = map[string]QueueSchedule{}
+	}
+	// A schedule saved under another spelling of a queue's name is that
+	// queue's, unless the queue has one under its own.
+	for k, sc := range s.Schedules {
+		if c := s.canonicalQueue(k); c != k {
+			if _, ok := s.Schedules[c]; !ok {
+				s.Schedules[c] = sc
+			}
+			delete(s.Schedules, k)
+		}
 	}
 	keep := map[string]bool{}
 	for _, q := range s.Queues {

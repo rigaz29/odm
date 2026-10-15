@@ -465,6 +465,9 @@ func (m *Manager) MoveToQueue(id, queue string) bool {
 	if d == nil {
 		return false
 	}
+	m.mu.Lock()
+	queue = m.settings.canonicalQueue(queue)
+	m.mu.Unlock()
 	d.mu.Lock()
 	d.Queue = queue
 	d.mu.Unlock()
@@ -481,7 +484,7 @@ func (m *Manager) RemoveQueue(name string) bool {
 	m.mu.Lock()
 	idx := -1
 	for i, q := range m.settings.Queues {
-		if q == name {
+		if strings.EqualFold(q, name) {
 			idx = i
 		}
 	}
@@ -489,6 +492,7 @@ func (m *Manager) RemoveQueue(name string) bool {
 		m.mu.Unlock()
 		return false
 	}
+	name = m.settings.Queues[idx]
 	next := m.settings.clone()
 	next.Queues = append(next.Queues[:idx], next.Queues[idx+1:]...)
 	delete(next.Schedules, name)
@@ -497,7 +501,7 @@ func (m *Manager) RemoveQueue(name string) bool {
 	delete(m.repeatFrom, name)
 	var moved []*Download
 	for _, d := range m.downloads {
-		if queueOf(d) == name {
+		if strings.EqualFold(queueOf(d), name) {
 			moved = append(moved, d)
 		}
 	}
@@ -717,9 +721,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 			continue
 		}
 		st.Status = StatusPaused
-		if st.Queue == "" {
-			st.Queue = DefaultQueue
-		}
+		st.Queue = stt.canonicalQueue(st.Queue)
 		d := Restore(st, nil) // the client is set when it joins the list
 		d.Categories = stt.Categories
 		d.SetCategoryDirs(stt.CategoryDirs)
@@ -757,6 +759,7 @@ func (m *Manager) Restore(states []State) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, st := range sorted {
+		st.Queue = m.settings.canonicalQueue(st.Queue)
 		d := Restore(st, m.client)
 		d.Categories = m.settings.Categories
 		d.SetCategoryDirs(m.settings.CategoryDirs)
@@ -874,10 +877,7 @@ func (m *Manager) Create(o AddOptions) Info {
 	if conns <= 0 {
 		conns = connectionsFor(st, o.URL)
 	}
-	queue := strings.TrimSpace(o.Queue)
-	if queue == "" {
-		queue = DefaultQueue
-	}
+	queue := st.canonicalQueue(o.Queue)
 	d := New(newID(), o.URL, dir, conns, o.Headers, o.SpeedLimit, nil) // client set below
 	d.Categories = st.Categories
 	d.CategoryName = o.Category
@@ -1473,12 +1473,18 @@ func (m *Manager) isRunning(q string) bool {
 }
 
 // QueueRunning reports whether a queue was started and is still working.
-func (m *Manager) QueueRunning(q string) bool { return m.isRunning(q) }
+func (m *Manager) QueueRunning(q string) bool {
+	m.mu.Lock()
+	q = m.settings.canonicalQueue(q)
+	m.mu.Unlock()
+	return m.isRunning(q)
+}
 
 // QueueRepeating reports whether a queue set to start again every so many
 // minutes is in its repeat cycle (started and not stopped), running or not.
 func (m *Manager) QueueRepeating(q string) bool {
 	m.mu.Lock()
+	q = m.settings.canonicalQueue(q)
 	sc := m.settings.Schedules[q]
 	m.mu.Unlock()
 	return sc.RepeatMinutes > 0 && m.repeating(q)

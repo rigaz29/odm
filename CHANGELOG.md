@@ -126,6 +126,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Queue names are the same queue whatever their case. A download added,
+  moved or imported into "night" joins the listed queue Night, so it gets
+  Night's schedule and runs and stops with it; deleting "night" deletes
+  Night; and settings no longer keep "Night" and "night" as two queues.
 - The extension forgets an Alt-click (download in the browser) once it no
   longer applies; the marks used to pile up until the browser closed.
 - A stream's playlist or decryption key whose server stops sending part

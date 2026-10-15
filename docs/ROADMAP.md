@@ -126,7 +126,11 @@ dikerjakan.
 - [x] `/api/settings` bisa diubah sebagian (PATCH). **K** PUT dan PATCH
       sama-sama hanya mengubah field yang dikirim. Ditemukan saat merapikan
       web UI: Save di Options web menghapus queue, jadwal, login, dan proxy.
-- [ ] Perbandingan nama antrean konsisten (tidak peka huruf besar). **K**
+- [x] Perbandingan nama antrean konsisten (tidak peka huruf besar). **K**
+      Nama antrean dikanonkan ke ejaan di settings saat unduhan dibuat,
+      dipindah, diimpor, dan dipulihkan; settings membuang ejaan ganda
+      (jadwalnya ikut pindah); `RemoveQueue`, `QueueRunning`, dan
+      `QueueRepeating` tidak peka huruf besar; antrean utama selalu `Main`.
 
 ## Catatan kerja
 

@@ -32,6 +32,12 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- A speed limit below 64 KB/s no longer stops a download for good. One
+  read can be larger than a second's worth of the limit; it is now let
+  through and the next read waits until the limit is met again.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

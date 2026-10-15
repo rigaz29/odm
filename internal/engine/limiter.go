@@ -29,36 +29,42 @@ func (l *Limiter) SetRate(bytesPerSecond int64) {
 	l.mu.Unlock()
 }
 
-// Wait blocks until n bytes may be consumed or ctx is done.
+// Wait blocks until n bytes may be consumed or ctx is done. The bytes are
+// taken at once and the bucket may go below zero; the caller then waits
+// until that debt is paid back. The bucket never holds more than one
+// second of tokens, so waiting for a full balance would never end for a
+// read larger than the rate (a 64 KiB read under a 32 KiB/s limit).
 func (l *Limiter) Wait(ctx context.Context, n int) error {
-	if l == nil || l.rate <= 0 || n <= 0 {
+	if l == nil || n <= 0 {
 		return nil
 	}
-	need := float64(n)
-	for {
-		l.mu.Lock()
-		now := time.Now()
-		l.tokens += now.Sub(l.last).Seconds() * l.rate
-		l.last = now
-		if l.tokens > l.rate {
-			l.tokens = l.rate
-		}
-		if l.tokens >= need {
-			l.tokens -= need
-			l.mu.Unlock()
-			return nil
-		}
-		deficit := need - l.tokens
+	l.mu.Lock()
+	if l.rate <= 0 {
 		l.mu.Unlock()
+		return nil
+	}
+	now := time.Now()
+	l.tokens += now.Sub(l.last).Seconds() * l.rate
+	l.last = now
+	if l.tokens > l.rate {
+		l.tokens = l.rate
+	}
+	l.tokens -= float64(n)
+	var wait time.Duration
+	if l.tokens < 0 {
+		wait = time.Duration(-l.tokens / l.rate * float64(time.Second))
+	}
+	l.mu.Unlock()
 
-		d := time.Duration(deficit / l.rate * float64(time.Second))
-		if d < time.Millisecond {
-			d = time.Millisecond
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(d):
-		}
+	if wait <= 0 {
+		return nil
+	}
+	t := time.NewTimer(wait)
+	defer t.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-t.C:
+		return nil
 	}
 }

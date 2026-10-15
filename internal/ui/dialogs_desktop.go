@@ -108,9 +108,6 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	connEntry.SetText(fmt.Sprint(settings.Connections))
 	queueSelect := widget.NewSelect(a.mgr.Queues(), nil)
 	queueSelect.SetSelected(engine.DefaultQueue)
-	// One "File info" row filled by the probe: size and type, or the error.
-	infoLabel := widget.NewLabel("—")
-	infoLabel.Truncation = fyne.TextTruncateEllipsis
 	// Preview lists a ZIP archive's contents before it is downloaded; shown
 	// once the probe finds a ZIP on a server that sends parts of files.
 	var previewURL, previewName string
@@ -118,6 +115,8 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		a.showZipPreview(parent, previewURL, previewName, pre.Headers)
 	})
 	previewBtn.Hide()
+	// The card under the form says what the check of the address found.
+	card := newProbeCard(previewBtn)
 
 	// Quality and Audio rows, added to the form the first time the address
 	// turns out to be an HLS/DASH playlist. All of the stream state below
@@ -189,9 +188,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		switch {
 		case errors.Is(err, engine.ErrStreamRefused):
 			streamErr = err
-			infoLabel.SetText(err.Error())
+			card.problem("This stream cannot be downloaded", err.Error())
 		case err != nil:
-			infoLabel.SetText(err.Error() + " · Start lets ODM pick the best quality")
+			card.warn("The playlist could not be read just now",
+				"Start lets ODM pick the best quality when it runs · "+err.Error())
 		}
 		if err != nil {
 			qualitySelect.Disable()
@@ -212,7 +212,11 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		if c.Note != "" {
 			info += " · " + c.Note
 		}
-		infoLabel.SetText(info)
+		title := nameEntry.Text
+		if title == "" {
+			title = "Video stream"
+		}
+		card.stream(title, info)
 	}
 	hideStream := func() {
 		stream, streamKind, streamErr, streamFor = nil, "", nil, ""
@@ -239,11 +243,16 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			probeTimer.Stop()
 		}
 		hideStream()
-		infoLabel.SetText("—")
 		previewBtn.Hide()
-		if !strings.HasPrefix(s, "http") {
+		switch {
+		case strings.TrimSpace(s) == "":
+			card.idle()
+			return
+		case !strings.HasPrefix(s, "http"):
+			card.warn("Not checked", "Only http and https addresses are checked before they are added.")
 			return
 		}
+		card.check()
 		probeTimer = time.AfterFunc(600*time.Millisecond, func() {
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
@@ -283,25 +292,18 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 				case kind != "":
 					// A typed address that only looked like a stream (an
 					// .m3u music list, say) is downloaded as the file it is.
-					infoLabel.SetText(err.Error() + " · downloads as a file")
+					card.warn("Not a stream ODM can read", "It downloads as a file · "+err.Error())
 					return
 				}
 				if err != nil {
-					infoLabel.SetText(err.Error())
+					card.problem("The file could not be checked", err.Error())
 					return
 				}
-				info := "Size unknown"
-				if p.Total > 0 {
-					info = humanBytes(p.Total)
-				}
-				if p.ContentType != "" {
-					info += " · " + p.ContentType
-				}
-				infoLabel.SetText(info)
 				if nameEntry.Text == "" {
 					nameEntry.SetText(p.FileName)
 					catSelect.SetSelected(engine.Category(p.FileName))
 				}
+				card.file(p, nameEntry.Text)
 				if p.RangeOK && p.Total > 0 && engine.IsZipName(p.FileName, p.ContentType) {
 					previewURL, previewName = strings.TrimSpace(s), p.FileName
 					previewBtn.Show()
@@ -328,7 +330,6 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		widget.NewFormItem("Description", descEntry),
 		widget.NewFormItem("Connections", connEntry),
 		widget.NewFormItem("Queue", queueSelect),
-		widget.NewFormItem("File info", container.NewBorder(nil, nil, nil, previewBtn, infoLabel)),
 	)
 	urlEntry.SetText(pre.URL) // after OnChanged and the form, so a prefilled URL is probed
 	if pre.Stream != nil {
@@ -399,7 +400,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	startBtn.Importance = widget.HighImportance
 	laterBtn := widget.NewButtonWithIcon("Download Later", theme.ContentAddIcon(), func() { create(false, false) })
 	cancelBtn := widget.NewButton("Cancel", done)
-	return form, []fyne.CanvasObject{laterBtn, cancelBtn, startBtn}
+	return container.NewVBox(form, card.root), []fyne.CanvasObject{laterBtn, cancelBtn, startBtn}
 }
 
 /* ---------- Options ---------- */
@@ -1433,6 +1434,7 @@ type progressView struct {
 	resume     *widget.Label
 	saveTo     *widget.Label
 	bar        *widget.ProgressBar
+	graph      *speedGraph
 	strip      *chunkStrip
 	mapLabel   *widget.Label
 	conns      *widget.Table
@@ -1489,8 +1491,9 @@ func (a *application) openProgressWindow(id string) {
 		return fmt.Sprintf("%.1f%%", v.bar.Value*100)
 	}
 	v.strip = newChunkStrip()
+	v.graph = newSpeedGraph()
 
-	// Download status
+	// Download status, with the rate of the last minute under it.
 	statusTab := container.NewVBox(
 		v.url,
 		infoGrid(
@@ -1501,6 +1504,7 @@ func (a *application) openProgressWindow(id string) {
 			caption("Time left"), v.eta,
 			caption("Resumable"), v.resume,
 		),
+		v.graph,
 	)
 
 	// Speed limiter: applied as soon as it changes, like the reference UI.
@@ -1654,7 +1658,7 @@ func (a *application) toggleProgressDetails(v *progressView) {
 // connection table, or just the strip for a stream, which has no table.
 func detailsHeight(v *progressView) float32 {
 	if v.connBox.Visible() {
-		return 480
+		return 560
 	}
 	return v.top.MinSize().Height + v.details.MinSize().Height + 30
 }
@@ -1719,6 +1723,9 @@ func (a *application) updateProgressWindow(id string) {
 	}
 	v.rate.SetText(dash(rateText(d)))
 	v.limitRate.SetText(dash(rateText(d)))
+	if d.Status == engine.StatusDownloading {
+		v.graph.add(d.Speed, time.Now())
+	}
 	if d.Live {
 		v.eta.SetText(dash("")) // until the broadcast ends or is stopped
 	} else {

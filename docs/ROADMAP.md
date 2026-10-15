@@ -90,8 +90,10 @@ dikerjakan.
 - [x] Status bar: total kecepatan, jumlah aktif, status limiter. **K**
       Kiri: jumlah item, hasil pencarian, jumlah yang dipilih. Kanan:
       jumlah aktif dan kecepatan total, jumlah antre, batas kecepatan.
-- [ ] Dialog Add URL dengan kartu hasil probe; jendela progress dengan
-      grafik kecepatan. **S**
+- [x] Dialog Add URL dengan kartu hasil probe; jendela progress dengan
+      grafik kecepatan. **S** Kartu menggantikan baris "File info" (ikon tipe,
+      nama, ukuran, tipe, server, badge resumable, spinner, error). Grafik
+      60 detik terakhir di tab Download status.
 - [x] Shortcut keyboard: Del, Ctrl+N, Ctrl+F, Space. **K** Ditambah
       Shift+Del (hapus beserta file), label shortcut di menu, dan Help →
       Keyboard shortcuts. Sekalian menghapus item "Quit" ganda di menu Tasks.

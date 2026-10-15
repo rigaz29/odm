@@ -12,6 +12,12 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- The New Download window shows what the check of the address found as a
+  card under the form: the file's type icon, name, size, type and server,
+  and whether it can be resumed, or a stream, or why the check failed,
+  with a spinner while it runs. The ZIP Preview… button moved onto it.
+- The progress window graphs the transfer rate of the last minute under
+  the download status, with the peak rate.
 - A light theme. ODM follows the system's light or dark app mode, also
   when it changes while ODM runs, and Options → General → Appearance can
   keep it light or dark and pick one of eight accent colours. The window

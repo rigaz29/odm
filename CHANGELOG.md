@@ -91,6 +91,11 @@ All notable changes to ODM are documented here. The format is based on
   one save at a time. A half-written or interleaved file used to fail to
   load, and ODM then started with default settings, without its logins,
   queues and schedules.
+- File names are made safe for Windows in more cases: control characters
+  (for example from a `%0A` in the address) become `_`, a name such as
+  `CON`, `nul.txt` or `COM1.mp4`, which Windows reserves for devices, gets a
+  leading `_`, and a name longer than 200 bytes is shortened without
+  cutting a character in half and keeps its extension.
 
 ## [0.2.0] - 2026-10-13
 

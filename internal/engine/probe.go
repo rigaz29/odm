@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // Probe captures what a target advertises before the transfer starts.
@@ -131,21 +132,71 @@ func FileName(resp *http.Response, rawURL string) string {
 	return "download.bin"
 }
 
-// SanitizeName strips path separators and characters illegal on Windows.
+// maxNameBytes leaves room for " (n)" and ".odmpart" within the 255-unit
+// name limit of common file systems.
+const maxNameBytes = 200
+
+// maxKeptExt is the longest extension kept whole when a name is shortened.
+const maxKeptExt = 16
+
+// SanitizeName turns name into a file name that Windows accepts, and so
+// every other system: path separators, reserved and control characters
+// become "_", dots and spaces are trimmed from the ends, a device name such
+// as "CON" or "com1.txt" gets a leading "_", and a long name is shortened
+// on a character boundary, keeping its extension. "" means nothing usable
+// was left.
 func SanitizeName(name string) string {
-	name = strings.TrimSpace(name)
-	name = strings.ReplaceAll(name, "\\", "_")
-	name = strings.ReplaceAll(name, "/", "_")
-	name = strings.ReplaceAll(name, ":", "_")
-	for _, r := range []string{"<", ">", "\"", "|", "?", "*"} {
-		name = strings.ReplaceAll(name, r, "_")
+	name = strings.Map(func(r rune) rune {
+		if r < 0x20 || r == 0x7f || strings.ContainsRune(`\/:<>"|?*`, r) {
+			return '_'
+		}
+		return r
+	}, name)
+	name = strings.Trim(strings.TrimSpace(name), ". ")
+	if len(name) > maxNameBytes {
+		name = shortenName(name, maxNameBytes)
 	}
-	name = strings.Trim(name, ". ")
-	if name == "" || name == "." || name == ".." {
+	if name == "" {
 		return ""
 	}
-	if len(name) > 200 {
-		name = name[:200]
+	if reservedDeviceName(name) {
+		name = "_" + name
 	}
 	return name
+}
+
+// shortenName cuts name to at most limit bytes without splitting a UTF-8
+// sequence, keeping a short extension so the file still opens with the
+// right program. Windows drops trailing dots and spaces, so none are left.
+func shortenName(name string, limit int) string {
+	ext := path.Ext(name)
+	if len(ext) > maxKeptExt {
+		ext = ""
+	}
+	stem := strings.TrimSuffix(name, ext)
+	for len(stem)+len(ext) > limit {
+		_, size := utf8.DecodeLastRuneInString(stem)
+		stem = stem[:len(stem)-size]
+	}
+	stem = strings.TrimRight(stem, ". ")
+	if stem == "" {
+		return ""
+	}
+	return stem + ext
+}
+
+// reservedDeviceName reports whether Windows treats name as a device (CON,
+// PRN, AUX, NUL, COM1-COM9, LPT1-LPT9), with or without an extension.
+// Creating such a file opens the device instead.
+func reservedDeviceName(name string) bool {
+	stem := name
+	if i := strings.IndexByte(stem, '.'); i >= 0 {
+		stem = stem[:i]
+	}
+	stem = strings.ToUpper(strings.TrimRight(stem, " "))
+	switch stem {
+	case "CON", "PRN", "AUX", "NUL":
+		return true
+	}
+	return len(stem) == 4 && (stem[:3] == "COM" || stem[:3] == "LPT") && stem[3] >= '1' && stem[3] <= '9'
 }

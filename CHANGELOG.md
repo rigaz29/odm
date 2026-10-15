@@ -96,6 +96,11 @@ All notable changes to ODM are documented here. The format is based on
   `CON`, `nul.txt` or `COM1.mp4`, which Windows reserves for devices, gets a
   leading `_`, and a name longer than 200 bytes is shortened without
   cutting a character in half and keeps its extension.
+- A server that accepts the connection and then never answers no longer
+  keeps a download waiting forever. Connecting is limited to 30 seconds,
+  the TLS handshake to 15 seconds and the wait for the response headers to
+  30 seconds, for file probes, stream playlists, keys and the site grabber
+  as well as for transfers.
 
 ## [0.2.0] - 2026-10-13
 

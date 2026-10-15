@@ -156,10 +156,14 @@ const maxKeptExt = 16
 // every other system: path separators, reserved and control characters
 // become "_", dots and spaces are trimmed from the ends, a device name such
 // as "CON" or "com1.txt" gets a leading "_", and a long name is shortened
-// on a character boundary, keeping its extension. "" means nothing usable
-// was left.
+// on a character boundary, keeping its extension. Characters that change
+// the direction text is shown in are dropped. "" means nothing usable was
+// left.
 func SanitizeName(name string) string {
 	name = strings.Map(func(r rune) rune {
+		if bidiControl(r) {
+			return -1
+		}
 		if r < 0x20 || r == 0x7f || strings.ContainsRune(`\/:<>"|?*`, r) {
 			return '_'
 		}
@@ -176,6 +180,21 @@ func SanitizeName(name string) string {
 		name = "_" + name
 	}
 	return name
+}
+
+// bidiControl reports whether r changes the direction of the text around
+// it. In a file name it disguises the real extension: "photo‮gpj.exe"
+// is shown as "photoexe.jpg", an executable that looks like a picture.
+func bidiControl(r rune) bool {
+	switch {
+	case r == '؜', r == '‎', r == '‏': // ALM, LRM, RLM
+		return true
+	case r >= '‪' && r <= '‮': // LRE, RLE, PDF, LRO, RLO
+		return true
+	case r >= '⁦' && r <= '⁩': // LRI, RLI, FSI, PDI
+		return true
+	}
+	return false
 }
 
 // shortenName cuts name to at most limit bytes without splitting a UTF-8

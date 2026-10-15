@@ -116,6 +116,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Security
 
+- File names lose the characters that change the direction text is shown
+  in (such as RIGHT-TO-LEFT OVERRIDE), which a server could use to make
+  `photo‮gpj.exe` look like `photoexe.jpg`.
 - A stream whose playlist is on a public server can no longer make ODM
   request addresses on the user's own machine or network (localhost,
   private and link-local ranges, including after a redirect). Browsers

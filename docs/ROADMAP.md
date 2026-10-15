@@ -132,6 +132,25 @@ dikerjakan.
       (jadwalnya ikut pindah); `RemoveQueue`, `QueueRunning`, dan
       `QueueRepeating` tidak peka huruf besar; antrean utama selalu `Main`.
 
+## Fase 5: hasil perbandingan dengan downloader open-source
+
+Dari perbandingan dengan aria2, Gopeed, dan wget2 (2026-10-15): ODM sudah
+setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
+
+- [ ] Tandai file hasil unduhan dengan Mark-of-the-Web (`Zone.Identifier`)
+      lewat Attachment Services Windows (`IAttachmentExecute`), yang juga
+      memicu pemindai antivirus terdaftar. **S**
+- [x] Buang karakter kontrol arah teks (RTLO dan sejenisnya) dari nama file,
+      agar `foto‮gpj.exe` tidak tampil sebagai `fotoexe.jpg`. **K** Di
+      `SanitizeName`, yang dilalui nama dari server, API, dan form.
+- [ ] `fsync` berkala sebelum progres disimpan, agar resume setelah listrik
+      mati tidak meninggalkan lubang di file. **K** Ditunda.
+- [ ] Validasi akhir dan total ukuran di `Content-Range`, bukan hanya byte
+      awal. **K**
+- [ ] Verifikasi checksum SHA-256/SHA-1/MD5 setelah selesai (= item Fase 1). **S**
+- [ ] Koneksi yang jauh lebih lambat dari yang lain diambil alih seluruh
+      sisanya, agar tidak ada "ekor" di akhir unduhan. **S**
+
 ## Catatan kerja
 
 - Go portable: `C:\Users\rigaz\AppData\Local\go-sdk\go\bin`, dengan

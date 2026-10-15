@@ -22,6 +22,11 @@ func TestSanitizeName(t *testing.T) {
 		{"COM0.mp4", "_COM0.mp4"},
 		{"CONSOLE.txt", "CONSOLE.txt"},
 		{"concert.mp3", "concert.mp3"},
+		// Direction controls are dropped, so the real extension shows.
+		{"photo‮gpj.exe", "photogpj.exe"},
+		{"⁧invoice⁩ ‏cod.scr", "invoice cod.scr"},
+		{"؜نص.txt", "نص.txt"},
+		{"‮", ""},
 	}
 	for _, c := range cases {
 		if got := SanitizeName(c.in); got != c.want {

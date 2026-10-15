@@ -101,6 +101,8 @@ All notable changes to ODM are documented here. The format is based on
   the TLS handshake to 15 seconds and the wait for the response headers to
   30 seconds, for file probes, stream playlists, keys and the site grabber
   as well as for transfers.
+- A proxy changed in Options now applies to downloads that are already
+  in the list. They used to keep the old proxy until ODM was restarted.
 
 ## [0.2.0] - 2026-10-13
 

@@ -316,10 +316,20 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	proxyChanged := m.settings.Proxy != next.Proxy
 	next.normalize(fallback)
 	m.settings = next
+	var existing []*Download
 	if proxyChanged {
 		m.client = buildClient(next)
+		for _, d := range m.downloads {
+			existing = append(existing, d)
+		}
 	}
+	client := m.client
 	m.mu.Unlock()
+	// Downloads already in the list keep their client otherwise, so a new
+	// proxy would only reach them after ODM restarts.
+	for _, d := range existing {
+		d.setClient(client)
+	}
 
 	m.limiter.SetRate(next.SpeedLimit)
 	setUserAgent(next.UserAgent)
@@ -552,7 +562,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 		if st.Queue == "" {
 			st.Queue = DefaultQueue
 		}
-		d := Restore(st, m.client)
+		d := Restore(st, nil) // the client is set when it joins the list
 		d.Categories = stt.Categories
 		d.SetCategoryDirs(stt.CategoryDirs)
 		d.SetLimiter(m.limiter)
@@ -560,6 +570,9 @@ func (m *Manager) Import(data []byte) (int, error) {
 		d.SetOnUpdate(m.changed)
 
 		m.mu.Lock()
+		// Under mu, so a proxy change cannot slip in between: d is not
+		// in the list yet, so UpdateSettings would not reach it.
+		d.client = m.client
 		if d.Order == 0 {
 			d.Order = m.nextOrderLocked(queueOf(d))
 		}
@@ -688,7 +701,7 @@ func (m *Manager) Create(o AddOptions) Info {
 	if queue == "" {
 		queue = DefaultQueue
 	}
-	d := New(newID(), o.URL, dir, conns, o.Headers, o.SpeedLimit, m.client)
+	d := New(newID(), o.URL, dir, conns, o.Headers, o.SpeedLimit, nil) // client set below
 	d.Categories = st.Categories
 	d.CategoryName = o.Category
 	d.FileName = o.FileName
@@ -713,6 +726,9 @@ func (m *Manager) Create(o AddOptions) Info {
 	d.SetOnUpdate(m.changed)
 
 	m.mu.Lock()
+	// Under mu, so a proxy change cannot slip in between: d is not in the
+	// list yet, so UpdateSettings would not reach it.
+	d.client = m.client
 	d.Order = m.nextOrderLocked(queue)
 	m.downloads[d.ID] = d
 	m.order = append(m.order, d.ID)
@@ -724,7 +740,7 @@ func (m *Manager) Create(o AddOptions) Info {
 
 // Probe inspects a URL without creating a download.
 func (m *Manager) Probe(ctx context.Context, rawURL string, headers map[string]string) (*Probe, error) {
-	return Inspect(ctx, m.client, strings.TrimSpace(rawURL), headers)
+	return Inspect(ctx, m.HTTPClient(), strings.TrimSpace(rawURL), headers)
 }
 
 // SetSpeedLimit applies a per-download cap in bytes/sec.

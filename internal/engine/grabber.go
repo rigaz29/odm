@@ -109,19 +109,13 @@ func (m *Manager) Grab(ctx context.Context, o GrabberOptions, progress func(page
 	return res, nil
 }
 
-func (m *Manager) httpClient() *http.Client {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-	return m.client
-}
-
 func (m *Manager) fetchPage(ctx context.Context, raw string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, raw, nil)
 	if err != nil {
 		return "", err
 	}
 	req.Header.Set("User-Agent", currentUserAgent())
-	resp, err := m.httpClient().Do(req)
+	resp, err := m.HTTPClient().Do(req)
 	if err != nil {
 		return "", err
 	}

@@ -184,7 +184,7 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 		return nil, nil, err
 	}
 	d.decorate(req)
-	resp, err := d.client.Do(req)
+	resp, err := d.httpClient().Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -936,7 +936,7 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	if p.rng != nil {
 		req.Header.Set("Range", p.rng.Header())
 	}
-	resp, err := d.client.Do(req)
+	resp, err := d.httpClient().Do(req)
 	if err != nil {
 		return err
 	}
@@ -1077,7 +1077,7 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 		return nil, err
 	}
 	s.d.decorate(req)
-	resp, err := s.d.client.Do(req)
+	resp, err := s.d.httpClient().Do(req)
 	if err != nil {
 		return nil, err
 	}

@@ -89,13 +89,26 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 // Set it before NewManager.
 var SystemProxy = http.ProxyFromEnvironment
 
-// buildClient creates an HTTP client honouring the configured proxy.
+// headerTimeout bounds the wait for response headers on every request the
+// shared client sends: probes, playlists, keys, grabber pages and
+// transfers. A variable so tests can shorten it.
+var headerTimeout = 30 * time.Second
+
+// buildClient creates an HTTP client honouring the configured proxy. Every
+// network wait is bounded: without that, a server that accepts the
+// connection and never answers kept a probe, and the download behind it,
+// waiting forever.
 func buildClient(s Settings) *http.Client {
+	dialer := &net.Dialer{Timeout: 30 * time.Second, KeepAlive: 30 * time.Second}
 	transport := &http.Transport{
-		MaxIdleConns:        64,
-		MaxIdleConnsPerHost: 16,
-		IdleConnTimeout:     30 * time.Second,
-		ForceAttemptHTTP2:   true,
+		DialContext:           dialer.DialContext,
+		TLSHandshakeTimeout:   15 * time.Second,
+		ResponseHeaderTimeout: headerTimeout,
+		ExpectContinueTimeout: time.Second,
+		MaxIdleConns:          64,
+		MaxIdleConnsPerHost:   16,
+		IdleConnTimeout:       30 * time.Second,
+		ForceAttemptHTTP2:     true,
 	}
 	switch s.Proxy.Mode {
 	case ProxyNone:

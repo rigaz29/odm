@@ -32,6 +32,14 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- A server that accepts the connection and then never answers no longer
+  keeps a download waiting forever. Connecting is limited to 30 seconds,
+  the TLS handshake to 15 seconds and the wait for the response headers to
+  30 seconds, for file probes, stream playlists, keys and the site grabber
+  as well as for transfers.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

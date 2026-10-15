@@ -20,6 +20,17 @@ const CONFIG_TTL_MS = 5 * 60 * 1000;
 const MAX_MEDIA_PER_TAB = 15;
 const BYPASS_MS = 10 * 1000;
 
+// pruneBypass keeps the Alt-click marks younger than BYPASS_MS. Older ones
+// no longer apply, and dropping them keeps the session map from growing
+// with every link Alt-clicked since the browser started.
+function pruneBypass(bypass, now) {
+  const out = {};
+  for (const [url, at] of Object.entries(bypass || {})) {
+    if (now - at < BYPASS_MS) out[url] = at;
+  }
+  return out;
+}
+
 const STREAM_TYPES = [
   "application/vnd.apple.mpegurl", "application/x-mpegurl", "audio/mpegurl", "audio/x-mpegurl",
   "application/dash+xml",
@@ -362,8 +373,10 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     }
     if (msg.type === "odm-bypass" && msg.url) {
       chrome.storage.session.get("bypass").then(({ bypass = {} }) => {
-        bypass[msg.url] = Date.now();
-        chrome.storage.session.set({ bypass });
+        const now = Date.now();
+        const next = pruneBypass(bypass, now);
+        next[msg.url] = now;
+        chrome.storage.session.set({ bypass: next });
       });
     }
     return false;
@@ -371,5 +384,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, DEFAULT_TYPES };
+  module.exports = { hasType, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
 }

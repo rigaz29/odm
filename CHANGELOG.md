@@ -126,6 +126,8 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- The extension forgets an Alt-click (download in the browser) once it no
+  longer applies; the marks used to pile up until the browser closed.
 - A stream's playlist or decryption key whose server stops sending part
   way fails after the 30-second stall limit, as a segment does, instead of
   holding the download until it is paused.

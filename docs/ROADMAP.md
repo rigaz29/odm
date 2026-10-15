@@ -120,7 +120,9 @@ dikerjakan.
       `randomData(n)`.
 - [x] Batas stall untuk body manifest dan kunci AES. **K** Keduanya dibaca
       lewat `readAllIdle` dengan batas yang sama seperti segmen (30 detik).
-- [ ] Map `bypass` di extension dibersihkan dari entri lama. **K**
+- [x] Map `bypass` di extension dibersihkan dari entri lama. **K** Setiap
+      Alt-click baru membuang tanda yang lebih tua dari 10 detik
+      (`pruneBypass`, ada test-nya).
 - [x] `/api/settings` bisa diubah sebagian (PATCH). **K** PUT dan PATCH
       sama-sama hanya mengubah field yang dikirim. Ditemukan saat merapikan
       web UI: Save di Options web menghapus queue, jadwal, login, dan proxy.

@@ -82,3 +82,14 @@ test("popupReferrer", () => {
   assert.equal(bg.popupReferrer({ frameId: 5 }, tab), tab.url);
   assert.equal(bg.popupReferrer({ frameId: 5 }, null), "");
 });
+
+test("pruneBypass keeps only recent Alt-click marks", () => {
+  const now = 1_000_000;
+  const got = bg.pruneBypass({
+    "https://h/new.zip": now - 1000,
+    "https://h/edge.zip": now - bg.BYPASS_MS,
+    "https://h/old.zip": now - 60 * 60 * 1000,
+  }, now);
+  assert.deepEqual(got, { "https://h/new.zip": now - 1000 });
+  assert.deepEqual(bg.pruneBypass(undefined, now), {});
+});

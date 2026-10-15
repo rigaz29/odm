@@ -93,7 +93,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	catSelect := widget.NewSelect(engine.Categories(), nil)
 	catSelect.SetSelected("Other")
 	folderEntry := widget.NewEntry()
-	folderEntry.SetText(settings.Dir)
+	folderEntry.SetText(settings.SaveFolder()) // the folder used last time, when remembered
 	nameEntry := widget.NewEntry()
 	nameEntry.SetText(pre.FileName)
 	if pre.FileName != "" {
@@ -359,10 +359,11 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			a.askDuplicate(parent, existing, func() { create(start, true) })
 			return
 		}
+		folder := strings.TrimSpace(folderEntry.Text)
 		info := a.mgr.Create(engine.AddOptions{
 			Stream:      job,
 			URL:         url,
-			Dir:         strings.TrimSpace(folderEntry.Text),
+			Dir:         folder,
 			FileName:    engine.SanitizeName(nameEntry.Text),
 			Description: strings.TrimSpace(descEntry.Text),
 			Connections: conns,
@@ -371,6 +372,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			Headers:     pre.Headers,
 			Start:       start,
 		})
+		a.mgr.NoteSaveFolder(folder)
 		done()
 		a.refresh()
 		if start {
@@ -561,6 +563,8 @@ func (a *application) openOptionsTab(tab int) {
 	dirEntry.SetText(settings.Dir)
 	catsCheck := widget.NewCheck("Put files in category subfolders", nil)
 	catsCheck.SetChecked(settings.Categories)
+	rememberCheck := widget.NewCheck("Remember the folder last chosen in the New Download window", nil)
+	rememberCheck.SetChecked(!settings.NoRememberDir)
 	catDirs := map[string]string{}
 	for k, v := range settings.CategoryDirs {
 		catDirs[k] = v
@@ -587,6 +591,8 @@ func (a *application) openOptionsTab(tab int) {
 		widget.NewForm(widget.NewFormItem("Default download folder",
 			container.NewBorder(nil, nil, nil, browseDir(dirEntry), dirEntry))),
 		catsCheck,
+		rememberCheck,
+		hint("Downloads added from the clipboard, the site grabber or the API use the default folder."),
 		widget.NewSeparator(),
 		widget.NewForm(widget.NewFormItem("Category", catSelect)),
 		catTypes,
@@ -1009,6 +1015,12 @@ func (a *application) openOptionsTab(tab int) {
 		// edit (queues, schedules) survive OK.
 		next := a.mgr.Settings()
 		next.Dir = strings.TrimSpace(dirEntry.Text)
+		next.NoRememberDir = !rememberCheck.Checked
+		// A new default folder, or remembering turned off, offers the
+		// default folder again rather than the one chosen before.
+		if next.Dir != settings.Dir || next.NoRememberDir {
+			next.LastDir = ""
+		}
 		next.Connections = conns
 		next.Concurrent = conc
 		next.SpeedLimit = limit * 1024

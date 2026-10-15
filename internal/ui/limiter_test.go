@@ -13,7 +13,9 @@ import (
 
 func newTestApp(t *testing.T, st engine.Settings) *application {
 	t.Helper()
-	st.Dir = t.TempDir()
+	if st.Dir == "" {
+		st.Dir = t.TempDir()
+	}
 	mgr := engine.NewManager(st, "")
 	a := &application{mgr: mgr, progressWindows: map[string]*progressView{}, selectedRow: -1, sortCol: -1}
 	a.fyneApp = test.NewTempApp(t)

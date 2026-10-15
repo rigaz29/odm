@@ -365,6 +365,18 @@ func (m *Manager) SetSpeedLimiter(on bool, bytesPerSecond int64) Settings {
 	return m.UpdateSettings(next)
 }
 
+// NoteSaveFolder records dir as the folder last chosen in the New Download
+// window. Settings are written only when the folder offered next changes.
+func (m *Manager) NoteSaveFolder(dir string) {
+	dir = strings.TrimSpace(dir)
+	st := m.Settings()
+	if st.NoRememberDir || dir == "" || dir == st.SaveFolder() {
+		return
+	}
+	st.LastDir = dir
+	m.UpdateSettings(st)
+}
+
 // credentials returns the stored Basic credentials for a host, if any.
 func (m *Manager) credentials(host string) (string, string, bool) {
 	m.mu.Lock()

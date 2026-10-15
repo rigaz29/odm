@@ -116,6 +116,11 @@ type Settings struct {
 	// NoCloseToTray makes closing the main window quit instead of hiding it
 	// to the system tray (where downloads keep running).
 	NoCloseToTray bool `json:"no_close_to_tray,omitempty"`
+	// LastDir is the save folder last chosen in the New Download window,
+	// which offers it next time unless NoRememberDir is set (it is offered
+	// by default). Automatic adds (clipboard, grabber, API) use Dir.
+	LastDir       string `json:"last_dir,omitempty"`
+	NoRememberDir bool   `json:"no_remember_dir,omitempty"`
 	// FFmpegPath points at ffmpeg (the program or its folder), used to join
 	// streams that come as separate video and audio. Empty: look next to
 	// ODM, then on PATH.
@@ -143,6 +148,19 @@ func (s Settings) EffectiveSpeedLimit() int64 {
 		return 0
 	}
 	return s.SpeedLimit
+}
+
+// SaveFolder is the folder the New Download window offers: the one last
+// chosen there while that is remembered and the folder still exists (a
+// removed drive, a deleted folder), else the default download folder.
+func (s Settings) SaveFolder() string {
+	if s.NoRememberDir || s.LastDir == "" {
+		return s.Dir
+	}
+	if st, err := os.Stat(s.LastDir); err != nil || !st.IsDir() {
+		return s.Dir
+	}
+	return s.LastDir
 }
 
 // clone returns a copy that shares no map or slice with s. The manager

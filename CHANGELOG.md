@@ -18,6 +18,11 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- The New Download window offers the save folder chosen there last time,
+  for downloads added by hand and those handed over by the browser. A
+  folder that no longer exists, a new default folder, or turning the option
+  off (Options → Save to) brings back the default folder. Downloads added
+  from the clipboard, the site grabber or the API still use the default.
 - A system notification when a download finishes or fails, on by default.
   A finished download is not notified when its complete dialog was shown
   while ODM is in front. On Windows, ODM can also play the system sound for

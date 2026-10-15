@@ -469,7 +469,7 @@ func (d *Download) prepare(ctx context.Context) error {
 	d.mu.Unlock()
 
 	if needProbe {
-		p, err := Inspect(ctx, d.httpClient(), rawURL, headers)
+		p, err := d.inspect(ctx, rawURL, headers)
 		if err != nil {
 			return err
 		}
@@ -512,7 +512,7 @@ func (d *Download) revalidate(ctx context.Context) error {
 	done := d.doneLocked()
 	d.mu.Unlock()
 
-	p, err := Inspect(ctx, d.httpClient(), rawURL, headers)
+	p, err := d.inspect(ctx, rawURL, headers)
 	if err != nil {
 		return err
 	}
@@ -751,10 +751,8 @@ func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk, ready *bool) e
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
+		if serr := sleepCtx(ctx, retryWait(err, backoff)); serr != nil {
+			return serr
 		}
 		if backoff < 8*time.Second {
 			backoff *= 2
@@ -826,6 +824,9 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if err := busyResponse(resp, time.Now()); err != nil {
+		return err
+	}
 
 	if rangeOK {
 		switch resp.StatusCode {

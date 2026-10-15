@@ -9,6 +9,7 @@ import (
 	"path"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -42,6 +43,9 @@ func Inspect(ctx context.Context, client *http.Client, rawURL string, headers ma
 		return nil, err
 	}
 	defer resp.Body.Close()
+	if err := busyResponse(resp, time.Now()); err != nil {
+		return nil, err
+	}
 
 	p := &Probe{
 		FinalURL:     resp.Request.URL.String(),

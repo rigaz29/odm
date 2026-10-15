@@ -912,10 +912,8 @@ func (s *streamRun) fetchWithRetry(ctx context.Context, j pieceJob) error {
 			}
 			continue // retry at once with the fresh URL
 		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(backoff):
+		if serr := sleepCtx(ctx, retryWait(err, backoff)); serr != nil {
+			return serr
 		}
 		if backoff < 8*time.Second {
 			backoff *= 2
@@ -994,6 +992,9 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 		return err
 	}
 	defer resp.Body.Close()
+	if err := busyResponse(resp, time.Now()); err != nil {
+		return err
+	}
 	switch {
 	case resp.StatusCode == http.StatusForbidden || resp.StatusCode == http.StatusGone:
 		return fmt.Errorf("%w: %s", errExpired, resp.Status)

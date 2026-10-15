@@ -62,6 +62,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A server that answers 429 Too Many Requests or 503 Service Unavailable
+  is asked again after the time its `Retry-After` gives (at most two
+  minutes per try), or after the usual pause when it gives none. This
+  covers the first size check, which used to fail the download at once,
+  file connections and stream segments.
 - After a restart the download list keeps the order downloads were added
   in (it followed their random IDs), the Last attempt column keeps its
   time (it showed the restart), and a download added afterwards joins the

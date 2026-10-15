@@ -52,7 +52,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - A scheduler per queue: start with ODM, start at a set time (once or on chosen
   weekdays), stop at a set time, retry failed files, and open a file, exit or
   shut down when the queue finishes.
-- Site logins (HTTP Basic), import and export of the download list, and a site
+- Site logins (HTTP Digest or Basic, sent only to a host that asks), import
+  and export of the download list, and a site
   grabber that crawls a page and queues the files it links to.
 - A new download never replaces an existing file: if the name is taken, it is
   saved as `name (2).ext`. Adding a link that is already in the list asks
@@ -275,8 +276,8 @@ extension/          MV3 browser extension source and native-host manifests
 ## Roadmap
 
 - A properties dialog for each download.
-- A credentials prompt for HTTP 401 responses (Basic and Digest).
-- ZIP preview, sounds, a virus-scan hook, grabber projects, and translations.
+- A credentials prompt for HTTP 401 responses from a host with no site login.
+- ZIP preview, a virus-scan hook, grabber projects, and translations.
 - Live DASH streams.
 - Signed self-update, and code-signed Windows builds.
 

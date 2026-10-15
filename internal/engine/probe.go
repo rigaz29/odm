@@ -28,6 +28,12 @@ type Probe struct {
 // Inspect issues a ranged GET for the first byte to learn the size, whether
 // the server honours Range requests, the suggested file name and cookies.
 func Inspect(ctx context.Context, client *http.Client, rawURL string, headers map[string]string) (*Probe, error) {
+	return inspectWith(ctx, client, rawURL, headers, nil)
+}
+
+// inspectWith is Inspect answering an authentication challenge with a site
+// login through a (nil sends the request as it is).
+func inspectWith(ctx context.Context, client *http.Client, rawURL string, headers map[string]string, a *authorizer) (*Probe, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
 	if err != nil {
 		return nil, err
@@ -38,7 +44,7 @@ func Inspect(ctx context.Context, client *http.Client, rawURL string, headers ma
 	req.Header.Set("Accept-Encoding", "identity")
 	applyHeaders(req, headers)
 
-	resp, err := client.Do(req)
+	resp, err := a.do(req, client.Do)
 	if err != nil {
 		return nil, err
 	}

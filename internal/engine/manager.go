@@ -67,6 +67,9 @@ type Manager struct {
 	saveMu sync.Mutex
 	// setMu serialises writes of settings.json. It is taken before mu.
 	setMu sync.Mutex
+	// authz answers authentication challenges for requests the manager
+	// sends itself (the Add window's probe, a new address, grabber pages).
+	authz *authorizer
 }
 
 // NewManager builds a manager from persisted settings.
@@ -75,7 +78,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 	settings.normalize(settings.Dir)
 	setUserAgent(settings.UserAgent)
 	setFFmpegPath(settings.FFmpegPath)
-	return &Manager{
+	m := &Manager{
 		downloads: map[string]*Download{},
 		running:   map[string]bool{},
 		queueSeq:  map[string]int{},
@@ -89,6 +92,8 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 
 		schedFired: map[string]string{},
 	}
+	m.authz = newAuthorizer(m.credentials)
+	return m
 }
 
 // SystemProxy picks the proxy when ODM's options set none. It defaults to the
@@ -379,14 +384,34 @@ func (m *Manager) NoteSaveFolder(dir string) {
 
 // credentials returns the stored Basic credentials for a host, if any.
 func (m *Manager) credentials(host string) (string, string, bool) {
+	host = loginHost(host)
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	for _, l := range m.settings.Logins {
-		if strings.EqualFold(strings.TrimSpace(l.Host), strings.TrimSpace(host)) && l.User != "" {
+		if loginHost(l.Host) == host && host != "" && l.User != "" {
 			return l.User, l.Pass, true
 		}
 	}
 	return "", "", false
+}
+
+// loginHost reduces a site login's host as typed ("https://Example.com/",
+// "example.com:8080") to the host name requests are matched by.
+func loginHost(s string) string {
+	s = strings.ToLower(strings.TrimSpace(s))
+	if i := strings.Index(s, "://"); i >= 0 {
+		s = s[i+3:]
+	}
+	if i := strings.IndexAny(s, "/?#"); i >= 0 {
+		s = s[:i]
+	}
+	if i := strings.LastIndexByte(s, '@'); i >= 0 {
+		s = s[i+1:]
+	}
+	if h, _, err := net.SplitHostPort(s); err == nil {
+		s = h
+	}
+	return strings.Trim(strings.TrimSuffix(s, "."), "[]")
 }
 
 /* ---------- queues ---------- */
@@ -782,7 +807,7 @@ func (m *Manager) Create(o AddOptions) Info {
 
 // Probe inspects a URL without creating a download.
 func (m *Manager) Probe(ctx context.Context, rawURL string, headers map[string]string) (*Probe, error) {
-	return Inspect(ctx, m.HTTPClient(), strings.TrimSpace(rawURL), headers)
+	return inspectWith(ctx, m.HTTPClient(), strings.TrimSpace(rawURL), headers, m.authz)
 }
 
 // SetSpeedLimit applies a per-download cap in bytes/sec.
@@ -893,7 +918,7 @@ func (m *Manager) Readdress(ctx context.Context, id, newURL string) error {
 		m.changed(d)
 		return nil
 	}
-	p, err := Inspect(ctx, m.HTTPClient(), newURL, headers)
+	p, err := inspectWith(ctx, m.HTTPClient(), newURL, headers, m.authz)
 	if err != nil {
 		return fmt.Errorf("checking the new address: %w", err)
 	}

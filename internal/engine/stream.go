@@ -214,7 +214,7 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 		return nil, nil, err
 	}
 	d.decorate(req)
-	resp, err := d.streamClient().Do(req)
+	resp, err := d.authorizer().do(req, d.streamClient().Do)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -242,7 +242,7 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 // fresh requests, so that protection does not apply here.
 func (d *Download) decorate(req *http.Request) {
 	d.mu.Lock()
-	headers, cookies, auth := d.Headers, d.cookies, d.auth
+	headers, cookies := d.Headers, d.cookies
 	manifest := d.URL
 	if d.Stream != nil {
 		manifest = d.Stream.Manifest
@@ -261,11 +261,8 @@ func (d *Download) decorate(req *http.Request) {
 	if len(cookies) > 0 && req.Header.Get("Cookie") == "" {
 		req.Header.Set("Cookie", cookieHeader(cookies))
 	}
-	if auth != nil {
-		if user, pass, ok := auth(req.URL.Hostname()); ok {
-			req.SetBasicAuth(user, pass)
-		}
-	}
+	// Site logins are added by the authorizer, and only for a host that
+	// asks for one.
 }
 
 // streamClient is the client for every request of a stream: the
@@ -987,7 +984,7 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	if p.rng != nil {
 		req.Header.Set("Range", p.rng.Header())
 	}
-	resp, err := d.streamClient().Do(req)
+	resp, err := d.authorizer().do(req, d.streamClient().Do)
 	if err != nil {
 		return err
 	}
@@ -1140,7 +1137,7 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 		return nil, err
 	}
 	s.d.decorate(req)
-	resp, err := s.d.streamClient().Do(req)
+	resp, err := s.d.authorizer().do(req, s.d.streamClient().Do)
 	if err != nil {
 		return nil, err
 	}

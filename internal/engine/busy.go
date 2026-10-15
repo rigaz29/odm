@@ -72,7 +72,7 @@ func (d *Download) inspect(ctx context.Context, rawURL string, headers map[strin
 	var err error
 	for attempt := 0; attempt < MaxRetries; attempt++ {
 		var p *Probe
-		p, err = Inspect(ctx, d.httpClient(), rawURL, headers)
+		p, err = inspectWith(ctx, d.httpClient(), rawURL, headers, d.authorizer())
 		var busy *busyError
 		if err == nil || !errors.As(err, &busy) {
 			return p, err

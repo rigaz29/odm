@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -104,6 +103,7 @@ type Download struct {
 	file        *os.File
 	cookies     []*http.Cookie
 	auth        func(host string) (string, string, bool)
+	authz       *authorizer
 	catDirs     map[string]string
 	onUpdate    func(*Download)
 
@@ -217,11 +217,21 @@ func (d *Download) SetOpenWhenDone(v bool) {
 	d.mu.Unlock()
 }
 
-// SetAuthLookup installs the per-host credential lookup used for Basic auth.
+// SetAuthLookup installs the per-host site login lookup. A login is sent
+// only to a host that asks for one (401), with the scheme it names.
 func (d *Download) SetAuthLookup(fn func(host string) (string, string, bool)) {
 	d.mu.Lock()
 	d.auth = fn
+	d.authz = newAuthorizer(fn)
 	d.mu.Unlock()
+}
+
+// authorizer answers this download's authentication challenges; nil (no
+// site logins) sends requests as they are.
+func (d *Download) authorizer() *authorizer {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.authz
 }
 
 // SetCategoryDirs installs per-category destination folders.
@@ -814,18 +824,13 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 		}
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", reqStart, end))
 	}
-	if d.auth != nil {
-		if u, perr := url.Parse(finalURL); perr == nil {
-			if user, pass, ok := d.auth(u.Hostname()); ok {
-				req.SetBasicAuth(user, pass)
-			}
-		}
-	}
 	if len(cookies) > 0 {
 		req.Header.Set("Cookie", cookieHeader(cookies))
 	}
 
-	resp, err := d.exchange(ctx, client, req)
+	resp, err := d.authorizer().do(req, func(r *http.Request) (*http.Response, error) {
+		return d.exchange(ctx, client, r)
+	})
 	if err != nil {
 		return err
 	}

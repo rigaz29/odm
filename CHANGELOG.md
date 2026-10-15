@@ -62,6 +62,15 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Site logins now work for files that need them, and support Digest as
+  well as Basic. The first size check used to go out without the login, so
+  a protected file failed with 401 before any byte was fetched. A login is
+  now sent only to a host that asks for one, with the scheme it names
+  (Digest with SHA-256 or MD5, or Basic), and then with every request to
+  that host; it is not sent after a redirect to another host, and a wrong
+  password fails once instead of retrying. The site grabber and the New
+  Download window's size check use the logins too. A login's host may be
+  typed with `https://`, a port or a path.
 - A file whose size the server does not give (no `Content-Length`, as with
   a generated archive or a chunked response) is downloaded instead of
   refused. It is fetched on one connection, its size is known when the

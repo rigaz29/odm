@@ -115,7 +115,7 @@ func (m *Manager) fetchPage(ctx context.Context, raw string) (string, error) {
 		return "", err
 	}
 	req.Header.Set("User-Agent", currentUserAgent())
-	resp, err := m.HTTPClient().Do(req)
+	resp, err := m.authz.do(req, m.HTTPClient().Do)
 	if err != nil {
 		return "", err
 	}

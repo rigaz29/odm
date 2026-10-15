@@ -1807,6 +1807,9 @@ func Restore(s State, client *http.Client) *Download {
 	}
 	d.Err = s.Err
 	d.CreatedAt = s.CreatedAt
+	if !s.UpdatedAt.IsZero() {
+		d.UpdatedAt = s.UpdatedAt // shown as "Last attempt"; New set it to now
+	}
 	switch s.Status {
 	case StatusComplete:
 		d.Status = StatusComplete

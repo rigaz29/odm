@@ -57,6 +57,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- After a restart the download list keeps the order downloads were added
+  in (it followed their random IDs), the Last attempt column keeps its
+  time (it showed the restart), and a download added afterwards joins the
+  end of its queue instead of taking a position a restored download
+  already has. Imported downloads join the end of their queue too.
 - File names that Windows reserves for devices (`CON`, `NUL`, `COM1`, …,
   with any extension) get a leading `_`. Before, a page titled "nul" or
   "con" could make the download fail or write into a device on Windows.

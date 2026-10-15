@@ -584,9 +584,9 @@ func (m *Manager) Import(data []byte) (int, error) {
 		// Under mu, so a proxy change cannot slip in between: d is not
 		// in the list yet, so UpdateSettings would not reach it.
 		d.client = m.client
-		if d.Order == 0 {
-			d.Order = m.nextOrderLocked(queueOf(d))
-		}
+		// Imported positions come from another list and would collide
+		// with this one's; imported downloads join the end of their queue.
+		d.Order = m.nextOrderLocked(queueOf(d))
 		m.downloads[d.ID] = d
 		m.order = append(m.order, d.ID)
 		m.mu.Unlock()
@@ -601,20 +601,42 @@ func (m *Manager) Import(data []byte) (int, error) {
 
 // Restore loads persisted downloads into the manager.
 func (m *Manager) Restore(states []State) {
+	// The store lists state files by name, which is a random ID; the list
+	// shows downloads in the order they were added.
+	sorted := append([]State(nil), states...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		if !sorted[i].CreatedAt.Equal(sorted[j].CreatedAt) {
+			return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
+		}
+		return sorted[i].ID < sorted[j].ID
+	})
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	for _, st := range states {
+	for _, st := range sorted {
 		d := Restore(st, m.client)
 		d.Categories = m.settings.Categories
 		d.SetCategoryDirs(m.settings.CategoryDirs)
 		d.SetLimiter(m.limiter)
 		d.SetAuthLookup(m.credentials)
 		d.SetOnUpdate(m.changed)
-		if d.Order == 0 {
-			d.Order = m.nextOrderLocked(queueOf(d))
-		}
+		m.claimOrderLocked(d)
 		m.downloads[d.ID] = d
 		m.order = append(m.order, d.ID)
+	}
+}
+
+// claimOrderLocked gives d a queue position if it has none, and keeps the
+// queue's counter past the position it has. A restored or imported download
+// keeps its position; without this, the next new download in that queue
+// was handed the same number and the run order became a tie.
+func (m *Manager) claimOrderLocked(d *Download) {
+	q := queueOf(d)
+	if d.Order == 0 {
+		d.Order = m.nextOrderLocked(q)
+		return
+	}
+	if d.Order > m.queueSeq[q] {
+		m.queueSeq[q] = d.Order
 	}
 }
 

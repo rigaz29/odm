@@ -678,20 +678,47 @@ func (d *Download) openTarget(fresh bool) error {
 	return nil
 }
 
+// idleRecheck is how often a connection with nothing to do looks again for
+// a slow connection to take over, while others still work.
+const idleRecheck = 250 * time.Millisecond
+
 func (d *Download) worker(ctx context.Context) {
 	ready := false
+	// lastPace is this connection's speed on its last chunk: bytes over
+	// the time it took, measured here because a chunk done in less than
+	// paceWindow has no pace of its own.
+	var lastPace int64
 	for {
 		if ctx.Err() != nil {
 			return
 		}
 		ch := d.takeChunk()
 		if ch == nil {
-			ch = d.trySplit()
+			ch = d.trySplit(lastPace)
 		}
 		if ch == nil {
-			return
+			// Nothing to take now. A fast connection stays while others
+			// work: a slow one's pace is known only after a while, and
+			// then its rest can be taken over. It holds no request
+			// meanwhile.
+			if lastPace <= 0 || !d.othersWorking() {
+				return
+			}
+			if sleepCtx(ctx, idleRecheck) != nil {
+				return
+			}
+			continue
 		}
+		d.mu.Lock()
+		before := ch.Done
+		d.mu.Unlock()
+		began := time.Now()
 		err := d.fetchWithRetry(ctx, ch, &ready)
+		d.mu.Lock()
+		if n, secs := ch.Done-before, time.Since(began).Seconds(); n > 0 && secs > 0 {
+			lastPace = int64(float64(n) / secs)
+		}
+		d.mu.Unlock()
 		if errors.Is(err, errRepresentationChanged) {
 			d.noteChanged()
 			d.mu.Lock()
@@ -730,6 +757,18 @@ func (d *Download) worker(ctx context.Context) {
 	}
 }
 
+// othersWorking reports whether some chunk is still being fetched.
+func (d *Download) othersWorking() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	for _, c := range d.Chunks {
+		if c.claimed && !c.Complete() {
+			return true
+		}
+	}
+	return false
+}
+
 func (d *Download) takeChunk() *Chunk {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -742,13 +781,13 @@ func (d *Download) takeChunk() *Chunk {
 	return nil
 }
 
-func (d *Download) trySplit() *Chunk {
+func (d *Download) trySplit(helperPace int64) *Chunk {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.alone {
 		return nil
 	}
-	nc, ok := Split(d.Chunks, MinChunkSize)
+	nc, ok := splitFor(d.Chunks, MinChunkSize, helperPace)
 	if !ok {
 		return nil
 	}

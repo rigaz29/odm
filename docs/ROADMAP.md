@@ -158,8 +158,11 @@ setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
       Juga SHA-512. Dicek sebelum rename; tidak cocok → tetap `.odmpart`,
       error menyebut kedua hash, Resume mengunduh ulang semua byte. Ada di
       form desktop, web UI, API, dan `-add -checksum`.
-- [ ] Koneksi yang jauh lebih lambat dari yang lain diambil alih seluruh
-      sisanya, agar tidak ada "ekor" di akhir unduhan. **S**
+- [x] Koneksi yang jauh lebih lambat dari yang lain diambil alih seluruh
+      sisanya, agar tidak ada "ekor" di akhir unduhan. **S** Rasio ≥4×, sisa
+      ≥16 KB yang butuh >1 detik. Koneksi cepat yang menganggur menunggu
+      (cek tiap 250 ms) selama yang lain masih bekerja. Uji lokal: 24 MB,
+      satu dari 8 koneksi 16 KB/s, 9,1 s → 3,1 s.
 
 ## Catatan kerja
 

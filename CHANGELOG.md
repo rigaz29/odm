@@ -117,6 +117,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- A connection four or more times slower than a freed one hands it all the
+  work it has left, instead of keeping the last piece that halving left it
+  while every other connection had finished; a freed connection waits for
+  such a chance while others still work. A connection far slower than the
+  others no longer takes half of a fast one's work. With one of eight
+  connections crawling at 16 KB/s, a 24 MB file took 3.1 s instead of
+  9.1 s in a local test.
 - The status bar is split in two. The left names the list: how many
   downloads, how many match the search, and how many are selected. The
   right names what is going on: how many downloads run and at what total

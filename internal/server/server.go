@@ -45,6 +45,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/config", s.handleConfig)
 	mux.HandleFunc("GET /api/settings", s.handleConfig)
 	mux.HandleFunc("PUT /api/settings", s.handlePutSettings)
+	mux.HandleFunc("PATCH /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/downloads", s.handleList)
 	mux.HandleFunc("POST /api/downloads", s.handleAdd)
 	mux.HandleFunc("GET /api/probe", s.handleProbe)
@@ -109,8 +110,12 @@ func (s *Server) handleConfig(w http.ResponseWriter, _ *http.Request) {
 	}{Settings: s.mgr.Settings(), CategoryList: engine.Categories()})
 }
 
+// handlePutSettings applies the body over the current settings, so a field
+// it leaves out keeps its value (a map in it adds or replaces entries). The
+// web UI's Options sends a handful of fields; decoded into empty settings,
+// they wiped the queues, schedules, logins, proxy and category folders.
 func (s *Server) handlePutSettings(w http.ResponseWriter, r *http.Request) {
-	var next engine.Settings
+	next := s.mgr.Settings()
 	if err := json.NewDecoder(r.Body).Decode(&next); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return

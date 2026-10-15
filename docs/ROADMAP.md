@@ -106,7 +106,9 @@ dikerjakan.
       tiap 256 byte. **K**
 - [ ] Batas stall untuk body manifest dan kunci AES. **K**
 - [ ] Map `bypass` di extension dibersihkan dari entri lama. **K**
-- [ ] `/api/settings` bisa diubah sebagian (PATCH). **K**
+- [x] `/api/settings` bisa diubah sebagian (PATCH). **K** PUT dan PATCH
+      sama-sama hanya mengubah field yang dikirim. Ditemukan saat merapikan
+      web UI: Save di Options web menghapus queue, jadwal, login, dan proxy.
 - [ ] Perbandingan nama antrean konsisten (tidak peka huruf besar). **K**
 
 ## Catatan kerja

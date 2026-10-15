@@ -159,6 +159,15 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- The Options window fits small laptops and tablets. It was as tall as its
+  longest page (Downloads), taller than a 1080p screen at 125% with its
+  OK button off the bottom. Pages now scroll instead, also by dragging
+  them, as a finger does on a touch screen (Fyne's own scrolling only
+  followed the wheel and its thin bar there); the window opens at a size
+  that fits the screen's work area; tabs that do not fit go into a "⋯"
+  menu. yt-dlp and ffmpeg moved to a Programs tab of their own, and the
+  sites the browser extension leaves alone to its section on General. The
+  main window is likewise made to fit the screen the first time it shows.
 - The New Download window that opens for a download from the browser stays
   above other windows until it is answered. The browser keeps the focus,
   as Windows does not let ODM take it from there, so the window used to

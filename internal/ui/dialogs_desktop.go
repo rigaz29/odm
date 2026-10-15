@@ -697,12 +697,19 @@ func (a *application) openOptionsTab(tab int) {
 	langSelect := widget.NewSelect(languageChoices(), nil)
 	langSelect.SetSelectedIndex(languageIndex(langWas))
 	accentRow, accentPicked := newAccentPicker(accentWas)
+	excludeEntry := widget.NewMultiLineEntry()
+	excludeEntry.SetText(strings.Join(settings.ExcludeSites, " "))
+	excludeEntry.SetPlaceHolder("*.update.microsoft.com example.org")
+	excludeEntry.SetMinRowsVisible(2)
 	generalTab := container.NewVBox(
 		header(T("Browser / system integration")),
 		widget.NewLabelWithStyle(T("Browser extension (Chrome, Edge, Chromium, Firefox)"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		statusRow,
 		browserHint,
 		container.NewHBox(regBtn, unregBtn),
+		widget.NewLabel(T("The browser extension leaves downloads from these sites alone:")),
+		excludeEntry,
+		hint(T("Separate names by spaces. A leading *. matches subdomains.")),
 		widget.NewSeparator(),
 		startupCheck,
 		trayCheck,
@@ -768,10 +775,6 @@ func (a *application) openOptionsTab(tab int) {
 	// Downloads
 	startCheck := widget.NewCheck(T("Show the New Download window for downloads from the browser"), nil)
 	startCheck.SetChecked(!settings.NoStartDialog)
-	excludeEntry := widget.NewMultiLineEntry()
-	excludeEntry.SetText(strings.Join(settings.ExcludeSites, " "))
-	excludeEntry.SetPlaceHolder("*.update.microsoft.com example.org")
-	excludeEntry.SetMinRowsVisible(2)
 	progCheck := widget.NewCheck(T("Show the progress window when a download starts"), nil)
 	progCheck.SetChecked(!settings.NoProgressDialog)
 	doneCheck := widget.NewCheck(T("Show the download complete dialog"), nil)
@@ -882,17 +885,19 @@ func (a *application) openOptionsTab(tab int) {
 		widget.NewSeparator(),
 		widget.NewLabel(T("User-Agent for downloads:")),
 		uaEntry,
-		widget.NewSeparator(),
-		widget.NewLabel(T("The browser extension leaves downloads from these sites alone:")),
-		excludeEntry,
-		hint(T("Separate names by spaces. A leading *. matches subdomains.")),
-		widget.NewSeparator(),
+	)
+	// The programs ODM runs for streams and video sites, on a tab of
+	// their own: with Downloads they made a page taller than a laptop.
+	programsTab := container.NewVBox(
+		header(T("Companion programs")),
 		widget.NewLabel(T("ffmpeg (joins the video and audio of some streams):")),
 		container.NewBorder(nil, nil, nil, ffBrowse, ffEntry),
 		ffStatus,
+		widget.NewSeparator(),
 		widget.NewLabel(T("yt-dlp (downloads videos from YouTube and similar sites):")),
 		container.NewBorder(nil, nil, nil, ytBrowse, ytEntry),
 		ytStatus,
+		widget.NewSeparator(),
 		toolsBox,
 		hint(T("ODM keeps its own copies in its folder, checked against the checksums of their releases, and uses them unless a path is chosen above.")),
 	)
@@ -1154,13 +1159,17 @@ func (a *application) openOptionsTab(tab int) {
 		nil, nil, framed(loginsTable),
 	)
 
+	// Pages scroll (by dragging too, on a touch screen) instead of making
+	// the window as tall as the longest; the two with a table fill the
+	// height themselves.
 	tabs := container.NewAppTabs(
-		container.NewTabItem(T("General"), generalTab),
-		container.NewTabItem(T("File types"), typesTab),
-		container.NewTabItem(T("Save to"), saveTab),
-		container.NewTabItem(T("Downloads"), downloadsTab),
+		container.NewTabItem(T("General"), newDragScroll(generalTab)),
+		container.NewTabItem(T("File types"), newDragScroll(typesTab)),
+		container.NewTabItem(T("Save to"), newDragScroll(saveTab)),
+		container.NewTabItem(T("Downloads"), newDragScroll(downloadsTab)),
+		container.NewTabItem(T("Programs"), newDragScroll(programsTab)),
 		container.NewTabItem(T("Connection"), connTab),
-		container.NewTabItem(T("Proxy / Socks"), proxyTab),
+		container.NewTabItem(T("Proxy / Socks"), newDragScroll(proxyTab)),
 		container.NewTabItem(T("Site logins"), loginsTab),
 	)
 	tabs.SelectIndex(tab)
@@ -1284,8 +1293,7 @@ func (a *application) openOptionsTab(tab int) {
 	buttons := container.NewHBox(layout.NewSpacer(), okBtn, widget.NewButton(T("Cancel"), closeWin))
 	w.SetContent(container.New(layout.NewCustomPaddedLayout(8, 10, 10, 10),
 		container.NewBorder(nil, buttons, nil, nil, tabs)))
-	w.Resize(fyne.NewSize(640, 560))
-	w.Show()
+	fitWindow(w, fyne.NewSize(680, 600))
 }
 
 // ffmpegStatus describes the ffmpeg that the typed path (empty: the

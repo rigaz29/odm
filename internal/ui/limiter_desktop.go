@@ -12,7 +12,7 @@ import (
 )
 
 // optionsTabConnection is the Options tab with the global speed limit.
-const optionsTabConnection = 4
+const optionsTabConnection = 5
 
 // newLimiterItem returns a "Speed limiter" menu item that is kept checked
 // while the global limit applies; the main menu and the tray each get one.

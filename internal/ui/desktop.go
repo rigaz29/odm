@@ -118,6 +118,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		a.fyneApp.Run() // window stays hidden until the tray or a relaunch shows it
 		return nil
 	}
+	a.fyneApp.Lifecycle().SetOnStarted(func() { fyne.Do(a.fitMain) })
 	a.win.ShowAndRun()
 	return nil
 }
@@ -171,8 +172,19 @@ func (a *application) readClipboard() string {
 
 func (a *application) showWindow() {
 	a.win.Show()
+	a.fitMain()
 	a.win.RequestFocus()
 	a.foreground.Store(true)
+}
+
+// fitMain shrinks the main window to the screen the first time it shows:
+// its default size is larger than a small laptop's screen.
+func (a *application) fitMain() {
+	if a.mainFitted {
+		return
+	}
+	a.mainFitted = true
+	fitShown(a.win, a.win.Canvas().Size())
 }
 
 // sidebarEntry is one row of the category/queue sidebar.
@@ -193,6 +205,8 @@ type application struct {
 	fyneApp fyne.App
 	win     fyne.Window
 	keeper  *tools.Keeper
+	// mainFitted is set once the window was fitted to the screen.
+	mainFitted bool
 
 	table *downloadTable
 	cats  *widget.List

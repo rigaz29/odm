@@ -68,9 +68,9 @@ dikerjakan.
 - [x] Preview isi ZIP sebelum diunduh (Range ke central directory). **S–B**
       Hanya membaca ujung arsip (sekitar 1 KB untuk arsip 2,5 MB).
 - [ ] Drop target melayang untuk link dari browser (cek dukungan Fyne
-      dulu). **S** Sudah dicek: GLFW 3.4 di Windows hanya menerima drop
-      file (`WM_DROPFILES`), bukan link dari browser. Butuh implementasi
-      COM `IDropTarget` sendiri (**B**). Menunggu keputusan.
+      dulu). **S** **Dilewati** (keputusan 2026-10-15). GLFW 3.4 di Windows
+      hanya menerima drop file (`WM_DROPFILES`), bukan link dari browser;
+      butuh implementasi COM `IDropTarget` sendiri (**B**).
 - [x] Engine: `429`/`Retry-After`, file tanpa `Content-Length`, Digest
       auth. **S** Sekaligus memperbaiki Site logins yang tidak pernah
       bekerja untuk file yang butuh login (probe dikirim tanpa login).
@@ -83,7 +83,9 @@ dikerjakan.
 - [ ] Status bar: total kecepatan, jumlah aktif, status limiter. **K**
 - [ ] Dialog Add URL dengan kartu hasil probe; jendela progress dengan
       grafik kecepatan. **S**
-- [ ] Shortcut keyboard: Del, Ctrl+N, Ctrl+F, Space. **K**
+- [x] Shortcut keyboard: Del, Ctrl+N, Ctrl+F, Space. **K** Ditambah
+      Shift+Del (hapus beserta file), label shortcut di menu, dan Help →
+      Keyboard shortcuts. Sekalian menghapus item "Quit" ganda di menu Tasks.
 - [ ] Web UI diseragamkan dengan desktop, responsif, mode terang. **S**
 - [ ] Bahasa Indonesia sebagai bahasa kedua. **B**
 

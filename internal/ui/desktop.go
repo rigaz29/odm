@@ -268,6 +268,8 @@ func (t *downloadTable) TypedKey(ev *fyne.KeyEvent) {
 	switch ev.Name {
 	case fyne.KeyDelete:
 		a.deleteSelected()
+	case fyne.KeySpace:
+		a.toggleSelected()
 	case fyne.KeyReturn, fyne.KeyEnter:
 		if d, ok := a.current(); ok {
 			a.openProgressWindow(d.ID)
@@ -290,14 +292,18 @@ func (t *downloadTable) TypedKey(ev *fyne.KeyEvent) {
 	}
 }
 
-// TypedShortcut handles Ctrl+A here and passes the rest to the window, since
-// a focused widget receives shortcuts before the canvas does.
+// TypedShortcut handles Ctrl+A, and Shift+Del, which Fyne delivers as the
+// alternative Cut shortcut. Shortcuts with a menu item (Ctrl+N, Ctrl+F) are
+// run by the menu before they reach a widget.
 func (t *downloadTable) TypedShortcut(s fyne.Shortcut) {
-	if _, ok := s.(*fyne.ShortcutSelectAll); ok {
+	switch s := s.(type) {
+	case *fyne.ShortcutSelectAll:
 		t.app.selectAll()
-		return
+	case *fyne.ShortcutCut:
+		if s.Secondary {
+			t.app.removeSelected(true)
+		}
 	}
-	t.app.handleShortcut(s)
 }
 
 func (t *downloadTable) Resize(size fyne.Size) {
@@ -461,8 +467,6 @@ func (a *application) build() {
 	a.win.SetContent(container.NewBorder(top, a.status, nil, nil, body))
 	a.mainMenu = a.buildMenu()
 	a.win.SetMainMenu(a.mainMenu)
-	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyN, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
-	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyF, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
 	// Keys typed with nothing focused (e.g. right after start) still reach
 	// the list's handler.
 	a.win.Canvas().SetOnTypedKey(a.table.TypedKey)
@@ -608,15 +612,30 @@ func (a *application) layoutColumns(total float32) {
 
 /* ---------- menu bar ---------- */
 
+// keyHint is a shortcut shown next to a menu item. With a modifier the main
+// menu also runs it, before the focused widget sees the keys; plain keys
+// (Del, Space) are only shown and handled by the list.
+func keyHint(key fyne.KeyName, mod fyne.KeyModifier) fyne.Shortcut {
+	return &desktop.CustomShortcut{KeyName: key, Modifier: mod}
+}
+
+// withKey returns item with a shortcut shown next to it.
+func withKey(item *fyne.MenuItem, key fyne.KeyName, mod fyne.KeyModifier) *fyne.MenuItem {
+	item.Shortcut = keyHint(key, mod)
+	return item
+}
+
 func (a *application) buildMenu() *fyne.MainMenu {
+	ctrl := fyne.KeyModifierShortcutDefault
 	tasks := fyne.NewMenu("Tasks",
-		fyne.NewMenuItem("Add new download…", a.openAddDialog),
+		withKey(fyne.NewMenuItem("Add new download…", a.openAddDialog), fyne.KeyN, ctrl),
 		fyne.NewMenuItem("Grab site…", a.openGrabberDialog),
 		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Export download list…", a.exportList),
 		fyne.NewMenuItem("Import download list…", a.importList),
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Exit", func() { a.fyneApp.Quit() }),
+		// IsQuit, or Fyne appends a Quit item of its own below Exit.
+		&fyne.MenuItem{Label: "Exit", IsQuit: true, Action: func() { a.fyneApp.Quit() }},
 	)
 	downloads := fyne.NewMenu("Downloads",
 		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
@@ -634,6 +653,8 @@ func (a *application) buildMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Options…", func() { a.openOptionsTab(0) }),
 	)
 	view := fyne.NewMenu("View",
+		withKey(fyne.NewMenuItem("Search downloads", a.focusSearch), fyne.KeyF, ctrl),
+		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Hide categories", a.toggleSidebar),
 		fyne.NewMenuItem("Sort by name", func() { a.sortBy(colName) }),
 		fyne.NewMenuItem("Sort by size", func() { a.sortBy(colSize) }),
@@ -643,6 +664,7 @@ func (a *application) buildMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Sort by description", func() { a.sortBy(colDescription) }),
 	)
 	help := fyne.NewMenu("Help",
+		fyne.NewMenuItem("Keyboard shortcuts", a.showShortcuts),
 		fyne.NewMenuItem("Check for updates…", func() { a.checkForUpdates(true) }),
 		fyne.NewMenuItem("About ODM", a.showAbout),
 	)
@@ -653,6 +675,27 @@ func (a *application) showAbout() {
 	dialog.ShowInformation("About",
 		"Ochi Download Manager (ODM)\n\nA segmented, resumable download manager.\nBuilt with Go and Fyne.",
 		a.win)
+}
+
+// shortcuts lists the keys of the main window, for Help → Keyboard shortcuts.
+var shortcuts = [][2]string{
+	{"Ctrl+N", "Add a new download"},
+	{"Ctrl+F", "Search the list (Esc clears the search)"},
+	{"Ctrl+A", "Select every download in the list"},
+	{"Enter", "Show the progress of the selected download"},
+	{"Space", "Pause or resume the selected downloads"},
+	{"Del", "Remove the selected downloads from the list"},
+	{"Shift+Del", "Remove them and delete their files"},
+	{"Up / Down", "Move the selection (with Shift: extend it)"},
+}
+
+func (a *application) showShortcuts() {
+	grid := container.New(layout.NewFormLayout())
+	for _, s := range shortcuts {
+		grid.Add(widget.NewLabelWithStyle(s[0], fyne.TextAlignTrailing, fyne.TextStyle{Bold: true}))
+		grid.Add(widget.NewLabel(s[1]))
+	}
+	dialog.ShowCustom("Keyboard shortcuts", "Close", grid, a.win)
 }
 
 func (a *application) exportList() {
@@ -1219,7 +1262,7 @@ func (a *application) showRowMenu(pos fyne.Position) {
 		return
 	}
 	sel := a.selectedItems()
-	items := []*fyne.MenuItem{fyne.NewMenuItem("Show progress", func() { a.openProgressWindow(d.ID) })}
+	items := []*fyne.MenuItem{withKey(fyne.NewMenuItem("Show progress", func() { a.openProgressWindow(d.ID) }), fyne.KeyEnter, 0)}
 	if d.Status == engine.StatusComplete {
 		items = append(items, fyne.NewMenuItem("Open file", func() { openPath(d.FilePath) }))
 	}
@@ -1229,14 +1272,7 @@ func (a *application) showRowMenu(pos fyne.Position) {
 	items = append(items,
 		fyne.NewMenuItem("Open folder", func() { revealPath(d.FilePath) }),
 		refresh,
-		fyne.NewMenuItem("Pause / Resume", func() {
-			// The clicked row decides the direction for the whole selection.
-			if d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued {
-				a.stopSelected()
-				return
-			}
-			a.resumeSelected()
-		}),
+		withKey(fyne.NewMenuItem("Pause / Resume", a.toggleSelected), fyne.KeySpace, 0),
 	)
 	move := fyne.NewMenuItem("Move to queue", nil)
 	move.ChildMenu = a.queueSubmenu(sel)
@@ -1245,8 +1281,8 @@ func (a *application) showRowMenu(pos fyne.Position) {
 		fyne.NewMenuItem("Move down in queue", func() { a.mgr.MoveInQueue(d.ID, +1); a.refresh() }),
 	)
 	items = append(items,
-		fyne.NewMenuItem("Remove from list", func() { a.removeSelected(false) }),
-		fyne.NewMenuItem("Remove + delete file", func() { a.removeSelected(true) }),
+		withKey(fyne.NewMenuItem("Remove from list", func() { a.removeSelected(false) }), fyne.KeyDelete, 0),
+		withKey(fyne.NewMenuItem("Remove + delete file", func() { a.removeSelected(true) }), fyne.KeyDelete, fyne.KeyModifierShift),
 	)
 	pop := widget.NewPopUpMenu(fyne.NewMenu("", items...), a.win.Canvas())
 	pop.ShowAtPosition(pos)
@@ -1346,20 +1382,6 @@ func (a *application) selectedItems() []engine.Info {
 	return out
 }
 
-// handleShortcut is the window-wide keyboard shortcut handler.
-func (a *application) handleShortcut(s fyne.Shortcut) {
-	cs, ok := s.(*desktop.CustomShortcut)
-	if !ok || cs.Modifier != fyne.KeyModifierShortcutDefault {
-		return
-	}
-	switch cs.KeyName {
-	case fyne.KeyN:
-		a.openAddDialog()
-	case fyne.KeyF:
-		a.focusSearch()
-	}
-}
-
 /* ---------- actions on the selection ---------- */
 
 func (a *application) resumeSelected() {
@@ -1370,6 +1392,23 @@ func (a *application) resumeSelected() {
 	a.refresh()
 	if len(sel) == 1 { // one window, not one per file
 		a.autoProgress(sel[0].ID)
+	}
+}
+
+// toggleSelected pauses the selection when the focused download is running
+// or waiting in a queue, and resumes it otherwise: the focused row decides
+// the direction for all of them. A finished focused download does nothing.
+func (a *application) toggleSelected() {
+	d, ok := a.current()
+	if !ok {
+		return
+	}
+	switch d.Status {
+	case engine.StatusDownloading, engine.StatusQueued:
+		a.stopSelected()
+	case engine.StatusComplete:
+	default:
+		a.resumeSelected()
 	}
 }
 

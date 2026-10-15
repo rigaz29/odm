@@ -6,7 +6,6 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 
 	"odm/internal/engine"
@@ -83,7 +82,9 @@ func TestSearchFiltersTheList(t *testing.T) {
 
 	// Ctrl+F puts the keyboard in the search box.
 	a.win.Canvas().Unfocus()
-	a.handleShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyF, Modifier: fyne.KeyModifierShortcutDefault})
+	if !menuShortcut(a, fyne.KeyF, fyne.KeyModifierShortcutDefault) {
+		t.Fatal("no menu item has Ctrl+F")
+	}
 	if a.win.Canvas().Focused() != a.search {
 		t.Fatal("Ctrl+F did not focus the search box")
 	}

@@ -26,6 +26,7 @@ import (
 	"odm/internal/ipc"
 	"odm/internal/native"
 	"odm/internal/osutil"
+	"odm/internal/quarantine"
 	"odm/internal/server"
 	"odm/internal/sysproxy"
 	"odm/internal/ui"
@@ -40,6 +41,9 @@ func main() {
 		runNativeHost(configBaseDir())
 		return
 	}
+	// A finished file is marked as coming from the internet, as a browser
+	// marks it, and scanned by the registered antivirus program.
+	engine.MarkFile = quarantine.Mark
 
 	addr := flag.String("addr", "127.0.0.1:8721", "web UI/API address used with -serve")
 	serve := flag.Bool("serve", false, "also serve the web UI and API on -addr (token-protected)")

@@ -1589,6 +1589,27 @@ func contiguousDone(chunks []*Chunk, total int64) int64 {
 	}
 }
 
+// MarkFile, when set, records where a finished file came from, as browsers
+// do (package quarantine sets the mark of the web on Windows). The program
+// sets it; tests leave it nil.
+var MarkFile func(path, source, referrer string) error
+
+// origin is the address a file came from and the page that linked to it.
+func (d *Download) origin() (source, referrer string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	source = d.FinalURL
+	if source == "" {
+		source = d.URL
+	}
+	for k, v := range d.Headers {
+		if strings.EqualFold(k, "Referer") {
+			referrer = v
+		}
+	}
+	return source, referrer
+}
+
 func (d *Download) finish() error {
 	d.mu.Lock()
 	f := d.file
@@ -1630,6 +1651,17 @@ func (d *Download) finish() error {
 	d.mu.Lock()
 	d.replace = false
 	d.mu.Unlock()
+	if MarkFile != nil {
+		source, referrer := d.origin()
+		if err := MarkFile(final, source, referrer); err != nil {
+			// The mark is a safeguard, not part of the file: a volume
+			// without the streams it needs (FAT) does not fail the
+			// download. A file that is gone was removed by the scan.
+			if _, serr := os.Stat(final); errors.Is(serr, os.ErrNotExist) {
+				return fmt.Errorf("removed by the antivirus program or Windows security: %w", err)
+			}
+		}
+	}
 	return nil
 }
 

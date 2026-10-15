@@ -116,6 +116,14 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Security
 
+- On Windows a finished download is handed to Attachment Services, as
+  browsers hand theirs: it gets the mark of the web (the `Zone.Identifier`
+  stream, with the address it came from) as system policy asks, so
+  SmartScreen checks a downloaded program before it runs and Office opens a
+  downloaded document in Protected View, and the registered antivirus
+  program scans it. A file the scan removes ends as an error. Where the
+  service is unavailable the mark is written directly; a drive that cannot
+  hold it (FAT) does not fail the download.
 - File names lose the characters that change the direction text is shown
   in (such as RIGHT-TO-LEFT OVERRIDE), which a server could use to make
   `photo‮gpj.exe` look like `photoexe.jpg`.

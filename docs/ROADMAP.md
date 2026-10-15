@@ -55,7 +55,8 @@ dikerjakan.
 - [ ] Folder sementara terpisah. **K**
 - [ ] Verifikasi checksum SHA-256/MD5 setelah selesai. **K–S**
 - [ ] Jalankan pemindai antivirus setelah selesai (program dan argumen bisa
-      diatur). **K**
+      diatur). **K** Sebagian: Attachment Services (Fase 5) sudah memicu
+      antivirus yang terdaftar di Windows; program pilihan sendiri belum.
 
 ## Fase 2: fitur besar
 
@@ -137,9 +138,13 @@ dikerjakan.
 Dari perbandingan dengan aria2, Gopeed, dan wget2 (2026-10-15): ODM sudah
 setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
 
-- [ ] Tandai file hasil unduhan dengan Mark-of-the-Web (`Zone.Identifier`)
+- [x] Tandai file hasil unduhan dengan Mark-of-the-Web (`Zone.Identifier`)
       lewat Attachment Services Windows (`IAttachmentExecute`), yang juga
-      memicu pemindai antivirus terdaftar. **S**
+      memicu pemindai antivirus terdaftar. **S** Paket `internal/quarantine`,
+      dipasang lewat `engine.MarkFile` di `main`. Dicek end-to-end:
+      `ZoneId=3` + `HostUrl`. Saat mengujinya ketemu bug besar: unduhan
+      multi-koneksi dari server HTTPS ber-HTTP/2 selalu gagal (sudah
+      diperbaiki).
 - [x] Buang karakter kontrol arah teks (RTLO dan sejenisnya) dari nama file,
       agar `foto‮gpj.exe` tidak tampil sebagai `fotoexe.jpg`. **K** Di
       `SanitizeName`, yang dilalui nama dari server, API, dan form.

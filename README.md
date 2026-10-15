@@ -49,7 +49,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - The New Download window remembers the save folder chosen last time, and
   falls back to the default folder when that one is gone.
 - Named queues with a run order. Each queue can download a set number of files
-  at once.
+  at once. A synchronization queue checks its finished files against the
+  server and downloads the ones that changed again, replacing the local copy.
 - A scheduler per queue: start with ODM, start at a set time (once or on chosen
   weekdays), start again every so many minutes until stopped, stop at a set
   time, retry failed files, and open a file, exit, sleep, hibernate or shut

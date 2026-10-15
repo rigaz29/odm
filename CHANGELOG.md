@@ -18,6 +18,12 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- Synchronization queues (Scheduler → Schedule): starting such a queue also
+  checks each finished file against the server (ETag, else Last-Modified,
+  else size) and downloads it again when it changed there. The new copy
+  replaces the local file, under the same name, once it is complete; the
+  old one stays until then. With "Start the queue again every N minutes"
+  the check is periodic. A synchronization queue shows a refresh icon.
 - ZIP preview: for a ZIP archive on a server that sends parts of files, the
   New Download window has a Preview… button that lists the files inside
   (name, size, date, and whether they are encrypted) before anything is
@@ -79,6 +85,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Finishing a download waits up to three seconds for a file that another
+  program holds open for a moment (an antivirus scanning it, a player with
+  the old copy), instead of failing at the final rename on Windows.
 - Site logins now work for files that need them, and support Digest as
   well as Basic. The first size check used to go out without the login, so
   a protected file failed with 401 before any byte was fetched. A login is

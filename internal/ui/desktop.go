@@ -767,9 +767,14 @@ func (a *application) buildEntries(all []engine.Info) []sidebarEntry {
 	}
 	out = append(out, sidebarEntry{text: "Queues", icon: theme.ListIcon(), header: true, node: "queues", expanded: queuesOpen})
 	if queuesOpen {
+		scheds := a.mgr.Settings().Schedules
 		for _, q := range queues {
+			icon := folder
+			if scheds[q].Sync {
+				icon = queueIcon(scheds[q])
+			}
 			out = append(out, sidebarEntry{
-				text: label(q, perQueue[strings.ToLower(q)]), kind: "queue", value: q, indent: 1, icon: folder,
+				text: label(q, perQueue[strings.ToLower(q)]), kind: "queue", value: q, indent: 1, icon: icon,
 			})
 		}
 	}

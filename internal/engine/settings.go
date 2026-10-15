@@ -67,6 +67,11 @@ type QueueSchedule struct {
 	RepeatMinutes int `json:"repeat_minutes,omitempty"`
 	// Parallel is how many of the queue's files download at once.
 	Parallel int `json:"parallel,omitempty"`
+	// Sync makes this a synchronization queue: starting it also checks each
+	// finished file against the server and downloads it again, replacing
+	// the local copy, when it changed there. With RepeatMinutes the check
+	// is periodic.
+	Sync bool `json:"sync,omitempty"`
 }
 
 // DownloadLimits caps how much is downloaded in a rolling window.

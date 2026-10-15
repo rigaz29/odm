@@ -40,6 +40,12 @@ func TestSchedulerFinishAndRepeatRoundTrip(t *testing.T) {
 		t.Fatalf("reloaded: repeat %v %q, finish %q", v.repeatOn.Checked, v.repeatMins.Text, v.finish.Selected)
 	}
 
+	// A synchronization queue is saved as one.
+	v.syncOn.SetChecked(true)
+	if !v.apply() || !a.mgr.Settings().Schedules[engine.DefaultQueue].Sync {
+		t.Fatal("the synchronization option was not saved")
+	}
+
 	// Zero minutes is refused rather than silently turning repeating off.
 	v.repeatMins.SetText("0")
 	if v.apply() {

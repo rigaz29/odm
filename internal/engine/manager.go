@@ -73,6 +73,9 @@ type Manager struct {
 	// repeatFrom holds when each queue was last started, for queues that
 	// start again every so many minutes; a stopped queue has no entry.
 	repeatFrom map[string]time.Time
+	// syncing counts the checks running for synchronization queues, which
+	// keep their queue running until they are done.
+	syncing map[string]int
 }
 
 // NewManager builds a manager from persisted settings.
@@ -96,6 +99,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 
 		schedFired: map[string]string{},
 		repeatFrom: map[string]time.Time{},
+		syncing:    map[string]int{},
 	}
 	m.authz = newAuthorizer(m.credentials)
 	return m
@@ -523,18 +527,26 @@ func (m *Manager) startQueueAt(name string, now time.Time) {
 		}
 	}
 	ids := append([]string(nil), m.order...)
+	scheds := m.settings.Schedules
 	m.mu.Unlock()
 	var matched []*Download
+	toCheck := map[string][]*Download{} // finished files of sync queues
 	for _, id := range ids {
 		d := m.get(id)
-		if d == nil || d.status() == StatusComplete {
+		if d == nil {
 			continue
 		}
 		d.mu.Lock()
 		match := queueMatches(d.Queue, name)
+		done, stream := d.Status == StatusComplete, d.Stream != nil
 		d.mu.Unlock()
-		if match {
+		q := queueOf(d)
+		switch {
+		case !match:
+		case !done:
 			matched = append(matched, d)
+		case scheds[q].Sync && !stream:
+			toCheck[q] = append(toCheck[q], d)
 		}
 	}
 	// Mark queues as running only when they actually have work; an empty
@@ -545,10 +557,85 @@ func (m *Manager) startQueueAt(name string, now time.Time) {
 		m.queueRun[queueOf(d)] = true
 		delete(m.attempts, d.ID)
 	}
+	for q := range toCheck {
+		m.queueRun[q] = true
+		m.syncing[q]++
+	}
+	ctx := m.ctx
 	m.mu.Unlock()
 	for _, d := range matched {
 		m.resume(d)
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	for q, list := range toCheck {
+		go m.syncQueue(ctx, q, list)
+	}
+}
+
+// syncQueue checks the finished files of a synchronization queue against
+// the server, one at a time, and queues each that changed to be fetched
+// again. The queue keeps running until the check is done.
+func (m *Manager) syncQueue(ctx context.Context, q string, list []*Download) {
+	defer func() {
+		m.mu.Lock()
+		m.syncing[q]--
+		if m.syncing[q] <= 0 {
+			delete(m.syncing, q)
+		}
+		m.mu.Unlock()
+		m.pump()
+		m.whenDone()
+	}()
+	for _, d := range list {
+		if ctx.Err() != nil || !m.isRunning(q) { // stopped meanwhile
+			return
+		}
+		if m.get(d.ID) != d {
+			continue // removed meanwhile
+		}
+		changed := m.syncCheck(ctx, d)
+		m.changed(d)
+		if changed {
+			m.pump() // start fetching it while the others are checked
+		}
+	}
+}
+
+// syncCheck compares a finished download with the file on the server and,
+// when that changed, queues the download to be fetched again. A file the
+// server cannot be asked about now is left as it is.
+func (m *Manager) syncCheck(ctx context.Context, d *Download) bool {
+	d.mu.Lock()
+	rawURL, headers := d.URL, d.Headers
+	etag, modified, total := d.ETag, d.LastModified, d.Total
+	d.mu.Unlock()
+	p, err := inspectWith(ctx, d.httpClient(), rawURL, headers, d.authorizer())
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.UpdatedAt = time.Now() // shown as the last attempt
+	if err != nil || d.Status != StatusComplete || !serverFileChanged(etag, modified, total, p) {
+		return false
+	}
+	d.resyncLocked(p)
+	return true
+}
+
+// serverFileChanged reports whether p describes a different file from the
+// one stored: a different ETag, else a different Last-Modified, else a
+// different size. Without any of those to compare, the file is taken as
+// unchanged rather than fetched again on every check.
+func serverFileChanged(etag, modified string, total int64, p *Probe) bool {
+	switch {
+	case etag != "" && p.ETag != "":
+		return etag != p.ETag
+	case modified != "" && p.LastModified != "":
+		return modified != p.LastModified
+	case total > 0 && p.Total > 0:
+		return total != p.Total
+	}
+	return false
 }
 
 // StopQueue pauses the active downloads of a queue. A stopped queue is not
@@ -1200,6 +1287,11 @@ func (m *Manager) settleQueuesLocked() {
 		return
 	}
 	open := map[string]bool{}
+	for q, n := range m.syncing { // a sync check is still under way
+		if n > 0 {
+			open[q] = true
+		}
+	}
 	for id, d := range m.downloads {
 		switch d.status() {
 		case StatusQueued, StatusDownloading, StatusPaused:

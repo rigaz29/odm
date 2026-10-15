@@ -143,6 +143,9 @@ type Download struct {
 
 	discardPart bool
 	changed     bool
+	// replace makes finish overwrite the file at the final name: set while a
+	// synchronization queue fetches a changed file again.
+	replace bool
 
 	// single is set once two connections disagreed. Later passes, and a
 	// resume, stay on one connection.
@@ -1571,7 +1574,10 @@ func (d *Download) finish() error {
 	}
 	final := filepath.Join(dir, name)
 	tmp := final + ".odmpart"
-	if _, err := os.Stat(final); err == nil {
+	d.mu.Lock()
+	replace := d.replace
+	d.mu.Unlock()
+	if _, err := os.Stat(final); err == nil && !replace {
 		// A file took this name while we downloaded. Keep it and finish
 		// under the next free name; this used to delete it.
 		alt, err := freeName(dir, name)
@@ -1583,7 +1589,56 @@ func (d *Download) finish() error {
 		d.mu.Unlock()
 		final = filepath.Join(dir, alt)
 	}
-	return os.Rename(tmp, final)
+	// A synchronization download replaces the file it was made from; the old
+	// copy stayed in place until the new one was complete.
+	if err := renameRetry(tmp, final); err != nil {
+		return err
+	}
+	d.mu.Lock()
+	d.replace = false
+	d.mu.Unlock()
+	return nil
+}
+
+// renameAttempts and renameWait bound how long finish keeps trying to move
+// the .odmpart into place. On Windows a file that another program holds
+// open (an antivirus scanning the new file, a player with the old copy of a
+// synchronized file) cannot be renamed or replaced for that moment.
+var (
+	renameAttempts = 12
+	renameWait     = 250 * time.Millisecond
+)
+
+func renameRetry(from, to string) error {
+	var err error
+	for i := 0; i < renameAttempts; i++ {
+		if err = os.Rename(from, to); err == nil {
+			return nil
+		}
+		if _, serr := os.Stat(from); serr != nil {
+			return err // nothing to move: retrying cannot help
+		}
+		time.Sleep(renameWait)
+	}
+	return err
+}
+
+// resyncLocked prepares a finished download to be fetched again because the
+// file on the server changed (p): the new representation is planned from
+// the first byte into a fresh .odmpart, and finish replaces the old file.
+// The caller holds d.mu.
+func (d *Download) resyncLocked(p *Probe) {
+	if p.FinalURL != "" {
+		d.FinalURL = p.FinalURL
+	}
+	d.Total, d.RangeOK = p.Total, p.RangeOK
+	d.ETag, d.LastModified = p.ETag, p.LastModified
+	d.cookies = p.Cookies
+	d.single, d.alone, d.restarted = false, false, false
+	d.planLocked(p)
+	d.discardPart = true // a leftover .odmpart is not this file
+	d.replace = true
+	d.Status, d.Err = StatusQueued, ""
 }
 
 // maxNameTries bounds the "name (n).ext" search.
@@ -1744,6 +1799,7 @@ type State struct {
 	LastModified string            `json:"last_modified,omitempty"`
 	Single       bool              `json:"single,omitempty"`
 	Alone        bool              `json:"alone,omitempty"`
+	Replace      bool              `json:"replace,omitempty"`
 	CategoryName string            `json:"category_name,omitempty"`
 	Queue        string            `json:"queue,omitempty"`
 	Description  string            `json:"description,omitempty"`
@@ -1783,7 +1839,7 @@ func (d *Download) State() State {
 		OpenWhenDone: d.OpenWhenDone, CategoryName: d.CategoryName,
 		Queue: d.Queue, Description: d.Description, Order: d.Order,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
-		Single: d.single, Alone: d.alone, Status: status, Err: d.Err,
+		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
 		Chunks: chunks, Stream: stream, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
@@ -1807,6 +1863,7 @@ func Restore(s State, client *http.Client) *Download {
 	d.LastModified = s.LastModified
 	d.single = s.Single
 	d.alone = s.Alone
+	d.replace = s.Replace
 	d.OpenWhenDone = s.OpenWhenDone
 	d.CategoryName = s.CategoryName
 	d.Queue = s.Queue

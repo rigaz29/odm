@@ -45,11 +45,11 @@ type schedulerView struct {
 	delBtn   *widget.Button
 
 	// Schedule tab
-	onStartup, startOn, stopOn, retryOn, openOn, repeatOn *widget.Check
-	startAt, stopAt, retries, openPath, repeatMins        *widget.Entry
-	mode, finish                                          *widget.RadioGroup
-	onceDate                                              *widget.DateEntry
-	days                                                  []*widget.Check
+	onStartup, startOn, stopOn, retryOn, openOn, repeatOn, syncOn *widget.Check
+	startAt, stopAt, retries, openPath, repeatMins                *widget.Entry
+	mode, finish                                                  *widget.RadioGroup
+	onceDate                                                      *widget.DateEntry
+	days                                                          []*widget.Check
 
 	// Files tab
 	parallel *widget.Entry
@@ -130,7 +130,7 @@ func (v *schedulerView) build() {
 				label.SetText("Download limits")
 				return
 			}
-			icon.SetResource(theme.ListIcon())
+			icon.SetResource(queueIcon(v.sched[v.names[id]]))
 			label.SetText(v.names[id])
 		},
 	)
@@ -193,6 +193,7 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 		e.OnChanged = func(string) { mark() }
 		return e
 	}
+	v.syncOn = check("Synchronization queue: check finished files and download them again when they change on the server")
 	v.onStartup = check("Start download on ODM startup")
 	v.startOn = check("Start download at")
 	v.startAt = entry("HH:MM")
@@ -233,6 +234,9 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 		return container.NewGridWrap(fyne.NewSize(w, o.MinSize().Height), o)
 	}
 	return container.NewVScroll(container.NewVBox(
+		v.syncOn,
+		schedHint("The new copy replaces the local file once it is complete. With \"Start the queue again\" below, the check runs every so many minutes."),
+		widget.NewSeparator(),
 		v.onStartup,
 		widget.NewSeparator(),
 		container.NewHBox(v.startOn, fixed(v.startAt, 90)),
@@ -387,6 +391,7 @@ func (v *schedulerView) select_(name string) {
 	v.limitBox.Hide()
 	v.queueBox.Show()
 	sc := v.sched[name]
+	v.syncOn.SetChecked(sc.Sync)
 	v.onStartup.SetChecked(sc.OnStartup)
 	v.startOn.SetChecked(sc.StartEnabled)
 	v.startAt.SetText(orDefault(sc.StartAt, "23:00"))
@@ -421,6 +426,14 @@ func (v *schedulerView) select_(name string) {
 	v.refreshFiles()
 }
 
+// queueIcon marks a synchronization queue apart from an ordinary one.
+func queueIcon(sc engine.QueueSchedule) fyne.Resource {
+	if sc.Sync {
+		return theme.ViewRefreshIcon()
+	}
+	return theme.ListIcon()
+}
+
 // schedHint is a small explanatory line under scheduler options.
 func schedHint(s string) *widget.Label {
 	l := widget.NewLabel(s)
@@ -443,6 +456,7 @@ func (v *schedulerView) store() {
 		return
 	}
 	sc := v.sched[v.current]
+	sc.Sync = v.syncOn.Checked
 	sc.OnStartup = v.onStartup.Checked
 	sc.StartEnabled = v.startOn.Checked
 	sc.StartAt = strings.TrimSpace(v.startAt.Text)

@@ -54,10 +54,15 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		sortCol:         -1,
 	}
 	a.fyneApp = app.NewWithID("com.ochi.odm")
-	a.fyneApp.Settings().SetTheme(newTheme())
+	a.applyTheme()
 	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
 	a.win.Resize(fyne.NewSize(1140, 660)) // the toolbar and the search box fit
-	a.win.SetIcon(theme.DownloadIcon())
+	// In the accent colour, not the text colour: a dark icon for the light
+	// theme vanished on a dark title bar or taskbar, and a light one on a
+	// light bar.
+	icon := theme.NewColoredResource(theme.DownloadIcon(), theme.ColorNamePrimary)
+	a.fyneApp.SetIcon(icon)
+	a.win.SetIcon(icon)
 	a.notify = a.fyneApp.SendNotification
 	a.beep = playSound
 	// Not in front until a window gets the focus: Windows may start ODM
@@ -133,7 +138,7 @@ func (a *application) setupTray() {
 	desk.SetSystemTrayMenu(a.trayMenu)
 	a.limiterShown = "" // the new item has not been synced yet
 	a.syncLimiter(a.mgr.Settings().EffectiveSpeedLimit())
-	desk.SetSystemTrayIcon(theme.DownloadIcon())
+	desk.SetSystemTrayIcon(theme.NewColoredResource(theme.DownloadIcon(), theme.ColorNamePrimary))
 	desk.SetSystemTrayWindow(a.win) // left-click shows the window
 	a.win.SetCloseIntercept(func() {
 		if a.mgr.Settings().NoCloseToTray {
@@ -443,7 +448,7 @@ func (a *application) build() {
 	list := framed(container.NewStack(a.grid, a.table, container.NewVBox(newHeaderGrips(a))))
 	// The category tree uses tighter padding; the table's rows are already
 	// compact because its cells draw their own text at a fixed height.
-	compact := compactTheme{Theme: newTheme()}
+	compact := compactTheme{}
 
 	a.collapsed = map[string]bool{}
 	a.cats = widget.NewList(

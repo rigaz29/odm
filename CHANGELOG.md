@@ -12,6 +12,11 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- A light theme. ODM follows the system's light or dark app mode, also
+  when it changes while ODM runs, and Options → General → Appearance can
+  keep it light or dark and pick one of eight accent colours. The window
+  and tray icons take the accent colour, so they show on a dark or a light
+  taskbar.
 - Columns of the download list can be hidden and shown (right-click a
   column header, or View → Columns) and resized by dragging a header's
   border. The shown columns, their widths and the sort order are kept for

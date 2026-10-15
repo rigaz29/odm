@@ -77,8 +77,11 @@ dikerjakan.
 
 ## Fase 3: modernisasi dan perapian UI
 
-- [ ] Tema terang dan gelap mengikuti setelan Windows, pilihan warna
-      aksen. **S**
+- [x] Tema terang dan gelap mengikuti setelan Windows, pilihan warna
+      aksen. **S** Options → General → Appearance: Same as Windows / Light /
+      Dark, 8 warna aksen. Disimpan di preferences Fyne
+      (`%USERPROFILE%\AppData\Roamingyne\com.ochi.odm`, bukan
+      `%APPDATA%`).
 - [x] Kolom bisa disembunyikan/ditampilkan; lebar dan sortir diingat. **S**
       Klik kanan header atau View → Columns; drag tepi header untuk lebar.
       Disimpan di preferences Fyne. Catatan teknis: `widget.Table` menutup

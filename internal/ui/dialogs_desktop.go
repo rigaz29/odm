@@ -544,6 +544,11 @@ func (a *application) openOptionsTab(tab int) {
 	startupCheck.SetChecked(startupWas)
 	trayCheck := widget.NewCheck("Keep ODM running in the system tray when the window is closed", nil)
 	trayCheck.SetChecked(!settings.NoCloseToTray)
+	prefs := a.fyneApp.Preferences()
+	themeWas, accentWas := prefs.StringWithFallback(prefTheme, themeSystem), prefs.String(prefAccent)
+	themeSelect := widget.NewSelect(themeChoices(), nil)
+	themeSelect.SetSelectedIndex(themeIndex(themeWas))
+	accentRow, accentPicked := newAccentPicker(accentWas)
 	generalTab := container.NewVBox(
 		header("Browser / system integration"),
 		widget.NewLabelWithStyle("Browser extension (Chrome, Edge, Chromium, Firefox)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
@@ -555,6 +560,10 @@ func (a *application) openOptionsTab(tab int) {
 		trayCheck,
 		clipCheck,
 		updCheck,
+		header("Appearance"),
+		container.New(layout.NewFormLayout(),
+			widget.NewLabel("Theme"), container.NewHBox(small(themeSelect, 200)),
+			widget.NewLabel("Accent colour"), accentRow),
 	)
 
 	// File types
@@ -1054,6 +1063,11 @@ func (a *application) openOptionsTab(tab int) {
 		next.Logins = logins
 		next.Limits = lim
 		a.mgr.UpdateSettings(next)
+		if mode, accent := themeModes[themeSelect.SelectedIndex()], accentPicked(); mode != themeWas || accent != accentWas {
+			prefs.SetString(prefTheme, mode)
+			prefs.SetString(prefAccent, accent)
+			a.applyTheme()
+		}
 		if startupCheck.Checked != startupWas {
 			exe, err := os.Executable()
 			if err == nil {

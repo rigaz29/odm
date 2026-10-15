@@ -157,6 +157,8 @@ type tableCell struct {
 	text    *canvas.Text
 	full    string
 	hasIcon bool
+	// selected paints the selection colour behind the cell.
+	selected bool
 }
 
 func newTableCell() *tableCell {
@@ -195,13 +197,9 @@ func (c *tableCell) showIcon(on bool) {
 // setSelected paints the whole row: widget.Table only highlights the one
 // clicked cell, so every cell of the selected row draws its own background.
 func (c *tableCell) setSelected(on bool) {
-	want := color.Color(color.Transparent)
-	if on {
-		want = odmPalette.accentSoft
-	}
-	if c.bg.FillColor != want {
-		c.bg.FillColor = want
-		c.bg.Refresh()
+	if c.selected != on {
+		c.selected = on
+		c.Refresh()
 	}
 }
 
@@ -229,6 +227,11 @@ func (r *cellRenderer) MinSize() fyne.Size { return fyne.NewSize(20, rowHeight()
 
 func (r *cellRenderer) Refresh() {
 	r.c.text.Color = theme.ForegroundColor()
+	r.c.bg.FillColor = color.Transparent
+	if r.c.selected {
+		r.c.bg.FillColor = theme.SelectionColor()
+	}
+	r.c.bg.Refresh()
 	r.Layout(r.c.Size())
 	r.c.text.Refresh()
 	canvas.Refresh(r.c)
@@ -343,7 +346,7 @@ func (h *headerLabel) CreateRenderer() fyne.WidgetRenderer {
 	text := canvas.NewText(h.text, theme.ForegroundColor())
 	text.TextSize = theme.TextSize()
 	bg := canvas.NewRectangle(color.Transparent)
-	line := canvas.NewRectangle(odmPalette.border)
+	line := canvas.NewRectangle(theme.SeparatorColor())
 	line.SetMinSize(fyne.NewSize(1, 1))
 	return &headerRenderer{h: h, text: text, bg: bg, line: line, objects: []fyne.CanvasObject{bg, text, line}}
 }
@@ -369,6 +372,9 @@ func (r *headerRenderer) MinSize() fyne.Size {
 
 func (r *headerRenderer) Refresh() {
 	r.text.Text = r.h.text
+	r.text.Color = theme.ForegroundColor()
+	r.line.FillColor = theme.SeparatorColor()
+	r.line.Refresh()
 	if r.h.hover {
 		r.bg.FillColor = theme.HoverColor()
 	} else {
@@ -465,9 +471,9 @@ func (r *stripRenderer) rebuild() {
 	}
 	r.objects = make([]fyne.CanvasObject, 0, n*2)
 	for i := 0; i < n; i++ {
-		bg := canvas.NewRectangle(odmPalette.scrollTrack)
+		bg := canvas.NewRectangle(theme.Color(theme.ColorNameScrollBarBackground))
 		bg.CornerRadius = 2
-		fill := canvas.NewRectangle(odmPalette.accent)
+		fill := canvas.NewRectangle(theme.PrimaryColor())
 		fill.CornerRadius = 2
 		r.objects = append(r.objects, bg, fill)
 	}
@@ -492,6 +498,7 @@ func (r *stripRenderer) Layout(size fyne.Size) {
 		if w < 1 {
 			w = 1
 		}
+		bg.FillColor = theme.Color(theme.ColorNameScrollBarBackground)
 		bg.Move(fyne.NewPos(x, 0))
 		bg.Resize(fyne.NewSize(w, size.Height))
 
@@ -500,9 +507,9 @@ func (r *stripRenderer) Layout(size fyne.Size) {
 			frac = float64(c.Done) / span
 		}
 		if frac >= 1 {
-			fill.FillColor = odmPalette.success
+			fill.FillColor = theme.SuccessColor()
 		} else {
-			fill.FillColor = odmPalette.accent
+			fill.FillColor = theme.PrimaryColor()
 		}
 		fill.Move(fyne.NewPos(x, 0))
 		fill.Resize(fyne.NewSize(w*float32(frac), size.Height))
@@ -574,7 +581,7 @@ func (r *gridRenderer) Layout(size fyne.Size) {
 	off := (gap - sep) / 2
 	var objs []fyne.CanvasObject
 	line := func(x, y, w, h float32) {
-		l := canvas.NewRectangle(odmPalette.border)
+		l := canvas.NewRectangle(theme.SeparatorColor())
 		l.Move(fyne.NewPos(x, y))
 		l.Resize(fyne.NewSize(w, h))
 		objs = append(objs, l)
@@ -637,11 +644,43 @@ func (t *tapIcon) Tapped(*fyne.PointEvent) {
 // framed draws a thin border around a panel, like the sunken frames that
 // separate the category tree from the list.
 func framed(content fyne.CanvasObject) fyne.CanvasObject {
-	border := canvas.NewRectangle(color.Transparent)
-	border.StrokeColor = odmPalette.border
-	border.StrokeWidth = 1
-	return container.NewStack(border, container.New(layout.NewCustomPaddedLayout(1, 1, 1, 1), content))
+	return container.NewStack(newFrameLine(), container.New(layout.NewCustomPaddedLayout(1, 1, 1, 1), content))
 }
+
+// frameLine is the border of a framed panel, in the theme's separator
+// colour of the moment.
+type frameLine struct {
+	widget.BaseWidget
+}
+
+func newFrameLine() *frameLine {
+	f := &frameLine{}
+	f.ExtendBaseWidget(f)
+	return f
+}
+
+func (f *frameLine) CreateRenderer() fyne.WidgetRenderer {
+	border := canvas.NewRectangle(color.Transparent)
+	border.StrokeWidth = 1
+	r := &frameRenderer{border: border}
+	r.Refresh()
+	return r
+}
+
+type frameRenderer struct{ border *canvas.Rectangle }
+
+func (r *frameRenderer) Layout(size fyne.Size) { r.border.Resize(size) }
+
+func (r *frameRenderer) MinSize() fyne.Size { return fyne.NewSize(0, 0) }
+
+func (r *frameRenderer) Refresh() {
+	r.border.StrokeColor = theme.SeparatorColor()
+	r.border.Refresh()
+}
+
+func (r *frameRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.border} }
+
+func (r *frameRenderer) Destroy() {}
 
 var (
 	_ desktop.Hoverable      = (*toolButton)(nil)
@@ -650,3 +689,88 @@ var (
 	_ desktop.Cursorable     = (*headerGrips)(nil)
 	_ fyne.Draggable         = (*headerGrips)(nil)
 )
+
+/* ---------- accent swatches ---------- */
+
+// newAccentPicker is a row of round swatches, one per accent colour, with a
+// ring around the chosen one and its name beside them. selected reports
+// the chosen accent's key.
+func newAccentPicker(key string) (row fyne.CanvasObject, selected func() string) {
+	if key == "" {
+		key = accents[0].key
+	}
+	name := widget.NewLabel("")
+	var swatches []*swatch
+	pick := func(k string) {
+		key = k
+		for _, s := range swatches {
+			s.Refresh()
+		}
+		for _, a := range accents {
+			if a.key == k {
+				name.SetText(a.name)
+			}
+		}
+	}
+	objs := make([]fyne.CanvasObject, 0, len(accents)+1)
+	for _, a := range accents {
+		s := &swatch{key: a.key, color: a.color, chosen: func(k string) bool { return k == key }, pick: pick}
+		s.ExtendBaseWidget(s)
+		swatches = append(swatches, s)
+		objs = append(objs, s)
+	}
+	pick(key)
+	objs = append(objs, name)
+	return container.NewHBox(objs...), func() string { return key }
+}
+
+// swatch is one round accent colour to click.
+type swatch struct {
+	widget.BaseWidget
+	key    string
+	color  color.NRGBA
+	chosen func(key string) bool
+	pick   func(key string)
+}
+
+func (s *swatch) Tapped(*fyne.PointEvent) { s.pick(s.key) }
+
+func (s *swatch) Cursor() desktop.Cursor { return desktop.PointerCursor }
+
+func (s *swatch) CreateRenderer() fyne.WidgetRenderer {
+	r := &swatchRenderer{s: s, ring: canvas.NewCircle(color.Transparent), dot: canvas.NewCircle(s.color)}
+	r.ring.StrokeWidth = 2
+	r.Refresh()
+	return r
+}
+
+type swatchRenderer struct {
+	s         *swatch
+	ring, dot *canvas.Circle
+}
+
+const swatchSize = float32(24)
+
+func (r *swatchRenderer) Layout(size fyne.Size) {
+	d := min(size.Width, size.Height)
+	off := fyne.NewPos((size.Width-d)/2, (size.Height-d)/2)
+	r.ring.Move(off.AddXY(1, 1))
+	r.ring.Resize(fyne.NewSize(d-2, d-2))
+	r.dot.Move(off.AddXY(5, 5))
+	r.dot.Resize(fyne.NewSize(d-10, d-10))
+}
+
+func (r *swatchRenderer) MinSize() fyne.Size { return fyne.NewSize(swatchSize, swatchSize) }
+
+func (r *swatchRenderer) Refresh() {
+	r.ring.StrokeColor = color.Transparent
+	if r.s.chosen(r.s.key) {
+		r.ring.StrokeColor = theme.ForegroundColor()
+	}
+	r.ring.Refresh()
+	r.dot.Refresh()
+}
+
+func (r *swatchRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.ring, r.dot} }
+
+func (r *swatchRenderer) Destroy() {}

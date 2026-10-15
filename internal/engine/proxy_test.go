@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"net"
+	"net/http"
 	"net/url"
 	"strconv"
 	"sync/atomic"
@@ -39,6 +40,34 @@ func TestProxyChangeReachesExistingDownloads(t *testing.T) {
 	}
 	if atomic.LoadInt64(&hits) == 0 {
 		t.Fatal("no request went through the new proxy")
+	}
+}
+
+// Ranged connections use an HTTP/1.1 copy of the client. A copy made before
+// the proxy changed must not outlive the change.
+func TestProxyChangeRebuildsTheRangedClient(t *testing.T) {
+	m := NewManager(Settings{Dir: t.TempDir(), Proxy: ProxyConfig{Mode: ProxyNone}}, "")
+	info := m.Create(AddOptions{URL: "http://h/file.bin", Connections: 4})
+	d := m.get(info.ID)
+	before := d.segmentClient(true, 4)
+	if before == d.httpClient() {
+		t.Fatal("several connections should use the HTTP/1.1 copy")
+	}
+
+	next := m.Settings()
+	next.Proxy = ProxyConfig{Mode: ProxyHTTP, Host: "127.0.0.1", Port: 3128}
+	m.UpdateSettings(next)
+	after := d.segmentClient(true, 4)
+	if after == before {
+		t.Fatal("the HTTP/1.1 copy from before the proxy change is still used")
+	}
+	tr := after.Transport.(*http.Transport)
+	req, _ := http.NewRequest(http.MethodGet, "http://h/file.bin", nil)
+	if pu, err := tr.Proxy(req); err != nil || pu == nil || pu.Host != "127.0.0.1:3128" {
+		t.Fatalf("ranged client proxy = %v, %v", pu, err)
+	}
+	if tr.ResponseHeaderTimeout <= 0 {
+		t.Fatal("the HTTP/1.1 copy lost the header timeout")
 	}
 }
 

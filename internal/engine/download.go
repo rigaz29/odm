@@ -236,10 +236,13 @@ func (d *Download) httpClient() *http.Client {
 }
 
 // setClient makes later requests use c, after the proxy settings changed.
-// A request already in flight finishes on the client it started with.
+// A request already in flight finishes on the client it started with. The
+// HTTP/1.1 copy for ranged connections was made from the old client, so it
+// is dropped and made again from c on the next request.
 func (d *Download) setClient(c *http.Client) {
 	d.mu.Lock()
 	d.client = c
+	d.h1 = nil
 	d.mu.Unlock()
 }
 
@@ -491,7 +494,7 @@ func (d *Download) revalidate(ctx context.Context) error {
 	done := d.doneLocked()
 	d.mu.Unlock()
 
-	p, err := Inspect(ctx, d.client, rawURL, headers)
+	p, err := Inspect(ctx, d.httpClient(), rawURL, headers)
 	if err != nil {
 		return err
 	}
@@ -954,11 +957,11 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 // segmentClient returns the HTTP/1.1 client when more than one ranged
 // connection will run. One stream keeps the shared client.
 func (d *Download) segmentClient(rangeOK bool, conns int) *http.Client {
+	d.mu.Lock()
+	defer d.mu.Unlock()
 	if d.client == nil || !rangeOK || conns <= 1 {
 		return d.client
 	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
 	if d.h1 != nil {
 		return d.h1
 	}

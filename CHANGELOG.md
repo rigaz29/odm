@@ -32,6 +32,11 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- A proxy changed in Options now applies to downloads that are already
+  in the list. They used to keep the old proxy until ODM was restarted.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

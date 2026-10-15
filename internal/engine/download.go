@@ -142,6 +142,21 @@ func (d *Download) SetCategoryDirs(dirs map[string]string) {
 // SetOnUpdate registers a callback invoked when visible state changes.
 func (d *Download) SetOnUpdate(fn func(*Download)) { d.onUpdate = fn }
 
+// httpClient is the client for the next request of this download.
+func (d *Download) httpClient() *http.Client {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.client
+}
+
+// setClient makes later requests use c, after the proxy settings changed.
+// A request already in flight finishes on the client it started with.
+func (d *Download) setClient(c *http.Client) {
+	d.mu.Lock()
+	d.client = c
+	d.mu.Unlock()
+}
+
 // Start runs the transfer to completion, pause or error. It blocks.
 func (d *Download) Start(parent context.Context) {
 	ctx, cancel := context.WithCancel(parent)
@@ -241,7 +256,7 @@ func (d *Download) prepare(ctx context.Context) error {
 	d.mu.Unlock()
 
 	if needProbe {
-		p, err := Inspect(ctx, d.client, rawURL, headers)
+		p, err := Inspect(ctx, d.httpClient(), rawURL, headers)
 		if err != nil {
 			return err
 		}
@@ -441,7 +456,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		req.Header.Set("Cookie", cookieHeader(cookies))
 	}
 
-	resp, err := d.client.Do(req)
+	resp, err := d.httpClient().Do(req)
 	if err != nil {
 		return err
 	}

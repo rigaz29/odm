@@ -59,13 +59,18 @@ dikerjakan.
 
 ## Fase 2: fitur besar
 
-- [ ] Antrean sinkronisasi: cek berkala apakah file di server berubah
-      (ETag/Last-Modified), lalu unduh ulang. **S–B**
+- [x] Antrean sinkronisasi: cek berkala apakah file di server berubah
+      (ETag/Last-Modified), lalu unduh ulang. **S–B** File baru menimpa
+      file lama setelah selesai; rename dicoba ulang kalau file lama
+      sedang dibuka program lain.
 - [x] Scheduler: ulang tiap N menit/jam; sleep/hibernate setelah selesai. **S**
 - [x] Kategori bisa ditambah dan diedit (ekstensi dan folder). **S**
-- [ ] Preview isi ZIP sebelum diunduh (Range ke central directory). **S–B**
+- [x] Preview isi ZIP sebelum diunduh (Range ke central directory). **S–B**
+      Hanya membaca ujung arsip (sekitar 1 KB untuk arsip 2,5 MB).
 - [ ] Drop target melayang untuk link dari browser (cek dukungan Fyne
-      dulu). **S**
+      dulu). **S** Sudah dicek: GLFW 3.4 di Windows hanya menerima drop
+      file (`WM_DROPFILES`), bukan link dari browser. Butuh implementasi
+      COM `IDropTarget` sendiri (**B**). Menunggu keputusan.
 - [x] Engine: `429`/`Retry-After`, file tanpa `Content-Length`, Digest
       auth. **S** Sekaligus memperbaiki Site logins yang tidak pernah
       bekerja untuk file yang butuh login (probe dikirim tanpa login).

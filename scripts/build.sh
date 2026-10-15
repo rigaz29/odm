@@ -12,12 +12,35 @@ cd "$(dirname "$0")/.."
 OUT="${OUT:-dist}"
 mkdir -p "$OUT"
 
+# nomanifest prints -extldflags that keep the toolchain's default manifest
+# out of the exe, or nothing when the toolchain has none. mingw-w64 builds
+# such as WinLibs and MSYS2 link default-manifest.o into every program; ODM
+# embeds its own (cmd/odm/rsrc_windows_amd64.syso), and ld then keeps both
+# under the same ID, so Windows may load the one without DPI awareness. An
+# empty default-manifest.o that gcc finds first through -B replaces it.
+nomanifest() {
+  local cc="$1" found stub
+  found="$("$cc" -print-file-name=default-manifest.o 2>/dev/null || true)"
+  case "$found" in
+    */*|*\\*) ;;          # a path: the toolchain ships one
+    *) return 0 ;;
+  esac
+  stub="$OUT/.nomanifest"
+  mkdir -p "$stub"
+  echo "" | "$cc" -x c -c - -o "$stub/default-manifest.o"
+  # gcc on Windows needs a Windows path; pwd -W gives one under Git Bash.
+  stub="$(cd "$stub" && (pwd -W 2>/dev/null || pwd))"
+  printf ' -extldflags=-B%s/' "$stub"
+}
+
 desktop() {
   local goos="$1" goarch="$2" name="$3" ldflags="-s -w"
   [ "$goos" = "windows" ] && ldflags="-s -w -H=windowsgui"
   echo "building desktop $goos/$goarch -> $OUT/$name"
   if [ "$goos" = "windows" ]; then
-    CGO_ENABLED=1 CC="${CC_WINDOWS:-x86_64-w64-mingw32-gcc}" GOOS="$goos" GOARCH="$goarch" \
+    local cc="${CC_WINDOWS:-x86_64-w64-mingw32-gcc}"
+    ldflags="$ldflags$(nomanifest "$cc")"
+    CGO_ENABLED=1 CC="$cc" GOOS="$goos" GOARCH="$goarch" \
       go build -tags fyne -trimpath -ldflags "$ldflags" -o "$OUT/$name" ./cmd/odm
   else
     CGO_ENABLED=1 GOOS="$goos" GOARCH="$goarch" \

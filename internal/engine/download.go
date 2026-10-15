@@ -243,7 +243,15 @@ func (d *Download) Start(parent context.Context) {
 		// must set pauseReq, not cancel a context that is already gone.
 		d.cancel = nil
 		d.pauseReq = false
+		// A paused or failed run keeps no handle on the .odmpart: the next
+		// run opens it again, and Windows refuses to rename or delete a
+		// file that is still open.
+		f := d.file
+		d.file = nil
 		d.mu.Unlock()
+		if f != nil {
+			_ = f.Close()
+		}
 	}()
 	d.mu.Lock()
 	if d.pauseReq {

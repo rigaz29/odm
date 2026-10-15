@@ -13,7 +13,8 @@ dikerjakan.
 
 - [x] Sebelas perubahan engine (PR #1–#11 ke upstream, masih terbuka)
       digabung ke `main`.
-- [x] Upstream v0.3.0-rc1 (HLS/DASH) digabung ke `main`.
+- [x] Upstream v0.3.0-rc1 (HLS/DASH) digabung ke `main`, lalu v0.3.1
+      (lihat 0.1).
 - [x] File `.odmpart` ditutup saat download berhenti; test ffmpeg DASH di
       Windows (PR #12 dan #13, sudah di-merge upstream).
 - [x] Review engine, 9 bug diperbaiki: limiter macet di bawah 64 KB/s, file
@@ -24,11 +25,13 @@ dikerjakan.
 
 ## Langkah 0: persiapan
 
-- [ ] **0.1** Merge upstream v0.3.1 ke `main` (perekaman live HLS, popup
+- [x] **0.1** Merge upstream v0.3.1 ke `main` (perekaman live HLS, popup
       media di extension, playlist publik tidak boleh ke jaringan lokal, nama
       device Windows). **K**
-- [ ] **0.2** Pasang compiler C (gcc) supaya UI desktop Fyne bisa di-build
-      dan dicek di mesin ini. **K**
+- [x] **0.2** Pasang compiler C (gcc) supaya UI desktop Fyne bisa di-build
+      dan dicek di mesin ini. **K** WinLibs GCC 16.2 (UCRT) terpasang lewat
+      winget. `scripts/build.sh` kini mencegah manifest bawaan toolchain ikut
+      tertanam di exe.
 
 ## Fase 1: fitur cepat
 
@@ -81,6 +84,13 @@ dikerjakan.
 
 - Go portable: `C:\Users\rigaz\AppData\Local\go-sdk\go\bin`, dengan
   `GOTOOLCHAIN=local`. Test: `go test ./... -count=1`, lalu `go vet ./...`.
-- Build desktop: `go build -tags fyne -o odm.exe ./cmd/odm` (perlu gcc).
-  Build tanpa UI: `go build -o odm.exe ./cmd/odm`.
+- Build desktop (Git Bash): `bash scripts/build.sh windows`, hasilnya di
+  `dist/ODM.exe`. gcc dari WinLibs sudah ada di PATH user. Build pertama
+  sekitar 6 menit (GLFW dikompilasi), berikutnya beberapa detik.
+- Jangan build desktop dengan `go build -tags fyne` langsung: manifest
+  bawaan WinLibs ikut tertanam dan bertabrakan dengan manifest ODM. Kalau
+  perlu, tambahkan `-ldflags "-extldflags=-B<folder>/"` dengan
+  `default-manifest.o` kosong, seperti yang dilakukan `build.sh`.
+- Build tanpa UI: `go build -o odm.exe ./cmd/odm`.
+- Test dengan UI: `go test -tags fyne ./...` (perlu `CGO_ENABLED=1`).
 - Riwayat dan aturan lengkap ada di branch `docs/transfer-handoff`.

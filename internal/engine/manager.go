@@ -605,10 +605,7 @@ func (m *Manager) Restore(states []State) {
 	// shows downloads in the order they were added.
 	sorted := append([]State(nil), states...)
 	sort.SliceStable(sorted, func(i, j int) bool {
-		if !sorted[i].CreatedAt.Equal(sorted[j].CreatedAt) {
-			return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
-		}
-		return sorted[i].ID < sorted[j].ID
+		return sorted[i].CreatedAt.Before(sorted[j].CreatedAt)
 	})
 	m.mu.Lock()
 	defer m.mu.Unlock()

@@ -72,13 +72,13 @@ type DownloadLimits struct {
 
 // Settings are the user-facing options persisted between runs.
 type Settings struct {
-	Dir          string                   `json:"dir"`
-	Connections  int                      `json:"connections"`
-	Concurrent   int                      `json:"concurrent"`
-	SpeedLimit   int64                    `json:"speed_limit"`
+	Dir         string `json:"dir"`
+	Connections int    `json:"connections"`
+	Concurrent  int    `json:"concurrent"`
+	SpeedLimit  int64  `json:"speed_limit"`
 	// LimiterOff keeps SpeedLimit but does not apply it, so the speed
 	// limiter can be switched off and on again without retyping the value.
-	LimiterOff bool `json:"limiter_off,omitempty"`
+	LimiterOff   bool                     `json:"limiter_off,omitempty"`
 	Categories   bool                     `json:"categories"`
 	Clipboard    bool                     `json:"clipboard"`
 	Proxy        ProxyConfig              `json:"proxy"`

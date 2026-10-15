@@ -61,8 +61,8 @@ dikerjakan.
 
 - [ ] Antrean sinkronisasi: cek berkala apakah file di server berubah
       (ETag/Last-Modified), lalu unduh ulang. **S–B**
-- [ ] Scheduler: ulang tiap N menit/jam; sleep/hibernate setelah selesai. **S**
-- [ ] Kategori bisa ditambah dan diedit (ekstensi dan folder). **S**
+- [x] Scheduler: ulang tiap N menit/jam; sleep/hibernate setelah selesai. **S**
+- [x] Kategori bisa ditambah dan diedit (ekstensi dan folder). **S**
 - [ ] Preview isi ZIP sebelum diunduh (Range ke central directory). **S–B**
 - [ ] Drop target melayang untuk link dari browser (cek dukungan Fyne
       dulu). **S**

@@ -32,6 +32,16 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- A download removed while it was running no longer comes back the next
+  time ODM starts. Its last progress update could be saved after the
+  removal had deleted its state.
+- Saved download states are written one at a time, so two updates of one
+  download cannot leave a state file that fails to load (the download
+  used to disappear from the list).
+- Resume all no longer crashes when a download is removed at the same time.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

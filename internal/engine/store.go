@@ -5,11 +5,16 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 )
 
-// Store persists download state as one JSON file per download.
+// Store persists download state as one JSON file per download. Writes are
+// serialised: two saves of one download share a temporary file name, and
+// interleaved writes to it could leave a state file that no longer parses,
+// which drops that download from the list at the next start.
 type Store struct {
 	dir string
+	mu  sync.Mutex
 }
 
 // NewStore prepares the state directory.
@@ -30,6 +35,8 @@ func (s *Store) Save(st State) error {
 	if err != nil {
 		return err
 	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	tmp := s.path(st.ID) + ".tmp"
 	if err := os.WriteFile(tmp, data, 0o644); err != nil {
 		return err
@@ -39,6 +46,8 @@ func (s *Store) Save(st State) error {
 
 // Delete removes the state file for a download.
 func (s *Store) Delete(id string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	err := os.Remove(s.path(id))
 	if os.IsNotExist(err) {
 		return nil

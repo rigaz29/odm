@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestNewPlanCoversFileWithoutGaps(t *testing.T) {
@@ -54,6 +55,74 @@ func TestSplitShrinksVictimAndKeepsCoverage(t *testing.T) {
 	}
 	if _, ok := Split([]*Chunk{{ID: 0, Start: 0, End: MinChunkSize - 1}}, MinChunkSize); ok {
 		t.Fatal("tiny chunk must not split")
+	}
+}
+
+func TestSplitPrefersTheSlowerChunk(t *testing.T) {
+	fast := &Chunk{ID: 0, Start: 0, End: 8<<20 - 1, pace: 1 << 20}        // 8 MiB at 1 MiB/s
+	slow := &Chunk{ID: 1, Start: 8 << 20, End: 9<<20 - 1, pace: 16 << 10} // 1 MiB at 16 KiB/s
+	fastEnd := fast.End
+	nc, ok := Split([]*Chunk{fast, slow}, MinChunkSize)
+	if !ok {
+		t.Fatal("expected a split")
+	}
+	if fast.End != fastEnd {
+		t.Fatalf("fast chunk was split, end %d", fast.End)
+	}
+	if nc.Start != slow.End+1 || slow.End >= 9<<20-1 {
+		t.Fatalf("slow chunk end %d, new start %d", slow.End, nc.Start)
+	}
+	if nc.End != 9<<20-1 {
+		t.Fatalf("new chunk end %d", nc.End)
+	}
+}
+
+func TestSplitKeepsLargestWhenPacesMatch(t *testing.T) {
+	// 5 MiB and 4 MiB at the same pace. The longer one is not twice as slow,
+	// so the split stays on the larger remainder.
+	big := &Chunk{ID: 0, Start: 0, End: 5<<20 - 1, pace: 1 << 20}
+	small := &Chunk{ID: 1, Start: 5 << 20, End: 9<<20 - 1, pace: 1 << 20}
+	smallEnd := small.End
+	nc, ok := Split([]*Chunk{big, small}, MinChunkSize)
+	if !ok {
+		t.Fatal("expected a split")
+	}
+	if small.End != smallEnd {
+		t.Fatalf("smaller chunk was split, end %d", small.End)
+	}
+	if nc.Start != big.End+1 {
+		t.Fatalf("new chunk does not follow the larger chunk (%d, end %d)", nc.Start, big.End)
+	}
+}
+
+func TestSplitKeepsLargestWhenOnlyALittleSlower(t *testing.T) {
+	// 8 MiB at 2 MiB/s finishes in 4s. 3 MiB at 512 KiB/s finishes in 6s.
+	// Six seconds is not twice four, so the larger remainder is still split.
+	big := &Chunk{ID: 0, Start: 0, End: 8<<20 - 1, pace: 2 << 20}
+	small := &Chunk{ID: 1, Start: 8 << 20, End: 11<<20 - 1, pace: 512 << 10}
+	smallEnd := small.End
+	nc, ok := Split([]*Chunk{big, small}, MinChunkSize)
+	if !ok {
+		t.Fatal("expected a split")
+	}
+	if small.End != smallEnd {
+		t.Fatalf("slightly slower chunk was split, end %d", small.End)
+	}
+	if nc.Start != big.End+1 {
+		t.Fatalf("new chunk does not follow the larger chunk (%d, end %d)", nc.Start, big.End)
+	}
+}
+
+func TestNotePaceNeedsAWindow(t *testing.T) {
+	c := &Chunk{}
+	start := time.Unix(0, 0)
+	c.notePace(1000, start)
+	if c.pace != 0 {
+		t.Fatalf("pace %d before the window", c.pace)
+	}
+	c.notePace(1000, start.Add(paceWindow))
+	if c.pace != 10000 {
+		t.Fatalf("pace = %d, want 10000", c.pace)
 	}
 }
 
@@ -122,6 +191,202 @@ func TestSegmentedDownloadMultiConnection(t *testing.T) {
 	if !info.RangeOK {
 		t.Fatal("expected range support to be detected")
 	}
+	if d.State().Single {
+		t.Fatal("consistent ranges should keep using every connection")
+	}
+}
+
+func TestStalledConnectionRetriesFromLastByte(t *testing.T) {
+	data := make([]byte, 200*1024)
+	for i := range data {
+		data[i] = byte(i * 17)
+	}
+	var transfers atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Accept-Ranges", "bytes")
+		spec := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+		parts := strings.SplitN(spec, "-", 2)
+		start, _ := strconv.Atoi(parts[0])
+		end := len(data) - 1
+		explicit := len(parts) == 2 && parts[1] != ""
+		if explicit {
+			if v, err := strconv.Atoi(parts[1]); err == nil {
+				end = v
+			}
+		}
+		if end >= len(data) {
+			end = len(data) - 1
+		}
+		if start < 0 || start > end {
+			http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		body := data[start : end+1]
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(data)))
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.WriteHeader(http.StatusPartialContent)
+		// The size probe asks for the first byte only and does not read a body.
+		if !explicit || (start == 0 && end == 0) {
+			return
+		}
+		if transfers.Add(1) == 1 {
+			const first = 4096
+			if _, err := w.Write(data[start : start+first]); err != nil {
+				return
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			<-r.Context().Done()
+			return
+		}
+		_, _ = w.Write(body)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	d := New("stall", srv.URL+"/stall.bin", dir, 1, nil, 0, srv.Client())
+	d.stallTimeout = 200 * time.Millisecond
+	d.Start(context.Background())
+
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q", info.Status, info.Error)
+	}
+	if transfers.Load() < 2 {
+		t.Fatalf("stalled connection was not retried, transfers=%d", transfers.Load())
+	}
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatal("bytes after a stalled connection do not match")
+	}
+}
+
+func TestHeaderStallRetries(t *testing.T) {
+	data := bytes.Repeat([]byte("h"), 128*1024)
+	var transfers atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, end, explicit := testRange(r, len(data))
+		if start < 0 || end < start {
+			http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		if oneByteProbe(r) {
+			writeTestRange(w, data, start, end)
+			return
+		}
+		if explicit && transfers.Add(1) == 1 {
+			<-r.Context().Done()
+			return
+		}
+		writeTestRange(w, data, start, end)
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	d := New("header-stall", srv.URL+"/h.bin", dir, 1, nil, 0, srv.Client())
+	d.stallTimeout = 200 * time.Millisecond
+	t.Cleanup(func() { closeEngineFile(d) })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	d.Start(ctx)
+
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q transfers=%d", info.Status, info.Error, transfers.Load())
+	}
+	if transfers.Load() < 2 {
+		t.Fatalf("header stall was not retried, transfers=%d", transfers.Load())
+	}
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatal("bytes after a header stall do not match")
+	}
+}
+
+func TestPauseDuringHeaderWaitIsPaused(t *testing.T) {
+	data := bytes.Repeat([]byte("p"), 128*1024)
+	var d *Download
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, end, explicit := testRange(r, len(data))
+		if start < 0 || end < start {
+			http.Error(w, "bad range", http.StatusRequestedRangeNotSatisfiable)
+			return
+		}
+		if oneByteProbe(r) {
+			writeTestRange(w, data, start, end)
+			return
+		}
+		if explicit {
+			d.Pause()
+			<-release
+			return
+		}
+		writeTestRange(w, data, start, end)
+	}))
+	defer srv.Close()
+	defer close(release)
+
+	dir := t.TempDir()
+	d = New("header-pause", srv.URL+"/p.bin", dir, 1, nil, 0, srv.Client())
+	d.stallTimeout = time.Second
+	t.Cleanup(func() { closeEngineFile(d) })
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	d.Start(ctx)
+
+	info := d.Info()
+	if info.Status != StatusPaused {
+		t.Fatalf("status=%s err=%q", info.Status, info.Error)
+	}
+}
+
+// oneByteProbe reports the size probe, Range: bytes=0-0. It is a closed
+// range, so tests must not treat it as a file transfer.
+func oneByteProbe(r *http.Request) bool {
+	return r.Header.Get("Range") == "bytes=0-0"
+}
+
+func testRange(r *http.Request, total int) (start, end int, explicit bool) {
+	spec := strings.TrimPrefix(r.Header.Get("Range"), "bytes=")
+	parts := strings.SplitN(spec, "-", 2)
+	start, _ = strconv.Atoi(parts[0])
+	end = total - 1
+	explicit = len(parts) == 2 && parts[1] != ""
+	if explicit {
+		if v, err := strconv.Atoi(parts[1]); err == nil {
+			end = v
+		}
+	}
+	if end >= total {
+		end = total - 1
+	}
+	return start, end, explicit
+}
+
+func writeTestRange(w http.ResponseWriter, data []byte, start, end int) {
+	body := data[start : end+1]
+	w.Header().Set("Accept-Ranges", "bytes")
+	w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(data)))
+	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+	w.WriteHeader(http.StatusPartialContent)
+	_, _ = w.Write(body)
+}
+
+func closeEngineFile(d *Download) {
+	d.mu.Lock()
+	if d.file != nil {
+		_ = d.file.Close()
+		d.file = nil
+	}
+	d.mu.Unlock()
 }
 
 func TestDownloadWithoutRangeSupport(t *testing.T) {

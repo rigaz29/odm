@@ -11,12 +11,31 @@ queues. It runs as a desktop app, or headless with a JSON API.
 
 **Downloading**
 - Up to 32 connections per file using `Range` requests (8 by default), with
-  per-server overrides.
-- An idle connection takes over half of the busiest remaining chunk, so all
-  connections stay busy until the end.
+  per-server overrides. The first connection opens immediately. Another opens
+  after every connection already running has stored file bytes, up to the
+  configured limit. Several connections use HTTP/1.1, one socket each.
+  A single stream can still use HTTP/2.
+- An idle connection takes half of the chunk that will take the longest to
+  finish, when that chunk will take at least twice as long as the fastest
+  one. Until a pace is known, it takes half of the largest remaining chunk.
 - Resume after a pause, crash or restart from the exact byte offset. If a
   link expires, give the download a new address and it continues where it
   stopped, as long as the new address serves the same file.
+- Range requests ask for the raw bytes (`Accept-Encoding: identity`), so a
+  compressed response is not written in place of the file. A header set on
+  the download itself is left as it is.
+- A connection that closes before its chunk is finished retries from the
+  last byte written, and stops after the retry limit.
+- A saved `ETag` or `Last-Modified` is sent as `If-Range` on resume. If the
+  file on the server has changed, the partial download is discarded and
+  started again from the first byte. A `200` for a range that already covers
+  the whole file is kept when that validator still matches.
+- A later chunk re-reads a short stretch of the chunk before it. If the two
+  copies differ, the rest of the file is fetched on one connection. If that
+  copy still differs, the partial file is discarded and the download starts
+  again from the first byte.
+- A server that answers a smaller range with the whole file keeps bytes
+  already stored. The remainder is fetched on one connection.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
   window.
@@ -184,19 +203,39 @@ only.
 
 ## How a download works
 
-1. **Probe.** A ranged `GET bytes=0-` returns the file size, range support, file
-   name, cookies and validators.
+1. **Probe.** A ranged `GET bytes=0-0` returns the file size, range support,
+   file name, cookies and validators.
 2. **Plan.** The file is split into up to N chunks of at least 64 KiB. A tiny
    last chunk is merged into the one before it.
-3. **Transfer.** N workers each take a chunk and write it into the `.odmpart`
-   file at its absolute offset. A worker that finishes early takes over half
-   of the largest remaining chunk.
+3. **Transfer.** Workers write each chunk into the `.odmpart` file at its
+   absolute offset. Each range request asks for the raw bytes. With more than
+   one connection the requests use HTTP/1.1, so each connection has its own
+   socket. The first connection opens immediately. Another opens after every
+   connection already running has stored file bytes, up to the configured
+   limit. A worker that finishes early takes half of the chunk with the most
+   time left, when that chunk will take at least twice as long as the fastest
+   one. Until a pace is known, that is the largest remaining chunk. Bytes past
+   that chunk's new end are left for the connection that took them. A
+   connection that receives no bytes for 30 seconds, including while it waits
+   for response headers, is closed and that chunk is retried from the last
+   byte written. The other connections keep going. If the server answers a
+   smaller range with the whole file, bytes already stored are kept and the
+   remainder is fetched on one connection.
 4. **Finish.** The `.odmpart` file is renamed to the final name.
 
-Each chunk's progress (`{id,start,end,done}`) is saved as JSON, so a restart
-continues from the exact byte. Segmented ranges, byte-offset resume and chunk
-splitting are standard download-manager techniques. ODM implements them in
-its own code.
+Each chunk's progress (`{id,start,end,done}`) is saved as JSON, together with
+the `ETag` and `Last-Modified` from the probe, so a restart continues from
+the exact byte while the file on the server is unchanged. If `If-Range` fails,
+or a later probe reports a different validator or size, ODM deletes the partial
+file and downloads the new one. A `200` for a range that already covers the
+whole file is kept when the validator still matches. A chunk that starts after
+another one also reads 64 bytes of that earlier chunk and compares the two
+copies. When they differ, the other connections stop and one connection
+finishes from the last matching byte. If that copy differs as well, the
+partial file is deleted and downloaded again from the first byte, still on
+one connection. A resume after this fallback stays on one connection.
+Segmented ranges, byte-offset resume and chunk splitting are standard
+download-manager techniques. ODM implements them in its own code.
 
 ## Project layout
 

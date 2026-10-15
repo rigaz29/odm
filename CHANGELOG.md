@@ -8,6 +8,17 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- A connection that receives no bytes for 30 seconds is closed and its chunk
+  is retried from the last written offset. The same limit covers the wait
+  for response headers. Other connections of the same file keep going.
+- Resumed downloads send the saved `ETag` or `Last-Modified` as `If-Range`.
+  When the file on the server has changed, the partial file is discarded and
+  the download starts again from the first byte. A `200` response whose range
+  already covers the whole file is kept when that validator still matches.
+- When two connections receive different bytes for the same offset, the
+  download continues on one connection from the last matching byte. If that
+  copy still differs, the partial file is discarded and the download starts
+  again from the first byte.
 - HLS and DASH streams: ODM reads the playlist, picks the best quality,
   downloads the segments over several connections (each segment is kept,
   so a resume skips the finished ones) and joins them into one file.
@@ -29,8 +40,32 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- A download that uses several connections fetches each part over HTTP/1.1,
+  so each connection has its own socket. A single stream can still use HTTP/2.
+- An idle connection takes the tail of the chunk that will take the longest
+  to finish, once that chunk is at least twice as slow as the fastest one.
+  Until a pace is known, the largest remainder is used.
+- Connections open one at a time. The next connection starts after every
+  connection already open has stored file bytes, up to the configured limit.
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
+
+### Fixed
+
+- The size probe requests the first byte (`Range: bytes=0-0`). A server that
+  answers 200 for a range covering the whole file is still segmented when
+  that one-byte request returns 206.
+- Range requests send `Accept-Encoding: identity`, so the bytes written to
+  disk are the file itself. An `Accept-Encoding` header set on the download
+  is left as it is.
+- A connection that closes before its chunk is finished retries from the
+  last byte written. The retry uses the usual pause and stops after the
+  retry limit.
+- Splitting a chunk while its connection is still reading no longer counts
+  those bytes twice. Progress stays within the file size.
+- A server that answers a smaller range with the whole file no longer fails
+  that chunk. Bytes already stored are kept, and the rest of the file is
+  fetched on one connection.
 
 ## [0.2.0] - 2026-10-13
 

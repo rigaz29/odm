@@ -80,7 +80,9 @@ dikerjakan.
 - [ ] Tema terang dan gelap mengikuti setelan Windows, pilihan warna
       aksen. **S**
 - [ ] Kolom bisa disembunyikan/ditampilkan; lebar dan sortir diingat. **S**
-- [ ] Status bar: total kecepatan, jumlah aktif, status limiter. **K**
+- [x] Status bar: total kecepatan, jumlah aktif, status limiter. **K**
+      Kiri: jumlah item, hasil pencarian, jumlah yang dipilih. Kanan:
+      jumlah aktif dan kecepatan total, jumlah antre, batas kecepatan.
 - [ ] Dialog Add URL dengan kartu hasil probe; jendela progress dengan
       grafik kecepatan. **S**
 - [x] Shortcut keyboard: Del, Ctrl+N, Ctrl+F, Space. **K** Ditambah

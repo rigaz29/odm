@@ -69,7 +69,7 @@ func TestSearchFiltersTheList(t *testing.T) {
 	if n := len(a.items); n != 2 {
 		t.Fatalf("%d rows for %q, want 2", n, "report")
 	}
-	if got := a.status.Text; got != "  2 of 3 items match the search" {
+	if got := a.status.Text; got != "2 of 3 items match the search" {
 		t.Fatalf("status %q", got)
 	}
 

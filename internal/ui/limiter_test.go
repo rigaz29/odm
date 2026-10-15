@@ -41,16 +41,16 @@ func TestLimiterMenuToggle(t *testing.T) {
 	if n, _ := limiterItemsChecked(a); n != 0 {
 		t.Fatalf("%d limiter items checked while off", n)
 	}
-	if strings.Contains(a.status.Text, "speed limit") {
-		t.Fatalf("status names a limit while off: %q", a.status.Text)
+	if strings.Contains(a.activity.Text, "speed limit") {
+		t.Fatalf("status names a limit while off: %q", a.activity.Text)
 	}
 
 	a.toggleLimiter() // on again with the saved 500 KB/s
 	if n, label := limiterItemsChecked(a); n != len(a.limiterItems) || !strings.Contains(label, "500") {
 		t.Fatalf("after turning on: %d checked, label %q", n, label)
 	}
-	if !strings.Contains(a.status.Text, "speed limit 500") {
-		t.Fatalf("status %q", a.status.Text)
+	if !strings.Contains(a.activity.Text, "speed limit 500") {
+		t.Fatalf("status %q", a.activity.Text)
 	}
 
 	a.toggleLimiter()

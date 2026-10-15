@@ -182,10 +182,13 @@ type application struct {
 	fyneApp fyne.App
 	win     fyne.Window
 
-	table  *downloadTable
-	cats   *widget.List
-	split  *container.Split
-	status *widget.Label
+	table *downloadTable
+	cats  *widget.List
+	split *container.Split
+	// status names the downloads in the list (left of the status bar);
+	// activity what runs and the speed limit (right).
+	status   *widget.Label
+	activity *widget.Label
 
 	mu      sync.Mutex
 	items   []engine.Info
@@ -462,9 +465,12 @@ func (a *application) build() {
 	a.split = container.NewHSplit(sidebar, list)
 	a.split.Offset = 0.2
 
-	a.status = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{})
+	a.status = widget.NewLabel("")
+	a.activity = widget.NewLabel("")
+	statusBar := container.New(layout.NewCustomPaddedLayout(0, 0, 4, 4),
+		container.NewBorder(nil, nil, nil, a.activity, a.status))
 	body := container.New(layout.NewCustomPaddedLayout(4, 0, 4, 4), a.split)
-	a.win.SetContent(container.NewBorder(top, a.status, nil, nil, body))
+	a.win.SetContent(container.NewBorder(top, statusBar, nil, nil, body))
 	a.mainMenu = a.buildMenu()
 	a.win.SetMainMenu(a.mainMenu)
 	// Keys typed with nothing focused (e.g. right after start) still reach
@@ -1108,30 +1114,20 @@ func (a *application) refresh() {
 	}
 	a.updateToolbar()
 
-	active, speed := 0, int64(0)
+	active, queued, speed := 0, 0, int64(0)
 	for _, d := range all {
-		if d.Status == engine.StatusDownloading {
+		switch d.Status {
+		case engine.StatusDownloading:
 			active++
 			speed += d.Speed
+		case engine.StatusQueued:
+			queued++
 		}
 	}
-	if a.status != nil {
-		items := fmt.Sprintf("%d items", len(all))
-		if len(all) == 1 {
-			items = "1 item"
-		}
-		if len(terms) > 0 {
-			items = fmt.Sprintf("%d of %s match the search", len(filtered), items)
-		}
-		text := "  " + items
-		if active > 0 {
-			text = fmt.Sprintf("  %d active · %s/s · %s", active, humanBytes(speed), items)
-		}
-		if limit > 0 {
-			text += fmt.Sprintf(" · speed limit %s/s", humanBytes(limit))
-		}
-		a.status.SetText(text)
+	if a.activity != nil {
+		a.activity.SetText(activityStatus(active, queued, speed, limit))
 	}
+	a.updateStatus()
 	a.syncLimiter(limit)
 
 	a.noticeCompletions(all)
@@ -1146,6 +1142,53 @@ func (a *application) refresh() {
 		a.scheduler.refreshFiles()
 		a.scheduler.updateButtons()
 	}
+}
+
+// updateStatus fills the left of the status bar. Selecting rows calls it
+// too, so the count does not wait for the next refresh.
+func (a *application) updateStatus() {
+	if a.status == nil {
+		return
+	}
+	a.mu.Lock()
+	text := listStatus(a.total, len(a.items), len(a.query) > 0, len(a.selected))
+	a.mu.Unlock()
+	a.status.SetText(text)
+}
+
+// listStatus says how many downloads there are, how many of them match the
+// search, and how many are selected when that is more than one.
+func listStatus(total, shown int, searching bool, selected int) string {
+	text := fmt.Sprintf("%d items", total)
+	if total == 1 {
+		text = "1 item"
+	}
+	if searching {
+		text = fmt.Sprintf("%d of %s match the search", shown, text)
+	}
+	if selected > 1 {
+		text += fmt.Sprintf(" · %d selected", selected)
+	}
+	return text
+}
+
+// activityStatus is the total speed of the running downloads, how many run
+// and wait in a queue, and the global speed limit while it applies.
+func activityStatus(active, queued int, speed, limit int64) string {
+	var parts []string
+	switch {
+	case active > 0 && speed > 0:
+		parts = append(parts, fmt.Sprintf("%d active at %s/s", active, humanBytes(speed)))
+	case active > 0:
+		parts = append(parts, fmt.Sprintf("%d active", active))
+	}
+	if queued > 0 {
+		parts = append(parts, fmt.Sprintf("%d queued", queued))
+	}
+	if limit > 0 {
+		parts = append(parts, fmt.Sprintf("speed limit %s/s", humanBytes(limit)))
+	}
+	return strings.Join(parts, " · ")
 }
 
 // noticeCompletions closes the progress window of each download that just
@@ -1353,6 +1396,7 @@ func (a *application) clickRow(row int, mods fyne.KeyModifier) {
 	a.mu.Unlock()
 	a.table.Refresh()
 	a.updateToolbar()
+	a.updateStatus()
 }
 
 func (a *application) selectAll() {
@@ -1367,6 +1411,7 @@ func (a *application) selectAll() {
 	a.mu.Unlock()
 	a.table.Refresh()
 	a.updateToolbar()
+	a.updateStatus()
 }
 
 // selectedItems returns the selected downloads in list order.

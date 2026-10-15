@@ -77,6 +77,13 @@ All notable changes to ODM are documented here. The format is based on
   copy still differs, the partial file is discarded and the download starts
   again from the first byte.
 
+### Changed
+
+- The status bar is split in two. The left names the list: how many
+  downloads, how many match the search, and how many are selected. The
+  right names what is going on: how many downloads run and at what total
+  speed, how many wait in a queue, and the speed limit while it applies.
+
 ### Security
 
 - A stream whose playlist is on a public server can no longer make ODM

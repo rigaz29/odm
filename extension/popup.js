@@ -9,7 +9,7 @@ document.getElementById("test").onclick = () => {
   try {
     const port = chrome.runtime.connectNative("com.ochi.odm");
     port.onMessage.addListener((msg) => {
-      status.textContent = msg && msg.ok ? "ODM is reachable" : `reply: ${JSON.stringify(msg)}`;
+      status.textContent = msg && msg.ok ? "ODM is reachable" : `ODM: ${(msg && msg.error) || "no reply"}`;
       port.disconnect();
     });
     port.onDisconnect.addListener(() => {

@@ -67,14 +67,15 @@ to ODM on this computer). The Chromium manifest drops the Firefox-only keys.
 
 ## 3. Use it
 
-Keep ODM running, then:
+ODM need not be open: when the browser hands it a download, it starts in
+the system tray first. Then:
 
 - **Click a file link.** Downloads whose type is in ODM's *Options → File
   types* go to ODM, which opens a *New Download* window to confirm (turn it
   off in *Options → Downloads*). Sites listed there under "leaves downloads
   from these sites alone" are skipped. **Alt-click** a link to let the
-  browser download it this once. If ODM cannot be reached, the browser keeps
-  the download.
+  browser download it this once. If ODM cannot be reached or started, the
+  browser keeps the download.
 - **Click "Download this video"** over a player. The button appears when the
   page loads a video or audio file of at least 512 KB; with several, it
   lists them. HLS/DASH streams are listed too, first the one the player
@@ -88,7 +89,8 @@ Keep ODM running, then:
   drawn on a canvas, a player in another frame, or after closing the
   button with ✕.
 
-The popup also toggles takeover and tests the connection.
+The popup also toggles takeover and tests the connection, starting ODM
+when it is not running.
 
 With each hand-off the extension sends ODM the URL, the page it came from,
 the page title, the browser's user agent and the site's cookies for that URL,

@@ -64,3 +64,50 @@ func TestRelayFileHasNoStream(t *testing.T) {
 		t.Fatalf("file relayed as stream: %+v", got)
 	}
 }
+
+func TestRelayStartsODM(t *testing.T) {
+	running := false
+	relay := func() native.Reply {
+		if !running {
+			return native.Reply{Error: errNotRunning}
+		}
+		return native.Reply{OK: true, Message: "queued"}
+	}
+	starts := 0
+	start := func() error { starts++; running = true; return nil }
+	if r := relayStarting(relay, start); !r.OK || starts != 1 {
+		t.Fatalf("ODM closed: reply %+v after %d starts", r, starts)
+	}
+	if r := relayStarting(relay, start); !r.OK || starts != 1 {
+		t.Fatalf("ODM running: reply %+v after %d starts", r, starts)
+	}
+
+	running = false
+	if r := relayStarting(relay, nil); r.OK || r.Error != errNotRunning {
+		t.Fatalf("no way to start: %+v", r)
+	}
+	failed := func() error { return io.ErrUnexpectedEOF }
+	if r := relayStarting(relay, failed); r.OK || !strings.Contains(r.Error, "could not be started") {
+		t.Fatalf("start failed: %+v", r)
+	}
+	// Other errors are ODM's answer, not a reason to start another one.
+	busy := func() native.Reply { return native.Reply{Error: "ODM returned 500"} }
+	if r := relayStarting(busy, start); r.Error != "ODM returned 500" || starts != 1 {
+		t.Fatalf("an error from ODM started it: %+v, %d starts", r, starts)
+	}
+}
+
+func TestRelayPingAsksODM(t *testing.T) {
+	down := &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+		return nil, io.ErrClosedPipe
+	})}
+	if r := relayPing(down); r.OK || r.Error != errNotRunning {
+		t.Fatalf("ping with ODM closed: %+v", r)
+	}
+	up := &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})}
+	if r := relayPing(up); !r.OK {
+		t.Fatalf("ping with ODM running: %+v", r)
+	}
+}

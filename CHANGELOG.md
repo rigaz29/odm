@@ -8,6 +8,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- A download the browser hands over starts ODM, in the system tray, when it
+  is not running. The browser used to keep such downloads, so taking them
+  over needed ODM to be open first. The extension popup's connection test
+  starts it the same way.
 - ODM registers itself with the browsers when it starts, so the extension
   works without first running `-register-browser` or clicking *Register*.
   This happens when no browser is registered yet, and again when ODM has
@@ -162,6 +166,8 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- The extension popup's connection test said "ODM is reachable" while ODM
+  was closed: the native host answered it without asking ODM.
 - In Chrome, Edge and Brave the browser extension let the browser keep a
   download whose link does not end in the file's type (`download.php?id=7`,
   `/get/1234`), even when the server named it `report.pdf`. These browsers

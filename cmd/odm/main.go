@@ -88,9 +88,12 @@ func main() {
 	if errors.Is(err, ipc.ErrRunning) {
 		// Launching ODM again (e.g. from the Start menu while it sits in the
 		// tray) should bring the running window forward, not do nothing.
-		resp, perr := ipc.Client(ipc.SocketPath(baseDir), 3*time.Second).Post(ipc.BaseURL+"/api/show", "", nil)
-		if perr == nil {
-			resp.Body.Close()
+		// -hidden (login, a browser download) asks for no window.
+		if !*hidden {
+			resp, perr := ipc.Client(ipc.SocketPath(baseDir), 3*time.Second).Post(ipc.BaseURL+"/api/show", "", nil)
+			if perr == nil {
+				resp.Body.Close()
+			}
 		}
 		fmt.Fprintln(os.Stderr, "ODM is already running.")
 		return

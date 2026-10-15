@@ -66,8 +66,9 @@ dikerjakan.
 - [ ] Preview isi ZIP sebelum diunduh (Range ke central directory). **S–B**
 - [ ] Drop target melayang untuk link dari browser (cek dukungan Fyne
       dulu). **S**
-- [ ] Engine: `429`/`Retry-After`, file tanpa `Content-Length`, Digest
-      auth. **S**
+- [x] Engine: `429`/`Retry-After`, file tanpa `Content-Length`, Digest
+      auth. **S** Sekaligus memperbaiki Site logins yang tidak pernah
+      bekerja untuk file yang butuh login (probe dikirim tanpa login).
 
 ## Fase 3: modernisasi dan perapian UI
 

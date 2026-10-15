@@ -415,6 +415,12 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		d.mu.Unlock()
 		return nil
 	}
+	if !d.RangeOK && ch.Done > 0 {
+		// Without ranges the server sends the file from its first byte, so a
+		// retry or a resume cannot carry on where the last attempt stopped.
+		// Count from zero again; the same bytes go to the same offsets.
+		ch.Done = 0
+	}
 	start, end := ch.Next(), ch.End
 	rangeOK := d.RangeOK
 	finalURL := d.FinalURL

@@ -32,6 +32,13 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- A download from a server without range support no longer ends up
+  corrupted after a dropped connection or a resume. Such a server always
+  sends the file from the first byte, so the download now starts counting
+  from zero again instead of writing that data after the bytes it had.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

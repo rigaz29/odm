@@ -309,7 +309,10 @@ func TestStreamDASHMergeRealFFmpeg(t *testing.T) {
 		"-f", "lavfi", "-i", "sine=duration=4",
 		"-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-g", "10", "-c:a", "aac",
 		"-f", "dash", "-seg_duration", "1", "-use_template", "1", "-use_timeline", "0",
-		filepath.Join(src, "m.mpd"))
+		"m.mpd")
+	// Run in src with a relative name: given a Windows path, ffmpeg writes
+	// the manifest there but the segments into its working directory.
+	cmd.Dir = src
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Skipf("cannot generate DASH input: %v %s", err, out)
 	}

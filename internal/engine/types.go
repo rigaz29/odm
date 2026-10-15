@@ -20,7 +20,7 @@ const (
 	MinChunkSize       = 64 << 10 // small enough to split mid-size files, large enough that per-request overhead stays negligible
 	DefaultFileLimit   = 3
 	DefaultChunkStep   = 1 << 21
-	MaxRetries = 8
+	MaxRetries         = 8
 	// DefaultStallTimeout is how long one connection may go without a byte,
 	// including the wait for response headers, before that connection is
 	// closed and its chunk is retried. The other connections of the same

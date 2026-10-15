@@ -96,6 +96,7 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Toolbar buttons and column headers now light up under the mouse pointer.
 - The Tasks menu no longer shows a second exit item, Quit, below Exit.
 - Finishing a download waits up to three seconds for a file that another
   program holds open for a moment (an antivirus scanning it, a player with

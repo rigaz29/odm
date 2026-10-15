@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -54,14 +55,16 @@ func (b *toolButton) Tapped(*fyne.PointEvent) {
 	}
 }
 
-func (b *toolButton) MouseIn(*fyne.PointEvent) {
+// MouseIn, MouseMoved and MouseOut make the button desktop.Hoverable; with
+// *fyne.PointEvent arguments they were never called and nothing lit up.
+func (b *toolButton) MouseIn(*desktop.MouseEvent) {
 	if !b.disabled {
 		b.hover = true
 		b.Refresh()
 	}
 }
 
-func (b *toolButton) MouseMoved(*fyne.PointEvent) {}
+func (b *toolButton) MouseMoved(*desktop.MouseEvent) {}
 
 func (b *toolButton) MouseOut() { b.hover = false; b.Refresh() }
 
@@ -297,9 +300,9 @@ func (h *headerLabel) Tapped(*fyne.PointEvent) {
 	}
 }
 
-func (h *headerLabel) MouseIn(*fyne.PointEvent) { h.hover = true; h.Refresh() }
+func (h *headerLabel) MouseIn(*desktop.MouseEvent) { h.hover = true; h.Refresh() }
 
-func (h *headerLabel) MouseMoved(*fyne.PointEvent) {}
+func (h *headerLabel) MouseMoved(*desktop.MouseEvent) {}
 
 func (h *headerLabel) MouseOut() { h.hover = false; h.Refresh() }
 
@@ -615,3 +618,8 @@ func framed(content fyne.CanvasObject) fyne.CanvasObject {
 	border.StrokeWidth = 1
 	return container.NewStack(border, container.New(layout.NewCustomPaddedLayout(1, 1, 1, 1), content))
 }
+
+var (
+	_ desktop.Hoverable = (*toolButton)(nil)
+	_ desktop.Hoverable = (*headerLabel)(nil)
+)

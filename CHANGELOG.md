@@ -12,6 +12,10 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- Columns of the download list can be hidden and shown (right-click a
+  column header, or View → Columns) and resized by dragging a header's
+  border. The shown columns, their widths and the sort order are kept for
+  the next start; Reset columns brings back the defaults.
 - Space pauses or resumes the selected downloads, and Shift+Del removes
   them and deletes their files. The menus show their keys, Help → Keyboard
   shortcuts lists them all, and Ctrl+N and Ctrl+F now also work while the

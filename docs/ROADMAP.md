@@ -79,7 +79,11 @@ dikerjakan.
 
 - [ ] Tema terang dan gelap mengikuti setelan Windows, pilihan warna
       aksen. **S**
-- [ ] Kolom bisa disembunyikan/ditampilkan; lebar dan sortir diingat. **S**
+- [x] Kolom bisa disembunyikan/ditampilkan; lebar dan sortir diingat. **S**
+      Klik kanan header atau View → Columns; drag tepi header untuk lebar.
+      Disimpan di preferences Fyne. Catatan teknis: `widget.Table` menutup
+      header dengan lapisan divider yang menangkap semua drag, jadi resize
+      memakai lapisan grip transparan sendiri di atas baris header.
 - [x] Status bar: total kecepatan, jumlah aktif, status limiter. **K**
       Kiri: jumlah item, hasil pencarian, jumlah yang dipilih. Kanan:
       jumlah aktif dan kecepatan total, jumlah antre, batas kecepatan.

@@ -202,13 +202,24 @@ type application struct {
 	selectedRow int // index of focusID in items, kept in step by refresh
 	sortCol     int
 	sortAsc     bool
-	counts      map[string]int
-	total       int
-	unfinished  int
-	finished    int
-	queues      []string
-	colWidths   []float32
-	filter      struct {
+	// The shown columns in order, those hidden, the widths the user
+	// dragged, and the list width they were last laid out for.
+	visibleCols []int
+	hiddenCols  map[int]bool
+	userWidths  map[int]float32
+	listWidth   float32
+	columnsMenu *fyne.Menu
+	// headers are the header cells the table created; hoverGrip is the
+	// column whose border the pointer is on, or -1.
+	headers    []*headerLabel
+	hoverGrip  int
+	counts     map[string]int
+	total      int
+	unfinished int
+	finished   int
+	queues     []string
+	colWidths  []float32
+	filter     struct {
 		kind  string
 		value string
 	}
@@ -257,7 +268,7 @@ func newDownloadTable(a *application) *downloadTable {
 	t.Length = func() (int, int) {
 		a.mu.Lock()
 		defer a.mu.Unlock()
-		return len(a.items), columnCount
+		return len(a.items), len(a.visibleCols)
 	}
 	t.CreateCell = func() fyne.CanvasObject { return newTableCell() }
 	t.UpdateCell = a.updateCell
@@ -314,6 +325,35 @@ func (t *downloadTable) Resize(size fyne.Size) {
 	t.app.layoutColumns(size.Width)
 }
 
+// MouseDown keeps widget.Table from arming its own column resize, which
+// only answers in the narrow gap between headers and keeps the widths where
+// the list cannot read them back. headerGrips resizes columns instead.
+func (t *downloadTable) MouseDown(*desktop.MouseEvent) {}
+
+// The pointer reaches the table itself in the gaps between the headers,
+// which are on a border too.
+func (t *downloadTable) MouseIn(e *desktop.MouseEvent) {
+	t.Table.MouseIn(e)
+	t.hoverHeaderGap(e)
+}
+
+func (t *downloadTable) MouseMoved(e *desktop.MouseEvent) {
+	t.Table.MouseMoved(e)
+	t.hoverHeaderGap(e)
+}
+
+func (t *downloadTable) MouseOut() {
+	t.Table.MouseOut()
+	t.app.hoverGrip = -1
+}
+
+func (t *downloadTable) hoverHeaderGap(e *desktop.MouseEvent) {
+	t.app.hoverGrip = -1
+	if e.Position.Y < rowHeight() {
+		t.app.hoverGrip = t.app.gripAt(e.AbsolutePosition.X)
+	}
+}
+
 func (t *downloadTable) DoubleTapped(*fyne.PointEvent) {
 	if d, ok := t.app.current(); ok {
 		t.app.openProgressWindow(d.ID)
@@ -324,31 +364,9 @@ func (t *downloadTable) TappedSecondary(e *fyne.PointEvent) {
 	t.app.showRowMenu(e.AbsolutePosition)
 }
 
-var columnTitles = []string{"File Name", "Q", "Size", "Status", "Time left", "Transfer rate", "Last attempt", "Description"}
-
-const (
-	colName = iota
-	colQueue
-	colSize
-	colStatus
-	colETA
-	colRate
-	colLastTry
-	colDescription
-	columnCount
-)
-
-// fixed column widths; the name and description columns share the slack.
-var columnFixed = map[int]float32{
-	colQueue:   44,
-	colSize:    80,
-	colStatus:  112,
-	colETA:     78,
-	colRate:    100,
-	colLastTry: 92,
-}
-
 func (a *application) build() {
+	a.loadColumns()
+	a.hoverGrip = -1
 	tint := func(icon fyne.Resource, c fyne.ThemeColorName) fyne.Resource {
 		return theme.NewColoredResource(icon, c)
 	}
@@ -404,11 +422,15 @@ func (a *application) build() {
 			a.clickRow(id.Row, currentModifiers())
 		}
 	}
-	base.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(a) }
+	base.CreateHeader = func() fyne.CanvasObject {
+		h := newHeaderLabel(a)
+		a.headers = append(a.headers, h)
+		return h
+	}
 	base.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
 		h := o.(*headerLabel)
-		h.col = id.Col
-		h.SetText(a.headerText(id.Col))
+		h.col = a.visibleColumn(id.Col)
+		h.SetText(a.headerText(h.col))
 		if hh := h.Size().Height; hh > 0 {
 			a.mu.Lock()
 			a.headH = hh
@@ -418,7 +440,7 @@ func (a *application) build() {
 	a.table = base
 	a.layoutColumns(760)
 	a.grid = newGridBackdrop(a)
-	list := framed(container.NewStack(a.grid, a.table))
+	list := framed(container.NewStack(a.grid, a.table, container.NewVBox(newHeaderGrips(a))))
 	// The category tree uses tighter padding; the table's rows are already
 	// compact because its cells draw their own text at a fixed height.
 	compact := compactTheme{Theme: newTheme()}
@@ -560,62 +582,6 @@ func (a *application) updateToolbar() {
 	a.tools["folder"].setEnabled(focused)
 }
 
-// layoutColumns sizes the table columns so they fill the available width.
-func (a *application) layoutColumns(total float32) {
-	if total <= 0 {
-		return
-	}
-	var fixedSum float32
-	for _, w := range columnFixed {
-		fixedSum += w
-	}
-	// widget.Table spaces columns by its theme's Padding (not the separator
-	// thickness); leaving that gap out of the sum made the row wider than the
-	// view, which showed a horizontal scrollbar and clipped Description. The
-	// last 2px absorb float rounding.
-	gap := theme.Padding()
-	if a.table != nil {
-		gap = a.table.Theme().Size(theme.SizeNamePadding)
-	}
-	total -= float32(columnCount)*gap + 2
-	slack := total - fixedSum
-	// Below these minimums the table scrolls horizontally rather than
-	// squeezing names into unreadable slivers.
-	const minName, minDesc = 180, 110
-	nameW, descW := float32(minName), float32(minDesc)
-	if slack > minName+minDesc {
-		nameW = slack * 0.6
-		descW = slack - nameW
-	}
-	widths := make([]float32, columnCount)
-	for col, w := range columnFixed {
-		widths[col] = w
-	}
-	widths[colName] = nameW
-	widths[colDescription] = descW
-
-	a.mu.Lock()
-	if len(a.colWidths) == len(widths) {
-		same := true
-		for i := range widths {
-			if a.colWidths[i] != widths[i] {
-				same = false
-				break
-			}
-		}
-		if same {
-			a.mu.Unlock()
-			return
-		}
-	}
-	a.colWidths = widths
-	a.mu.Unlock()
-
-	for i, w := range widths {
-		a.table.SetColumnWidth(i, w)
-	}
-}
-
 /* ---------- menu bar ---------- */
 
 // keyHint is a shortcut shown next to a menu item. With a modifier the main
@@ -658,10 +624,15 @@ func (a *application) buildMenu() *fyne.MainMenu {
 		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Options…", func() { a.openOptionsTab(0) }),
 	)
+	a.columnsMenu = fyne.NewMenu("", a.columnMenuItems()...)
+	columnsItem := fyne.NewMenuItem("Columns", nil)
+	columnsItem.ChildMenu = a.columnsMenu
 	view := fyne.NewMenu("View",
 		withKey(fyne.NewMenuItem("Search downloads", a.focusSearch), fyne.KeyF, ctrl),
 		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Hide categories", a.toggleSidebar),
+		columnsItem,
+		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Sort by name", func() { a.sortBy(colName) }),
 		fyne.NewMenuItem("Sort by size", func() { a.sortBy(colSize) }),
 		fyne.NewMenuItem("Sort by status", func() { a.sortBy(colStatus) }),
@@ -892,19 +863,23 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 		return
 	}
 	d := a.items[id.Row]
+	col := -1
+	if id.Col >= 0 && id.Col < len(a.visibleCols) {
+		col = a.visibleCols[id.Col]
+	}
 	a.mu.Unlock()
 
-	if id.Col == colName {
+	if col == colName {
 		c.setIcon(iconForCategory(d.Category))
 	}
-	c.showIcon(id.Col == colName)
+	c.showIcon(col == colName)
 	a.mu.Lock()
 	selected := a.selected[d.ID]
 	a.rowH = rowHeight()
 	a.mu.Unlock()
 	c.setSelected(selected)
 
-	switch id.Col {
+	switch col {
 	case colName:
 		c.setText(displayName(d))
 	case colQueue:
@@ -1004,7 +979,7 @@ func iconForCategory(cat string) fyne.Resource {
 }
 
 func (a *application) headerText(col int) string {
-	if col < 0 || col >= len(columnTitles) {
+	if col < 0 || col >= columnCount {
 		return ""
 	}
 	a.mu.Lock()
@@ -1012,11 +987,11 @@ func (a *application) headerText(col int) string {
 	a.mu.Unlock()
 	if sc == col {
 		if asc {
-			return columnTitles[col] + " ▲"
+			return columns[col].title + " ▲"
 		}
-		return columnTitles[col] + " ▼"
+		return columns[col].title + " ▼"
 	}
-	return columnTitles[col]
+	return columns[col].title
 }
 
 func (a *application) sortBy(col int) {
@@ -1028,6 +1003,7 @@ func (a *application) sortBy(col int) {
 		a.sortAsc = true
 	}
 	a.mu.Unlock()
+	a.saveColumns()
 	a.refresh()
 }
 

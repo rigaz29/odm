@@ -270,7 +270,9 @@ func ellipsize(s string, width, size float32) string {
 
 /* ---------- column header ---------- */
 
-// headerLabel is a compact, clickable table column header.
+// headerLabel is a compact table column header: a click sorts by the
+// column and a right-click lists the columns to show. Drags on its borders
+// are taken by headerGrips, which lies over the header row.
 type headerLabel struct {
 	widget.BaseWidget
 	app   *application
@@ -294,17 +296,39 @@ func (h *headerLabel) SetText(s string) {
 	h.Refresh()
 }
 
-func (h *headerLabel) Tapped(*fyne.PointEvent) {
-	if h.app != nil {
+// Tapped sorts by the column, unless the click is on a border, where it
+// ends a resize.
+func (h *headerLabel) Tapped(e *fyne.PointEvent) {
+	if h.app != nil && h.app.gripAt(e.AbsolutePosition.X) < 0 {
 		h.app.sortBy(h.col)
 	}
 }
 
-func (h *headerLabel) MouseIn(*desktop.MouseEvent) { h.hover = true; h.Refresh() }
+func (h *headerLabel) TappedSecondary(e *fyne.PointEvent) {
+	if h.app != nil {
+		h.app.showColumnMenu(e.AbsolutePosition)
+	}
+}
 
-func (h *headerLabel) MouseMoved(*desktop.MouseEvent) {}
+func (h *headerLabel) MouseIn(e *desktop.MouseEvent) {
+	h.hover = true
+	h.Refresh()
+	h.MouseMoved(e)
+}
 
-func (h *headerLabel) MouseOut() { h.hover = false; h.Refresh() }
+func (h *headerLabel) MouseMoved(e *desktop.MouseEvent) {
+	if h.app != nil {
+		h.app.hoverGrip = h.app.gripAt(e.AbsolutePosition.X)
+	}
+}
+
+func (h *headerLabel) MouseOut() {
+	h.hover = false
+	h.Refresh()
+	if h.app != nil {
+		h.app.hoverGrip = -1
+	}
+}
 
 type headerRenderer struct {
 	h       *headerLabel
@@ -620,6 +644,9 @@ func framed(content fyne.CanvasObject) fyne.CanvasObject {
 }
 
 var (
-	_ desktop.Hoverable = (*toolButton)(nil)
-	_ desktop.Hoverable = (*headerLabel)(nil)
+	_ desktop.Hoverable      = (*toolButton)(nil)
+	_ desktop.Hoverable      = (*headerLabel)(nil)
+	_ fyne.SecondaryTappable = (*headerLabel)(nil)
+	_ desktop.Cursorable     = (*headerGrips)(nil)
+	_ fyne.Draggable         = (*headerGrips)(nil)
 )

@@ -150,6 +150,11 @@ keeps the downloads whose file name, address or description contains every
 word typed; <kbd>Esc</kbd> clears it. On macOS, use <kbd>Cmd</kbd> instead of
 <kbd>Ctrl</kbd>.
 
+**Notifications.** A system notification says when a download finishes or
+fails, unless its complete dialog was just shown while ODM is in front. On
+Windows, ODM can also play the system sound for these events. Both are in
+*Options → Downloads*.
+
 **Tray and start-up.** Closing the window hides ODM in the tray, and downloads
 keep running. *Options → General* controls close-to-tray and *Launch ODM on
 startup*. Launch-at-login is registered for the current user only: the `Run`

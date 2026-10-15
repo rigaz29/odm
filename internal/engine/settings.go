@@ -108,6 +108,11 @@ type Settings struct {
 	// Same negative phrasing: both windows are shown unless turned off.
 	NoProgressDialog bool `json:"no_progress_dialog,omitempty"`
 	NoCompleteDialog bool `json:"no_complete_dialog,omitempty"`
+	// NoNotifications turns off the system notification for a download that
+	// finished or failed (shown by default). Sounds plays the system sound
+	// for those events (off by default).
+	NoNotifications bool `json:"no_notifications,omitempty"`
+	Sounds          bool `json:"sounds,omitempty"`
 	// NoCloseToTray makes closing the main window quit instead of hiding it
 	// to the system tray (where downloads keep running).
 	NoCloseToTray bool `json:"no_close_to_tray,omitempty"`

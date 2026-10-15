@@ -18,6 +18,10 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- A system notification when a download finishes or fails, on by default.
+  A finished download is not notified when its complete dialog was shown
+  while ODM is in front. On Windows, ODM can also play the system sound for
+  these events (off by default). Both are in Options → Downloads.
 - The extension's toolbar icon shows how many videos, audio files and
   streams the page has loaded, and its popup lists them (from every frame,
   with how long ago each was seen) to send one to ODM. This covers pages

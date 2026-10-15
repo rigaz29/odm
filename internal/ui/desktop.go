@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -55,6 +56,11 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
 	a.win.Resize(fyne.NewSize(1080, 660))
 	a.win.SetIcon(theme.DownloadIcon())
+	a.notify = a.fyneApp.SendNotification
+	a.beep = playSound
+	a.foreground.Store(!opts.Hidden)
+	a.fyneApp.Lifecycle().SetOnEnteredForeground(func() { a.foreground.Store(true) })
+	a.fyneApp.Lifecycle().SetOnExitedForeground(func() { a.foreground.Store(false) })
 
 	a.build()
 	a.refresh()
@@ -131,6 +137,7 @@ func (a *application) setupTray() {
 			return
 		}
 		a.win.Hide()
+		a.foreground.Store(false)
 		if !a.trayHinted {
 			a.trayHinted = true
 			a.fyneApp.SendNotification(fyne.NewNotification("ODM is still running",
@@ -150,6 +157,7 @@ func (a *application) readClipboard() string {
 func (a *application) showWindow() {
 	a.win.Show()
 	a.win.RequestFocus()
+	a.foreground.Store(true)
 }
 
 // sidebarEntry is one row of the category/queue sidebar.
@@ -206,6 +214,11 @@ type application struct {
 	trayMenu     *fyne.Menu
 	limiterItems []*fyne.MenuItem
 	limiterShown string
+	// foreground is whether an ODM window has the focus. notify and beep
+	// announce a finished or failed download; tests replace them.
+	foreground atomic.Bool
+	notify     func(*fyne.Notification)
+	beep       func(failed bool)
 	// rowH/headH are the table's real row and header heights, captured from
 	// laid-out cells so gridBackdrop can continue the grid below the rows.
 	rowH, headH float32
@@ -1066,7 +1079,8 @@ func (a *application) refresh() {
 }
 
 // noticeCompletions closes the progress window of each download that just
-// finished and shows the completion dialog in its place.
+// finished and shows the completion dialog in its place, and announces each
+// download that just finished or failed.
 func (a *application) noticeCompletions(all []engine.Info) {
 	first := a.lastStatus == nil
 	prev := a.lastStatus
@@ -1074,16 +1088,24 @@ func (a *application) noticeCompletions(all []engine.Info) {
 	show := !a.mgr.Settings().NoCompleteDialog
 	for _, d := range all {
 		a.lastStatus[d.ID] = d.Status
-		if first || d.Status != engine.StatusComplete {
+		if first {
 			continue
 		}
-		if was, seen := prev[d.ID]; seen && was != engine.StatusComplete {
+		was, seen := prev[d.ID]
+		if !seen || was == d.Status {
+			continue
+		}
+		switch d.Status {
+		case engine.StatusComplete:
 			if v, ok := a.progressWindows[d.ID]; ok {
 				v.win.Close()
 			}
 			if show {
 				a.showComplete(d)
 			}
+			a.announce(d, false, show)
+		case engine.StatusError:
+			a.announce(d, true, false)
 		}
 	}
 }

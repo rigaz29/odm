@@ -606,6 +606,14 @@ func (a *application) openOptionsTab(tab int) {
 	progCheck.SetChecked(!settings.NoProgressDialog)
 	doneCheck := widget.NewCheck("Show the download complete dialog", nil)
 	doneCheck.SetChecked(!settings.NoCompleteDialog)
+	notifyCheck := widget.NewCheck("Show a notification when a download finishes or fails", nil)
+	notifyCheck.SetChecked(!settings.NoNotifications)
+	soundCheck := widget.NewCheck("Play a sound when a download finishes or fails", nil)
+	soundCheck.SetChecked(settings.Sounds)
+	announceBox := container.NewVBox(notifyCheck)
+	if soundSupported {
+		announceBox.Add(soundCheck)
+	}
 	const (
 		dupSkip  = "Skip it"
 		dupAgain = "Download it again"
@@ -661,6 +669,9 @@ func (a *application) openOptionsTab(tab int) {
 		progCheck,
 		doneCheck,
 		hint("These settings do not apply to queue processing."),
+		widget.NewSeparator(),
+		announceBox,
+		hint("A finished download is not notified when its complete dialog is shown while ODM is in front."),
 		widget.NewSeparator(),
 		widget.NewLabel("If a link that is already in the list is added by the browser, clipboard or grabber:"),
 		small(dupSelect, 220),
@@ -1010,6 +1021,8 @@ func (a *application) openOptionsTab(tab int) {
 		next.NoStartDialog = !startCheck.Checked
 		next.ExcludeSites = strings.Fields(strings.ReplaceAll(excludeEntry.Text, ",", " "))
 		next.NoCompleteDialog = !doneCheck.Checked
+		next.NoNotifications = !notifyCheck.Checked
+		next.Sounds = soundCheck.Checked
 		next.FileTypes = parseFileTypes(typesEntry.Text)
 		next.CategoryDirs = cleanDirs
 		next.HostConnections = hostMap

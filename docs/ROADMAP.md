@@ -35,11 +35,18 @@ dikerjakan.
 
 ## Fase 1: fitur cepat
 
-- [ ] Cari di daftar: Ctrl+F dan kotak filter di toolbar. **K**
-- [ ] "Stop all" menghentikan juga antrean yang berjalan (sekarang sama
-      dengan "Pause all"). **K**
-- [ ] Speed limiter on/off cepat dari menu dan tray. **K**
-- [ ] Notifikasi Windows dan suara saat download selesai atau gagal. **K**
+- [x] Cari di daftar: Ctrl+F dan kotak filter di toolbar. **K**
+- [x] "Stop all" menghentikan juga antrean yang berjalan (sekarang sama
+      dengan "Pause all"). **K** Termasuk tombol Stop All di web UI
+      (`/api/actions/stop-all`).
+- [x] Speed limiter on/off cepat dari menu dan tray. **K** Nilai tetap
+      tersimpan saat dimatikan; status bar menampilkan batas yang aktif.
+- [x] Notifikasi Windows dan suara saat download selesai atau gagal. **K**
+      Diatur di Options → Downloads.
+- [x] Temuan saat aplikasi dijalankan, sudah diperbaiki: toolbar terpotong
+      oleh kotak pencarian, baris tanpa nama saat probe gagal, urutan daftar
+      teracak setelah restart, "Last attempt" berisi jam restart, posisi
+      antrean bentrok untuk download baru setelah restart.
 - [ ] Batch download dengan pola (`foto[001-120].jpg`, `[a-z]`) dan batch
       dari clipboard. **S**
 - [ ] Ingat folder simpan terakhir; folder sementara terpisah. **K**
@@ -93,4 +100,8 @@ dikerjakan.
   `default-manifest.o` kosong, seperti yang dilakukan `build.sh`.
 - Build tanpa UI: `go build -o odm.exe ./cmd/odm`.
 - Test dengan UI: `go test -tags fyne ./...` (perlu `CGO_ENABLED=1`).
+- Menjalankan aplikasi untuk dicek tanpa menyentuh data asli: set
+  `APPDATA` ke folder lain (ODM memakai `%APPDATA%\odm`) dan beri `-dir`.
+  Path folder itu harus pendek, karena socket kontrol gagal dibuat kalau
+  path-nya lebih dari sekitar 100 karakter.
 - Riwayat dan aturan lengkap ada di branch `docs/transfer-handoff`.

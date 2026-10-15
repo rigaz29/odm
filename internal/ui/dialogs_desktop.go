@@ -559,6 +559,7 @@ func (a *application) openOptionsTab(tab int) {
 						failed = append(failed, r.String())
 					}
 				}
+				a.setBrowserRegister(false) // or the next start registers again
 				refreshBrowser(true)
 				if len(failed) > 0 {
 					dialog.ShowError(fmt.Errorf(T("could not unregister:\n%s"), strings.Join(failed, "\n")), w)
@@ -1244,10 +1245,21 @@ func (a *application) registerBrowser(parent fyne.Window) {
 			failed = append(failed, r.String())
 		}
 	}
+	a.setBrowserRegister(true)
 	// Success shows in the status line on the Options window; a dialog is
 	// worth it only when a browser could not be registered.
 	if len(failed) > 0 {
 		dialog.ShowError(fmt.Errorf(T("could not register:\n%s"), strings.Join(failed, "\n")), parent)
+	}
+}
+
+// setBrowserRegister records whether ODM registers itself with the
+// browsers when it starts.
+func (a *application) setBrowserRegister(on bool) {
+	next := a.mgr.Settings()
+	if next.NoBrowserRegister != !on {
+		next.NoBrowserRegister = !on
+		a.mgr.UpdateSettings(next)
 	}
 }
 

@@ -7,9 +7,16 @@ relays each request to the running ODM instance over its control socket,
 `%AppData%` on Windows, `~/Library/Application Support` on macOS and
 `~/.config` on Linux.
 
-## 1. Register the native host (once)
+## 1. Register the native host
 
-In ODM: **Options → General → Register browser integration**, or from a shell:
+ODM does this itself when it starts, if no browser is registered yet or the
+registration points at an ODM that was moved or deleted. A registration of
+another ODM copy that still exists is left alone. **Options → General**
+shows which ODM each browser starts, and **Register** points them all at
+this one. After **Unregister** (there or with `-unregister-browser`), ODM
+stops registering itself until you register again.
+
+To register by hand, from a shell:
 
 ```
 ODM.exe -register-browser      # Windows
@@ -23,7 +30,8 @@ the current user:
 - **macOS / Linux** — copies the manifest into each installed browser's
   `NativeMessagingHosts` folder (Chrome, Chromium, Edge, Firefox).
 
-Run it again after moving `ODM.exe`; `-unregister-browser` removes it.
+Moving `ODM.exe` needs nothing: the next start registers the new place.
+`-unregister-browser` removes the registration.
 
 ## 2. Install the extension
 
@@ -92,8 +100,9 @@ computer: it goes to ODM over native messaging, not to any server.
 - **No video button in Firefox:** open `about:addons` → ODM Integration →
   *Permissions* and allow access to all websites. Firefox 127 and later grant
   it at install, but it can be revoked there.
-- **Downloads stay in the browser:** run `ODM.exe -register-browser` again
-  (for example after moving ODM) and restart the browser.
+- **Downloads stay in the browser:** check *Options → General* in ODM. If a
+  browser starts another ODM, or none, click *Register*, then restart the
+  browser.
 - **Another download manager takes the download, in one browser only:** some
   hook into the browser process itself (Internet Download Manager with
   *Options → General → Use advanced browser integration*, for one) and take

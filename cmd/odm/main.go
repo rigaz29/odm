@@ -17,6 +17,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"syscall"
 	"time"
 
@@ -103,6 +104,11 @@ func main() {
 	settingsPath := filepath.Join(baseDir, "settings.json")
 	fallback := defaultDownloadDir()
 	settings := engine.LoadSettings(settingsPath, fallback)
+	// Browsers hand downloads over through the control socket, so the
+	// integration is set up only by the instance that holds it.
+	if sock != nil && !settings.NoBrowserRegister {
+		registerBrowsersIfNeeded(baseDir)
+	}
 	if *dir != "" {
 		settings.Dir = *dir
 	}
@@ -266,15 +272,43 @@ func clipboardConfig(mgr *engine.Manager) func() clipmon.Config {
 	}
 }
 
+// selfExe is this ODM's executable path as registrations record it.
+func selfExe() (string, error) {
+	exe, err := os.Executable()
+	if err == nil {
+		exe, err = filepath.EvalSymlinks(exe)
+	}
+	return exe, err
+}
+
+// registerBrowsersIfNeeded registers this ODM with the browsers at start-up
+// when browserreg.NeedsRegister says so, so the extension works without
+// running -register-browser first, and again after ODM is moved. Results
+// go to the log; Options -> General shows the status.
+func registerBrowsersIfNeeded(baseDir string) {
+	exe, err := selfExe()
+	if err != nil {
+		log.Println("browser registration:", err)
+		return
+	}
+	exists := func(p string) bool {
+		fi, err := os.Stat(p)
+		return err == nil && fi.Mode().IsRegular()
+	}
+	if !browserreg.NeedsRegister(browserreg.Check(), exe, exists) {
+		return
+	}
+	for _, r := range browserreg.Register(exe, baseDir) {
+		log.Println("browser registration:", r)
+	}
+}
+
 // runBrowserRegistration handles -register-browser / -unregister-browser and
 // returns the process exit code.
 func runBrowserRegistration(register bool, baseDir string) int {
 	var results []browserreg.Result
 	if register {
-		exe, err := os.Executable()
-		if err == nil {
-			exe, err = filepath.EvalSymlinks(exe)
-		}
+		exe, err := selfExe()
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "cannot locate the ODM executable:", err)
 			return 1
@@ -290,7 +324,31 @@ func runBrowserRegistration(register bool, baseDir string) int {
 			code = 1
 		}
 	}
+	if err := rememberBrowserChoice(baseDir, !register); err != nil {
+		fmt.Fprintln(os.Stderr, "cannot save the setting:", err)
+		code = 1
+	}
 	return code
+}
+
+// rememberBrowserChoice records whether ODM may register itself at
+// start-up (off after -unregister-browser), in the running ODM when there
+// is one, which would otherwise write its own settings over the file.
+func rememberBrowserChoice(baseDir string, off bool) error {
+	body := fmt.Sprintf(`{"no_browser_register":%t}`, off)
+	req, _ := http.NewRequest(http.MethodPatch, ipc.BaseURL+"/api/settings", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	if resp, err := ipc.Client(ipc.SocketPath(baseDir), 3*time.Second).Do(req); err == nil {
+		resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			return nil
+		}
+		return fmt.Errorf("ODM returned %s", resp.Status)
+	}
+	path := filepath.Join(baseDir, "settings.json")
+	st := engine.LoadSettings(path, defaultDownloadDir())
+	st.NoBrowserRegister = off
+	return engine.SaveSettings(path, st)
 }
 
 // newToken returns a random per-run secret for the web UI.

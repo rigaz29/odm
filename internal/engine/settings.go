@@ -132,6 +132,10 @@ type Settings struct {
 	// NoCloseToTray makes closing the main window quit instead of hiding it
 	// to the system tray (where downloads keep running).
 	NoCloseToTray bool `json:"no_close_to_tray,omitempty"`
+	// NoBrowserRegister keeps ODM from registering itself with the
+	// browsers when it starts. Unregister sets it and Register clears it,
+	// so an integration someone removed stays removed.
+	NoBrowserRegister bool `json:"no_browser_register,omitempty"`
 	// LastDir is the save folder last chosen in the New Download window,
 	// which offers it next time unless NoRememberDir is set (it is offered
 	// by default). Automatic adds (clipboard, grabber, API) use Dir.

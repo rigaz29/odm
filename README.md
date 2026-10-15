@@ -181,7 +181,9 @@ shows the window.
 
 ## Browser integration
 
-1. In ODM, open *Options → General → Register*, or run `ODM.exe -register-browser`.
+1. Start ODM once: it registers itself with Chrome, Edge, Chromium and
+   Firefox. *Options → General* shows the status. (`ODM.exe
+   -register-browser` does the same from a shell.)
 2. Install the extension from the release:
    - Chrome, Edge, Brave, Opera: unzip `odm-extension-chromium.zip`, then
      *Developer mode* → *Load unpacked* in `chrome://extensions`.

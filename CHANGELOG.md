@@ -8,6 +8,12 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- ODM registers itself with the browsers when it starts, so the extension
+  works without first running `-register-browser` or clicking *Register*.
+  This happens when no browser is registered yet, and again when ODM has
+  been moved. A registration of another ODM copy that still exists is left
+  alone. Unregister (in Options or `-unregister-browser`) turns it off
+  until the next Register.
 - A search box next to the toolbar, also reached with Ctrl+F, keeps the
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the

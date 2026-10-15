@@ -163,3 +163,30 @@ func TestSummary(t *testing.T) {
 		t.Fatalf("mixed:\n got  %q\n want %q", got, want)
 	}
 }
+
+func TestNeedsRegister(t *testing.T) {
+	here, other, gone := "/apps/odm/ODM.exe", "/tools/odm/ODM.exe", "/old/odm/ODM.exe"
+	exists := func(p string) bool { return p == here || p == other }
+	at := func(exe string) Status { return Status{Browser: "B", Installed: true, Registered: true, Exe: exe} }
+	none := Status{Browser: "B", Installed: true}
+	absent := Status{Browser: "B"} // not installed (known on macOS/Linux)
+	cases := []struct {
+		name string
+		sts  []Status
+		want bool
+	}{
+		{"first start", []Status{none, none}, true},
+		{"registered here", []Status{at(here), at(here)}, false},
+		{"ODM was moved", []Status{at(gone), at(gone)}, true},
+		{"one browser lacks it", []Status{at(here), none}, true},
+		{"another ODM is registered", []Status{at(other), none}, false},
+		{"another ODM, one moved", []Status{at(gone), at(other)}, false},
+		{"no browser installed", []Status{absent, absent}, false},
+		{"only browsers not installed lack it", []Status{at(here), absent}, false},
+	}
+	for _, c := range cases {
+		if got := NeedsRegister(c.sts, here, exists); got != c.want {
+			t.Errorf("%s: NeedsRegister = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

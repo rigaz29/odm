@@ -108,6 +108,27 @@ func (s Status) Points(exe string) bool {
 	return s.Registered && samePath(s.Exe, exe)
 }
 
+// NeedsRegister reports whether the ODM at exe should register itself when
+// it starts: when no browser launches an ODM yet, when a registration
+// launches a program that is gone (ODM was moved or deleted), or when this
+// ODM is registered for some browsers but not all. A registration of
+// another ODM that still exists is left alone: that copy was registered on
+// purpose, and Options offers to switch. exists reports whether a program
+// is still there.
+func NeedsRegister(statuses []Status, exe string, exists func(string) bool) bool {
+	need := false
+	for _, s := range statuses {
+		switch {
+		case s.Points(exe):
+		case s.Registered && exists(s.Exe):
+			return false
+		case s.Registered, s.Installed:
+			need = true
+		}
+	}
+	return need
+}
+
 // manifestExe reads the executable path from a host manifest file.
 func manifestExe(path string) (string, error) {
 	data, err := os.ReadFile(path)

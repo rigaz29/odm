@@ -488,7 +488,7 @@ func (a *application) openOptionsTab(tab int) {
 				missing++
 			}
 		}
-		browserStatus.SetText(browserreg.Summary(sts, exe))
+		browserStatus.SetText(browserreg.SummaryWith(sts, exe, T))
 		switch {
 		case here > 0 && other == 0 && missing == 0:
 			statusIcon.SetResource(theme.NewSuccessThemedResource(theme.ConfirmIcon()))

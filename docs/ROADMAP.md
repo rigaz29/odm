@@ -97,19 +97,21 @@ dikerjakan.
 - [x] Shortcut keyboard: Del, Ctrl+N, Ctrl+F, Space. **K** Ditambah
       Shift+Del (hapus beserta file), label shortcut di menu, dan Help →
       Keyboard shortcuts. Sekalian menghapus item "Quit" ganda di menu Tasks.
-- [ ] Web UI diseragamkan dengan desktop, responsif, mode terang. **S**
-      Kode sudah masuk (palet, ikon, toolbar, pohon kategori, kolom,
-      pencarian, status bar, shortcut, kartu probe, grafik, laci kategori
-      dan kartu di layar sempit). Daftar sudah dicek visual (gelap, terang,
-      390 px). Dialog web (New Download, Options, Progress) belum dicek
-      visual: proses uji dihentikan sistem karena RAM menipis.
-- [ ] Bahasa Indonesia sebagai bahasa kedua. **B** Kode sudah masuk:
-      `T()`/`Tf()` di semua teks desktop (386 teks, `translations/id.json`),
-      teks bawaan Fyne (`fyne.id.json`), pilihan bahasa di Options →
-      General (ikut sistem / English / Bahasa Indonesia, berlaku setelah
-      restart). Test memastikan setiap teks punya terjemahan dan placeholder
-      `%d`/`%s` cocok. Belum: cek visual (teks Indonesia lebih panjang di
-      toolbar dan dialog), web UI, dan pesan error dari engine.
+- [x] Web UI diseragamkan dengan desktop, responsif, mode terang. **S**
+      Palet, ikon, toolbar, pohon kategori, kolom, pencarian, status bar,
+      shortcut, kartu probe, grafik, laci kategori dan kartu di layar
+      sempit. Daftar dicek visual (gelap, terang, 390 px). Dialog web (New
+      Download, Options, Progress) tidak dicek visual: dilewati atas
+      keputusan pengguna (2026-10-15).
+- [x] Bahasa Indonesia sebagai bahasa kedua. **B** `T()`/`Tf()` di semua
+      teks desktop (392 teks, `translations/id.json`, termasuk status
+      integrasi browser), teks bawaan Fyne (`fyne.id.json`), pilihan bahasa
+      di Options → General (ikut sistem / English / Bahasa Indonesia,
+      berlaku setelah restart). Test memastikan setiap teks punya terjemahan
+      dan placeholder `%d`/`%s` cocok. Dicek visual: jendela utama, menu,
+      Options, New Download, Penjadwal, menu klik kanan. Label toolbar yang
+      panjang dipecah dua baris. Masih Inggris: web UI, pesan error dari
+      engine, dan nama kategori/antrean (data milik pengguna).
 
 ## Fase 4: perapian teknis
 

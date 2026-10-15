@@ -126,6 +126,22 @@ func manifestExe(path string) (string, error) {
 // test build re-registered), and which have no registration. Browsers that
 // are not installed (known on macOS/Linux) are left out.
 func Summary(statuses []Status, exe string) string {
+	return SummaryWith(statuses, exe, func(s string) string { return s })
+}
+
+// SummaryTexts are the sentences of a summary, as format strings, for a
+// caller that translates them.
+var SummaryTexts = []string{
+	"Registered for %s.",
+	"%s uses another ODM: %s.",
+	"%s use another ODM: %s.",
+	"Not registered: %s.",
+	"Not registered for: %s.",
+	"No supported browser found.",
+}
+
+// SummaryWith is Summary with each sentence's format passed through tr.
+func SummaryWith(statuses []Status, exe string, tr func(string) string) string {
 	var here, missing []string
 	elsewhere := map[string][]string{}
 	var otherExes []string
@@ -144,30 +160,26 @@ func Summary(statuses []Status, exe string) string {
 	}
 	var parts []string
 	if len(here) > 0 {
-		parts = append(parts, "Registered for "+strings.Join(here, ", ")+".")
+		parts = append(parts, fmt.Sprintf(tr("Registered for %s."), strings.Join(here, ", ")))
 	}
 	for _, other := range otherExes {
-		parts = append(parts, fmt.Sprintf("%s use%s another ODM: %s.",
-			strings.Join(elsewhere[other], ", "), plural(len(elsewhere[other])), other))
+		format := "%s use another ODM: %s."
+		if len(elsewhere[other]) == 1 {
+			format = "%s uses another ODM: %s."
+		}
+		parts = append(parts, fmt.Sprintf(tr(format), strings.Join(elsewhere[other], ", "), other))
 	}
 	if len(missing) > 0 {
-		label := "Not registered"
+		format := "Not registered: %s."
 		if len(here) > 0 || len(otherExes) > 0 {
-			label = "Not registered for"
+			format = "Not registered for: %s."
 		}
-		parts = append(parts, label+": "+strings.Join(missing, ", ")+".")
+		parts = append(parts, fmt.Sprintf(tr(format), strings.Join(missing, ", ")))
 	}
 	if len(parts) == 0 {
-		return "No supported browser found."
+		return tr("No supported browser found.")
 	}
 	return strings.Join(parts, " ")
-}
-
-func plural(n int) string {
-	if n == 1 {
-		return "s"
-	}
-	return ""
 }
 
 // Check reports each supported browser's registration.

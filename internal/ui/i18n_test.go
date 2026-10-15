@@ -13,6 +13,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
+	"odm/internal/browserreg"
 	"odm/internal/engine"
 )
 
@@ -51,6 +52,9 @@ func TestIndonesianCoversTheUI(t *testing.T) {
 	keys := sourceKeys(t)
 	if len(keys) < 300 {
 		t.Fatalf("found only %d texts in the sources", len(keys))
+	}
+	for _, k := range browserreg.SummaryTexts { // shown through SummaryWith(…, T)
+		keys[k] = "browserreg"
 	}
 	for k, file := range keys {
 		v, ok := id[k]
@@ -148,5 +152,21 @@ func TestWindowInIndonesian(t *testing.T) {
 	}
 	if a.tools["add"].text != "Tambah URL" || a.headerText(colSize) != "Ukuran" || a.status.Text != "1 item" {
 		t.Fatalf("toolbar %q, header %q, status %q", a.tools["add"].text, a.headerText(colSize), a.status.Text)
+	}
+}
+
+func TestLongToolLabelsWrap(t *testing.T) {
+	newTestApp(t, engine.Settings{})
+	size := float32(12)
+	for _, s := range []string{"Add URL", "Start Queue", "Open folder", "Lanjutkan"} {
+		if got := toolLines(s, size); len(got) != 1 {
+			t.Errorf("%q split into %q", s, got)
+		}
+	}
+	if got := toolLines("Hentikan Antrean", size); len(got) != 2 || got[0] != "Hentikan" || got[1] != "Antrean" {
+		t.Errorf("Hentikan Antrean: %q", got)
+	}
+	if got := toolLines("Tambah unduhan sangat panjang", size); len(got) != 2 || got[0] != "Tambah unduhan" {
+		t.Errorf("split at the middle space: %q", got)
 	}
 }

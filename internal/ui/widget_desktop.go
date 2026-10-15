@@ -4,6 +4,7 @@ package ui
 
 import (
 	"image/color"
+	"strings"
 	"sync"
 
 	"fyne.io/fyne/v2"
@@ -72,8 +73,35 @@ type toolButtonRenderer struct {
 	btn     *toolButton
 	bg      *canvas.Rectangle
 	icon    *canvas.Image
-	label   *canvas.Text
+	lines   [2]*canvas.Text // the label, on one line or two
 	objects []fyne.CanvasObject
+}
+
+// toolLabelMax is the widest label kept on one line. A longer one with a
+// space, as translations often are, goes on two lines rather than widening
+// the toolbar until its last buttons scroll out of the window.
+const toolLabelMax = float32(84)
+
+// toolLines splits label at the space nearest its middle when it is wider
+// than toolLabelMax.
+func toolLines(label string, size float32) []string {
+	if !strings.Contains(label, " ") || fyne.MeasureText(label, size, fyne.TextStyle{}).Width <= toolLabelMax {
+		return []string{label}
+	}
+	best, mid := -1, len(label)/2
+	for i, r := range label {
+		if r == ' ' && (best < 0 || abs(i-mid) < abs(best-mid)) {
+			best = i
+		}
+	}
+	return []string{label[:best], label[best+1:]}
+}
+
+func abs(n int) int {
+	if n < 0 {
+		return -n
+	}
+	return n
 }
 
 func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
@@ -83,10 +111,13 @@ func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
 	r.icon = canvas.NewImageFromResource(b.icon)
 	r.icon.FillMode = canvas.ImageFillContain
 	r.icon.ScaleMode = canvas.ImageScaleSmooth
-	r.label = canvas.NewText(b.text, theme.ForegroundColor())
-	r.label.Alignment = fyne.TextAlignCenter
-	r.label.TextSize = theme.TextSize()
-	r.objects = []fyne.CanvasObject{r.bg, r.icon, r.label}
+	r.objects = []fyne.CanvasObject{r.bg, r.icon}
+	for i := range r.lines {
+		r.lines[i] = canvas.NewText("", theme.ForegroundColor())
+		r.lines[i].Alignment = fyne.TextAlignCenter
+		r.lines[i].TextSize = theme.TextSize()
+		r.objects = append(r.objects, r.lines[i])
+	}
 	r.Refresh()
 	return r
 }
@@ -97,38 +128,49 @@ func (r *toolButtonRenderer) Layout(size fyne.Size) {
 	r.icon.Move(fyne.NewPos(size.Width/2-iconSize/2, pad))
 	r.icon.Resize(fyne.NewSize(iconSize, iconSize))
 	top := pad + iconSize + 3
-	r.label.Move(fyne.NewPos(0, top))
-	r.label.Resize(fyne.NewSize(size.Width, size.Height-top-pad))
+	lh := r.lines[0].MinSize().Height
+	for i, l := range r.lines {
+		l.Move(fyne.NewPos(0, top+float32(i)*lh))
+		l.Resize(fyne.NewSize(size.Width, lh))
+	}
 }
 
 func (r *toolButtonRenderer) MinSize() fyne.Size {
-	w := fyne.MeasureText(r.btn.text, theme.TextSize(), fyne.TextStyle{}).Width + 14
-	if w < 64 {
-		w = 64
+	lines := toolLines(r.btn.text, theme.TextSize())
+	var w float32 = 64
+	for _, l := range lines {
+		w = max(w, fyne.MeasureText(l, theme.TextSize(), fyne.TextStyle{}).Width+10)
 	}
-	return fyne.NewSize(w, 62)
+	lh := fyne.MeasureText("Ag", theme.TextSize(), fyne.TextStyle{}).Height
+	return fyne.NewSize(w, 62+float32(len(lines)-1)*lh)
 }
 
 func (r *toolButtonRenderer) Refresh() {
+	fg := theme.ForegroundColor()
 	switch {
 	case r.btn.disabled:
 		r.bg.FillColor = color.Transparent
-		r.label.Color = theme.DisabledColor()
+		fg = theme.DisabledColor()
 	case r.btn.hover:
 		r.bg.FillColor = theme.HoverColor()
-		r.label.Color = theme.ForegroundColor()
 	default:
 		r.bg.FillColor = color.Transparent
-		r.label.Color = theme.ForegroundColor()
 	}
 	r.icon.Resource = r.btn.icon
 	if r.btn.disabled {
 		r.icon.Resource = theme.NewDisabledResource(r.btn.icon)
 	}
-	r.label.Text = r.btn.text
+	lines := toolLines(r.btn.text, theme.TextSize())
+	for i, l := range r.lines {
+		l.Text = ""
+		if i < len(lines) {
+			l.Text = lines[i]
+		}
+		l.Color = fg
+		l.Refresh()
+	}
 	r.bg.Refresh()
 	r.icon.Refresh()
-	r.label.Refresh()
 }
 
 func (r *toolButtonRenderer) Objects() []fyne.CanvasObject { return r.objects }
@@ -356,6 +398,9 @@ func (r *headerRenderer) Layout(size fyne.Size) {
 	pad := cellInset
 	// Size the text box to its real line height and centre it; stretching it
 	// to the full row height pushed the glyphs below the header and clipped them.
+	// Cut with an ellipsis, as the cells are: a long caption (a translation,
+	// a narrowed column) would run into the next header.
+	r.text.Text = ellipsize(r.h.text, size.Width-pad*2, r.text.TextSize)
 	th := r.text.MinSize().Height
 	r.text.Move(fyne.NewPos(pad, (size.Height-th)/2))
 	r.text.Resize(fyne.NewSize(size.Width-pad*2, th))
@@ -371,7 +416,7 @@ func (r *headerRenderer) MinSize() fyne.Size {
 }
 
 func (r *headerRenderer) Refresh() {
-	r.text.Text = r.h.text
+	r.Layout(r.h.Size()) // sets the text, cut to the width
 	r.text.Color = theme.ForegroundColor()
 	r.line.FillColor = theme.SeparatorColor()
 	r.line.Refresh()

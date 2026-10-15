@@ -42,7 +42,7 @@ var columns = [columnCount]struct {
 	colStatus:      {markT("Status"), markT("Status"), "status", 112},
 	colETA:         {markT("Time left"), markT("Time left"), "eta", 78},
 	colRate:        {markT("Transfer rate"), markT("Transfer rate"), "rate", 100},
-	colLastTry:     {markT("Last attempt"), markT("Last attempt"), "lasttry", 92},
+	colLastTry:     {markT("Last attempt"), markT("Last attempt"), "lasttry", 100},
 	colDescription: {markT("Description"), markT("Description"), "description", 0},
 }
 

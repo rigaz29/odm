@@ -126,6 +126,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A long toolbar label goes on two lines instead of pushing the last
+  buttons out of the window, and a column header too long for its column
+  ends with an ellipsis instead of running into the next one.
 - Saving Options in the web UI no longer wipes the settings it does not
   show (queues and their schedules, site logins, the proxy, category
   folders and more). `PUT /api/settings` now changes only the fields its

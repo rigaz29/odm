@@ -2,8 +2,10 @@ package engine
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -124,6 +126,27 @@ func DefaultSettings(dir string) Settings {
 		Categories:  true,
 		Queues:      []string{DefaultQueue},
 	}
+}
+
+// clone returns a copy that shares no map or slice with s. The manager
+// never changes a published Settings in place, and the copies it hands out
+// can be changed or encoded while it keeps working.
+func (s Settings) clone() Settings {
+	c := s
+	c.Logins = slices.Clone(s.Logins)
+	c.Queues = slices.Clone(s.Queues)
+	c.FileTypes = slices.Clone(s.FileTypes)
+	c.ExcludeSites = slices.Clone(s.ExcludeSites)
+	c.CategoryDirs = maps.Clone(s.CategoryDirs)
+	c.HostConnections = maps.Clone(s.HostConnections)
+	if s.Schedules != nil {
+		c.Schedules = make(map[string]QueueSchedule, len(s.Schedules))
+		for q, sc := range s.Schedules {
+			sc.Days = slices.Clone(sc.Days)
+			c.Schedules[q] = sc
+		}
+	}
+	return c
 }
 
 func (s *Settings) normalize(fallbackDir string) {
@@ -279,7 +302,9 @@ func LoadSettings(path, fallbackDir string) Settings {
 	return s
 }
 
-// SaveSettings writes settings to path.
+// SaveSettings writes settings to path. The file is written next to it and
+// renamed into place: a half-written settings.json does not parse, and
+// LoadSettings would then start from defaults, losing logins and queues.
 func SaveSettings(path string, s Settings) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
@@ -288,7 +313,11 @@ func SaveSettings(path string, s Settings) error {
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, data, 0o644)
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+		return err
+	}
+	return os.Rename(tmp, path)
 }
 
 var categoryExt = map[string]string{

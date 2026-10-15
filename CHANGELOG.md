@@ -32,6 +32,16 @@ All notable changes to ODM are documented here. The format is based on
 - Removing a download together with its file waits for the transfer to
   stop first, so the file is not still open (Windows refused to delete it).
 
+### Fixed
+
+- Reading the settings (Options, the web UI, the browser extension) while
+  they are being saved can no longer crash ODM. Each reader now gets its
+  own copy of the lists and tables in the settings.
+- `settings.json` is written to a temporary file and renamed into place,
+  one save at a time. A half-written or interleaved file used to fail to
+  load, and ODM then started with default settings, without its logins,
+  queues and schedules.
+
 ## [0.2.0] - 2026-10-13
 
 ### Added

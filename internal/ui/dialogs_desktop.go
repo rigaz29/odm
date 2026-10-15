@@ -282,7 +282,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 					infoLabel.SetText(err.Error())
 					return
 				}
-				info := dash(humanBytes(p.Total))
+				info := "Size unknown"
+				if p.Total > 0 {
+					info = humanBytes(p.Total)
+				}
 				if p.ContentType != "" {
 					info += " · " + p.ContentType
 				}

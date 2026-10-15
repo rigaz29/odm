@@ -62,6 +62,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A file whose size the server does not give (no `Content-Length`, as with
+  a generated archive or a chunked response) is downloaded instead of
+  refused. It is fetched on one connection, its size is known when the
+  response ends, and a response cut off part way is fetched again.
 - A server that answers 429 Too Many Requests or 503 Service Unavailable
   is asked again after the time its `Retry-After` gives (at most two
   minutes per try), or after the usual pause when it gives none. This

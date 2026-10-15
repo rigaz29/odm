@@ -47,14 +47,27 @@ type Chunk struct {
 	paceAt    time.Time
 }
 
-// Size is the number of bytes the chunk covers.
-func (c *Chunk) Size() int64 { return c.End - c.Start + 1 }
+// Size is the number of bytes the chunk covers; 0 for an open-ended chunk
+// (End < 0), whose size is only known when its response ends.
+func (c *Chunk) Size() int64 {
+	if c.End < 0 {
+		return 0
+	}
+	return c.End - c.Start + 1
+}
 
-// Remaining is the number of bytes still to fetch for this chunk.
-func (c *Chunk) Remaining() int64 { return c.Size() - c.Done }
+// Remaining is the number of bytes still to fetch for this chunk; 0 when
+// that is not known, so an open-ended chunk is never split.
+func (c *Chunk) Remaining() int64 {
+	if c.End < 0 {
+		return 0
+	}
+	return c.Size() - c.Done
+}
 
-// Complete reports whether every byte of the chunk has been written.
-func (c *Chunk) Complete() bool { return c.Done >= c.Size() }
+// Complete reports whether every byte of the chunk has been written. An
+// open-ended chunk is complete once its response has ended and End was set.
+func (c *Chunk) Complete() bool { return c.End >= 0 && c.Done >= c.Size() }
 
 // Next is the absolute file offset the next read should write to.
 func (c *Chunk) Next() int64 { return c.Start + c.Done }

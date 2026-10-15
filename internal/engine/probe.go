@@ -57,18 +57,21 @@ func Inspect(ctx context.Context, client *http.Client, rawURL string, headers ma
 
 	switch resp.StatusCode {
 	case http.StatusPartialContent:
-		if _, _, total, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok {
+		// "bytes 0-0/*" names no total: ranges cannot be planned without it.
+		if _, _, total, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok && total > 0 {
 			p.RangeOK = true
 			p.Total = total
 		}
 	case http.StatusOK:
-		p.Total = resp.ContentLength
+		if resp.ContentLength > 0 {
+			p.Total = resp.ContentLength
+		}
 	default:
 		return nil, fmt.Errorf("unexpected status: %s", resp.Status)
 	}
-	if p.Total <= 0 {
-		return nil, fmt.Errorf("server did not report a content length")
-	}
+	// Total 0: the server did not say how big the file is (a generated
+	// archive, a chunked response). It is fetched on one connection, and its
+	// size is known when the response ends.
 	p.FileName = FileName(resp, rawURL)
 	return p, nil
 }

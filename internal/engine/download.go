@@ -546,11 +546,17 @@ func (d *Download) planLocked(p *Probe) {
 	if conns < 1 {
 		conns = 1
 	}
-	if p.RangeOK {
+	if p.RangeOK && p.Total > 0 {
 		d.Chunks = NewPlan(p.Total, conns)
 		return
 	}
-	d.Chunks = []*Chunk{{ID: 0, Start: 0, End: p.Total - 1}}
+	// One stream; with the size unknown the chunk is open-ended and gets its
+	// end when the response does.
+	end := p.Total - 1
+	if p.Total <= 0 {
+		end = -1
+	}
+	d.Chunks = []*Chunk{{ID: 0, Start: 0, End: end}}
 }
 
 // representationDiffers reports whether p is a different file from the one
@@ -965,6 +971,12 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 		return nil
 	}
 	d.mu.Lock()
+	if ch.End < 0 {
+		// Size unknown: the response ending is the end of the file. A body
+		// cut off by a dropped connection fails with an error before this.
+		ch.End = ch.Start + ch.Done - 1
+		d.Total = ch.Start + ch.Done
+	}
 	complete := ch.Complete()
 	d.mu.Unlock()
 	if !complete {

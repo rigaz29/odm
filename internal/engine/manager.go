@@ -85,7 +85,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 		client:    buildClient(settings),
 		settings:  settings,
 		setPath:   settingsPath,
-		limiter:   NewLimiter(settings.SpeedLimit),
+		limiter:   NewLimiter(settings.EffectiveSpeedLimit()),
 
 		schedFired: map[string]string{},
 	}
@@ -331,7 +331,7 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 		d.setClient(client)
 	}
 
-	m.limiter.SetRate(next.SpeedLimit)
+	m.limiter.SetRate(next.EffectiveSpeedLimit())
 	setUserAgent(next.UserAgent)
 	setFFmpegPath(next.FFmpegPath)
 	m.saveSettings()
@@ -352,6 +352,17 @@ func (m *Manager) saveSettings() {
 	cur := m.settings // never changed in place once published
 	m.mu.Unlock()
 	_ = SaveSettings(m.setPath, cur)
+}
+
+// SetSpeedLimiter switches the global speed limiter on or off. A
+// bytesPerSecond above 0 also sets the limit; 0 keeps the one saved.
+func (m *Manager) SetSpeedLimiter(on bool, bytesPerSecond int64) Settings {
+	next := m.Settings()
+	next.LimiterOff = !on
+	if bytesPerSecond > 0 {
+		next.SpeedLimit = bytesPerSecond
+	}
+	return m.UpdateSettings(next)
 }
 
 // credentials returns the stored Basic credentials for a host, if any.

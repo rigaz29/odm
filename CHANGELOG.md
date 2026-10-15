@@ -13,6 +13,11 @@ All notable changes to ODM are documented here. The format is based on
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
 - `POST /api/actions/stop-all`, which the web UI's Stop All button now uses.
+- Speed limiter on/off in the Downloads menu and the tray menu, with
+  Downloads → Speed limiter settings… to change the value. Switching it off
+  keeps the value; with none saved yet, ODM asks for one. The status bar
+  names the limit while it applies, and Options → Connection has an On box
+  next to the global limit.
 - The extension's toolbar icon shows how many videos, audio files and
   streams the page has loaded, and its popup lists them (from every frame,
   with how long ago each was seen) to send one to ODM. This covers pages

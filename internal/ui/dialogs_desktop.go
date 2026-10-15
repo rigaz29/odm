@@ -687,6 +687,10 @@ func (a *application) openOptionsTab(tab int) {
 	connSelect.SetSelected(fmt.Sprint(settings.Connections))
 	concEntry := numEntry(settings.Concurrent)
 	limitEntry := numEntry(int(settings.SpeedLimit / 1024))
+	// The value stays when the limiter is off, so it can be turned on again
+	// from the menu or the tray without retyping it.
+	limitCheck := widget.NewCheck("On", nil)
+	limitCheck.SetChecked(settings.EffectiveSpeedLimit() > 0)
 	type hostRow struct {
 		host string
 		n    int
@@ -775,7 +779,7 @@ func (a *application) openOptionsTab(tab int) {
 			widget.NewForm(
 				widget.NewFormItem("Default max. connections", small(connSelect, 90)),
 				widget.NewFormItem("Simultaneous downloads", small(concEntry, 90)),
-				widget.NewFormItem("Global speed limit (KB/s, 0 = off)", small(limitEntry, 90)),
+				widget.NewFormItem("Global speed limit", container.NewHBox(limitCheck, small(limitEntry, 90), widget.NewLabel("KB/s"))),
 			),
 			widget.NewLabel("Exceptions:"),
 		),
@@ -997,6 +1001,7 @@ func (a *application) openOptionsTab(tab int) {
 		next.Connections = conns
 		next.Concurrent = conc
 		next.SpeedLimit = limit * 1024
+		next.LimiterOff = !limitCheck.Checked
 		next.Categories = catsCheck.Checked
 		next.Clipboard = clipCheck.Checked
 		next.NoUpdateCheck = !updCheck.Checked

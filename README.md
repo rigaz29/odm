@@ -38,7 +38,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
   already stored. The remainder is fetched on one connection.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
-  window.
+  window. The global limit is switched off and on from the Downloads menu
+  or the tray, and keeps its value while off.
 - HTTP and SOCKS5 proxies, or the system proxy (the default).
 
 **Organizing**

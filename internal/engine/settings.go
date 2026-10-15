@@ -76,6 +76,9 @@ type Settings struct {
 	Connections  int                      `json:"connections"`
 	Concurrent   int                      `json:"concurrent"`
 	SpeedLimit   int64                    `json:"speed_limit"`
+	// LimiterOff keeps SpeedLimit but does not apply it, so the speed
+	// limiter can be switched off and on again without retyping the value.
+	LimiterOff bool `json:"limiter_off,omitempty"`
 	Categories   bool                     `json:"categories"`
 	Clipboard    bool                     `json:"clipboard"`
 	Proxy        ProxyConfig              `json:"proxy"`
@@ -126,6 +129,15 @@ func DefaultSettings(dir string) Settings {
 		Categories:  true,
 		Queues:      []string{DefaultQueue},
 	}
+}
+
+// EffectiveSpeedLimit is the global limit in bytes per second that applies
+// now: 0 when the limiter is switched off or no limit is set.
+func (s Settings) EffectiveSpeedLimit() int64 {
+	if s.LimiterOff || s.SpeedLimit <= 0 {
+		return 0
+	}
+	return s.SpeedLimit
 }
 
 // clone returns a copy that shares no map or slice with s. The manager

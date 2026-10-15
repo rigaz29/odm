@@ -110,15 +110,19 @@ func (a *application) setupTray() {
 		return
 	}
 	a.trayOK = true
-	desk.SetSystemTrayMenu(fyne.NewMenu("ODM",
+	a.trayMenu = fyne.NewMenu("ODM",
 		fyne.NewMenuItem("Show ODM", a.showWindow),
 		fyne.NewMenuItem("Add URL…", func() { a.showWindow(); a.openAddDialog() }),
 		fyne.NewMenuItemSeparator(),
 		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
 		fyne.NewMenuItem("Resume all", func() { a.mgr.ResumeAll(); a.refresh() }),
+		a.newLimiterItem(),
 		fyne.NewMenuItemSeparator(),
 		&fyne.MenuItem{Label: "Exit", IsQuit: true, Action: a.fyneApp.Quit},
-	))
+	)
+	desk.SetSystemTrayMenu(a.trayMenu)
+	a.limiterShown = "" // the new item has not been synced yet
+	a.syncLimiter(a.mgr.Settings().EffectiveSpeedLimit())
 	desk.SetSystemTrayIcon(theme.DownloadIcon())
 	desk.SetSystemTrayWindow(a.win) // left-click shows the window
 	a.win.SetCloseIntercept(func() {
@@ -196,6 +200,12 @@ type application struct {
 	// search is the filter box; query holds its lower-case words.
 	search *searchEntry
 	query  []string
+	// The menus are kept to refresh the speed limiter items, which show
+	// whether the global limit applies; limiterShown is what they show now.
+	mainMenu     *fyne.MainMenu
+	trayMenu     *fyne.Menu
+	limiterItems []*fyne.MenuItem
+	limiterShown string
 	// rowH/headH are the table's real row and header heights, captured from
 	// laid-out cells so gridBackdrop can continue the grid below the rows.
 	rowH, headH float32
@@ -432,7 +442,8 @@ func (a *application) build() {
 	a.status = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{})
 	body := container.New(layout.NewCustomPaddedLayout(4, 0, 4, 4), a.split)
 	a.win.SetContent(container.NewBorder(top, a.status, nil, nil, body))
-	a.win.SetMainMenu(a.buildMenu())
+	a.mainMenu = a.buildMenu()
+	a.win.SetMainMenu(a.mainMenu)
 	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyN, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
 	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyF, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
 	// Keys typed with nothing focused (e.g. right after start) still reach
@@ -594,6 +605,9 @@ func (a *application) buildMenu() *fyne.MainMenu {
 		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
 		fyne.NewMenuItem("Stop all (and stop queues)", func() { a.mgr.StopAll(); a.refresh() }),
 		fyne.NewMenuItem("Clear completed", func() { a.mgr.ClearCompleted(); a.refresh() }),
+		&fyne.MenuItem{IsSeparator: true},
+		a.newLimiterItem(),
+		fyne.NewMenuItem("Speed limiter settings…", func() { a.openOptionsTab(optionsTabConnection) }),
 		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Start queue", a.startQueue),
 		fyne.NewMenuItem("Stop queue", a.stopQueue),
@@ -947,6 +961,7 @@ func (a *application) refresh() {
 
 	all := a.mgr.List()
 	queues := a.mgr.Queues()
+	limit := a.mgr.Settings().EffectiveSpeedLimit()
 	filtered := make([]engine.Info, 0, len(all))
 	counts := map[string]int{}
 	unfinished, finished := 0, 0
@@ -1025,12 +1040,16 @@ func (a *application) refresh() {
 		if len(terms) > 0 {
 			items = fmt.Sprintf("%d of %s match the search", len(filtered), items)
 		}
+		text := "  " + items
 		if active > 0 {
-			a.status.SetText(fmt.Sprintf("  %d active · %s/s · %s", active, humanBytes(speed), items))
-		} else {
-			a.status.SetText("  " + items)
+			text = fmt.Sprintf("  %d active · %s/s · %s", active, humanBytes(speed), items)
 		}
+		if limit > 0 {
+			text += fmt.Sprintf(" · speed limit %s/s", humanBytes(limit))
+		}
+		a.status.SetText(text)
 	}
+	a.syncLimiter(limit)
 
 	a.noticeCompletions(all)
 

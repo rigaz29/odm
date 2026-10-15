@@ -143,8 +143,11 @@ ODM.exe -add https://host/big.iso -no-ui # fetch one URL in the terminal, then e
 **Keyboard shortcuts** (main list): <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click to
 select several downloads, <kbd>Ctrl</kbd>+<kbd>A</kbd> to select all,
 <kbd>Del</kbd> to remove, <kbd>Enter</kbd> to open the progress window, arrow
-keys to move, and <kbd>Ctrl</kbd>+<kbd>N</kbd> to add a URL. On macOS, use
-<kbd>Cmd</kbd> instead of <kbd>Ctrl</kbd>.
+keys to move, <kbd>Ctrl</kbd>+<kbd>N</kbd> to add a URL, and
+<kbd>Ctrl</kbd>+<kbd>F</kbd> to search. The search box next to the toolbar
+keeps the downloads whose file name, address or description contains every
+word typed; <kbd>Esc</kbd> clears it. On macOS, use <kbd>Cmd</kbd> instead of
+<kbd>Ctrl</kbd>.
 
 **Tray and start-up.** Closing the window hides ODM in the tray, and downloads
 keep running. *Options → General* controls close-to-tray and *Launch ODM on

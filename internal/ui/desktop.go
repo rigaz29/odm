@@ -193,6 +193,9 @@ type application struct {
 		kind  string
 		value string
 	}
+	// search is the filter box; query holds its lower-case words.
+	search *searchEntry
+	query  []string
 	// rowH/headH are the table's real row and header heights, captured from
 	// laid-out cells so gridBackdrop can continue the grid below the rows.
 	rowH, headH float32
@@ -350,7 +353,12 @@ func (a *application) build() {
 	// width (the HBox MinSize would otherwise set the window minimum).
 	toolScroll := container.NewHScroll(container.New(layout.NewCustomPaddedLayout(2, 2, 4, 4), toolbar))
 	toolScroll.SetMinSize(fyne.NewSize(200, toolbar.MinSize().Height+4))
-	top := container.NewVBox(toolScroll, widget.NewSeparator())
+	a.search = newSearchEntry(a.setSearch, func() { a.win.Canvas().Focus(a.table) })
+	searchBox := container.NewCenter(container.NewGridWrap(fyne.NewSize(240, a.search.MinSize().Height), a.search))
+	top := container.NewVBox(
+		container.NewBorder(nil, nil, nil, container.New(layout.NewCustomPaddedLayout(0, 0, 4, 8), searchBox), toolScroll),
+		widget.NewSeparator(),
+	)
 
 	base := newDownloadTable(a)
 	base.OnSelected = func(id widget.TableCellID) {
@@ -426,6 +434,7 @@ func (a *application) build() {
 	a.win.SetContent(container.NewBorder(top, a.status, nil, nil, body))
 	a.win.SetMainMenu(a.buildMenu())
 	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyN, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
+	a.win.Canvas().AddShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyF, Modifier: fyne.KeyModifierShortcutDefault}, a.handleShortcut)
 	// Keys typed with nothing focused (e.g. right after start) still reach
 	// the list's handler.
 	a.win.Canvas().SetOnTypedKey(a.table.TypedKey)
@@ -933,6 +942,7 @@ func (a *application) refresh() {
 	a.mu.Lock()
 	col, asc := a.sortCol, a.sortAsc
 	kind, value := a.filter.kind, a.filter.value
+	terms := a.query
 	a.mu.Unlock()
 
 	all := a.mgr.List()
@@ -947,7 +957,7 @@ func (a *application) refresh() {
 		} else {
 			unfinished++
 		}
-		if matchesFilter(d, kind, value) {
+		if matchesFilter(d, kind, value) && matchesSearch(d, terms) {
 			filtered = append(filtered, d)
 		}
 	}
@@ -1011,6 +1021,9 @@ func (a *application) refresh() {
 		items := fmt.Sprintf("%d items", len(all))
 		if len(all) == 1 {
 			items = "1 item"
+		}
+		if len(terms) > 0 {
+			items = fmt.Sprintf("%d of %s match the search", len(filtered), items)
 		}
 		if active > 0 {
 			a.status.SetText(fmt.Sprintf("  %d active · %s/s · %s", active, humanBytes(speed), items))
@@ -1267,8 +1280,15 @@ func (a *application) selectedItems() []engine.Info {
 
 // handleShortcut is the window-wide keyboard shortcut handler.
 func (a *application) handleShortcut(s fyne.Shortcut) {
-	if cs, ok := s.(*desktop.CustomShortcut); ok && cs.KeyName == fyne.KeyN && cs.Modifier == fyne.KeyModifierShortcutDefault {
+	cs, ok := s.(*desktop.CustomShortcut)
+	if !ok || cs.Modifier != fyne.KeyModifierShortcutDefault {
+		return
+	}
+	switch cs.KeyName {
+	case fyne.KeyN:
 		a.openAddDialog()
+	case fyne.KeyF:
+		a.focusSearch()
 	}
 }
 

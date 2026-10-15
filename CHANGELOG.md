@@ -8,6 +8,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- A search box next to the toolbar, also reached with Ctrl+F, keeps the
+  downloads whose file name, address or description contains every word
+  typed. It works together with the category or queue picked in the
+  sidebar, and Esc clears it.
 - The extension's toolbar icon shows how many videos, audio files and
   streams the page has loaded, and its popup lists them (from every frame,
   with how long ago each was seen) to send one to ODM. This covers pages

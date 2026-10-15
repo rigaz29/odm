@@ -19,6 +19,9 @@ const MIN_MEDIA_BYTES = 512 * 1024;
 const CONFIG_TTL_MS = 5 * 60 * 1000;
 const MAX_MEDIA_PER_TAB = 15;
 const BYPASS_MS = 10 * 1000;
+// Chromium names a download within milliseconds, unless it asks where to
+// save it: then the name waits for the Save As dialog.
+const NAME_WAIT_MS = 2 * 60 * 1000;
 
 // pruneBypass keeps the Alt-click marks younger than BYPASS_MS. Older ones
 // no longer apply, and dropping them keeps the session map from growing
@@ -54,6 +57,37 @@ function hasType(url, types, filename) {
   const set = new Set(types.map((t) => String(t).toLowerCase().replace(/^\./, "")));
   const fromName = /\.([a-z0-9]{1,8})$/i.exec(filename || "");
   return set.has(urlExt(url)) || (fromName !== null && set.has(fromName[1].toLowerCase()));
+}
+
+// settledFilename resolves to the file name the browser gives download id.
+// Chromium creates the item before it has read Content-Disposition, so at
+// onCreated the name is still "" and a link such as download.php?id=7 says
+// nothing of the type. "" when the download ends first or timeoutMs
+// passes. downloads is chrome.downloads (a stand-in in the tests).
+function settledFilename(downloads, id, timeoutMs) {
+  return new Promise((resolve) => {
+    let timer;
+    let settled = false;
+    const finish = (name) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      downloads.onChanged.removeListener(onChanged);
+      resolve(name || "");
+    };
+    const onChanged = (d) => {
+      if (d.id !== id) return;
+      if (d.filename && d.filename.current) finish(d.filename.current);
+      else if (d.state && d.state.current !== "in_progress") finish("");
+    };
+    timer = setTimeout(() => finish(""), timeoutMs);
+    downloads.onChanged.addListener(onChanged);
+    // The name may have come before the listener did.
+    Promise.resolve(downloads.search({ id })).then(([it] = []) => {
+      if (it && it.filename) finish(it.filename);
+      else if (it && it.state !== "in_progress") finish("");
+    }, () => {});
+  });
 }
 
 // hostMatches: "example.org" matches that host; "*.example.org" matches it
@@ -270,11 +304,18 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     const { bypass = {} } = await chrome.storage.session.get("bypass");
     if (bypass[url] && Date.now() - bypass[url] < BYPASS_MS) return; // Alt-click
     const cfg = await getConfig();
-    if (isExcluded(url, cfg.excludeSites) || !hasType(url, cfg.fileTypes, item.filename)) return;
+    if (isExcluded(url, cfg.excludeSites)) return;
+    let filename = item.filename || "";
+    if (!filename && !hasType(url, cfg.fileTypes, "")) {
+      filename = await settledFilename(chrome.downloads, item.id, NAME_WAIT_MS);
+    }
+    if (!hasType(url, cfg.fileTypes, filename)) return;
 
     // Hold the browser's copy until ODM confirms; it used to be cancelled
     // first, so with ODM closed or unregistered the download was lost.
     try { await chrome.downloads.pause(item.id); } catch { /* may already be done */ }
+    // Not the name awaited above: Chromium adds " (1)" when its own folder
+    // has the file already. ODM reads the name from the server.
     const reply = await handOff({
       url, referrer: item.referrer || "", filename: item.filename || "",
       mime: item.mime || "", size: item.totalBytes > 0 ? item.totalBytes : 0,
@@ -384,5 +425,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
+  module.exports = { hasType, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
 }

@@ -152,6 +152,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- In Chrome, Edge and Brave the browser extension let the browser keep a
+  download whose link does not end in the file's type (`download.php?id=7`,
+  `/get/1234`), even when the server named it `report.pdf`. These browsers
+  tell extensions about a download before they read that name; the
+  extension now waits for it before deciding.
 - Downloads from HTTPS servers that speak HTTP/2 (most of them) failed with
   "malformed HTTP response" as soon as they used more than one connection.
   The connections for byte ranges, which use HTTP/1.1, still offered HTTP/2

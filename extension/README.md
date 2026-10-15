@@ -94,3 +94,9 @@ computer: it goes to ODM over native messaging, not to any server.
   it at install, but it can be revoked there.
 - **Downloads stay in the browser:** run `ODM.exe -register-browser` again
   (for example after moving ODM) and restart the browser.
+- **Another download manager takes the download, in one browser only:** some
+  hook into the browser process itself (Internet Download Manager with
+  *Options → General → Use advanced browser integration*, for one) and take
+  a download before the browser has created it, so this extension never
+  sees it, even with that manager's own extension turned off. Untick the
+  browser in that manager's list of browsers, or turn the option off.

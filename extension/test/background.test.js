@@ -41,6 +41,43 @@ test("hasType checks the URL and the browser's file name", () => {
   assert.ok(!bg.hasType("https://h/page", ["zip"], ""));
 });
 
+// fakeDownloads stands in for chrome.downloads with one item.
+function fakeDownloads(item) {
+  const listeners = new Set();
+  return {
+    listeners,
+    onChanged: { addListener: (f) => listeners.add(f), removeListener: (f) => listeners.delete(f) },
+    search: async ({ id }) => (id === item.id ? [item] : []),
+    emit: (d) => { for (const f of [...listeners]) f(d); },
+  };
+}
+const tick = () => new Promise((r) => setTimeout(r, 5));
+
+test("settledFilename waits for the name Chromium gives after onCreated", async () => {
+  const dl = fakeDownloads({ id: 4, filename: "", state: "in_progress" });
+  const name = bg.settledFilename(dl, 4, 1000);
+  await tick();
+  dl.emit({ id: 3, filename: { current: "C:\\other.zip", previous: "" } });
+  dl.emit({ id: 4, filename: { current: "C:\\Users\\u\\Downloads\\book.epub", previous: "" } });
+  assert.equal(await name, "C:\\Users\\u\\Downloads\\book.epub");
+  assert.equal(dl.listeners.size, 0);
+  assert.ok(bg.hasType("https://h/get?id=7", ["epub"], await name));
+});
+
+test("settledFilename: named already, ended first, or too slow", async () => {
+  assert.equal(await bg.settledFilename(fakeDownloads({ id: 1, filename: "C:\\a.zip", state: "in_progress" }), 1, 1000), "C:\\a.zip");
+
+  const dl = fakeDownloads({ id: 2, filename: "", state: "in_progress" });
+  const name = bg.settledFilename(dl, 2, 1000);
+  await tick();
+  dl.emit({ id: 2, state: { current: "interrupted", previous: "in_progress" } });
+  assert.equal(await name, "");
+
+  const slow = fakeDownloads({ id: 3, filename: "", state: "in_progress" });
+  assert.equal(await bg.settledFilename(slow, 3, 20), "");
+  assert.equal(slow.listeners.size, 0);
+});
+
 test("mergeMedia dedupes, keeps the larger size, caps the list", () => {
   let list = bg.mergeMedia([], { url: "a", size: 100 });
   list = bg.mergeMedia(list, { url: "a", size: 0 });

@@ -1,0 +1,75 @@
+# Builds the small ffmpeg ODM downloads for Windows (scripts/ffmpeg-min.sh)
+# and publishes it as a release, which ODM finds by the tag prefix
+# (internal/tools: FFmpeg). Push a tag named after the FFmpeg release and a
+# build number to run it:
+#
+#   git tag ffmpeg-min-n8.1-1 && git push origin ffmpeg-min-n8.1-1
+#
+# The source is FFmpeg's release tarball, checked against its signature.
+# The release carries the build's SHA-256, the script that made it and
+# FFmpeg's licence (LGPL 2.1 or later): what the LGPL asks of a binary.
+name: ffmpeg-min
+
+on:
+  push:
+    tags: ["ffmpeg-min-n*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64 binutils-mingw-w64-x86-64 make zip gnupg
+
+      - name: FFmpeg source, checked against its signature
+        run: |
+          tag="${GITHUB_REF_NAME#ffmpeg-min-n}"   # 8.1-1
+          ver="${tag%-*}"                          # 8.1
+          echo "FFMPEG_VERSION=$ver" >> "$GITHUB_ENV"
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$ver.tar.xz"
+          curl -fsSLO "https://ffmpeg.org/releases/ffmpeg-$ver.tar.xz.asc"
+          # FFmpeg release signing key <ffmpeg-devel@ffmpeg.org>
+          key=FCF986EA15E6E293A5644F10B4322F04D67658D8
+          curl -fsSL "https://keyserver.ubuntu.com/pks/lookup?op=get&search=0x$key" | gpg --batch --import
+          gpg --batch --status-fd 1 --verify "ffmpeg-$ver.tar.xz.asc" "ffmpeg-$ver.tar.xz" | grep -q "VALIDSIG $key"
+          tar -xJf "ffmpeg-$ver.tar.xz"
+
+      - name: Build
+        run: bash scripts/ffmpeg-min.sh "ffmpeg-$FFMPEG_VERSION" out x86_64-w64-mingw32-
+
+      - name: Package
+        run: |
+          mkdir pkg
+          cp out/ffmpeg.exe out/ffprobe.exe pkg/
+          cp "ffmpeg-$FFMPEG_VERSION/COPYING.LGPLv2.1" pkg/COPYING.LGPLv2.1.txt
+          cp "ffmpeg-$FFMPEG_VERSION/LICENSE.md" pkg/LICENSE.md
+          cp scripts/ffmpeg-min.sh pkg/
+          {
+            echo "FFmpeg $FFMPEG_VERSION, built for Ochi Download Manager with ffmpeg-min.sh"
+            echo "from $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/commit/$GITHUB_SHA."
+            echo
+            echo "Source: https://ffmpeg.org/releases/ffmpeg-$FFMPEG_VERSION.tar.xz"
+            echo "Licence: LGPL 2.1 or later (COPYING.LGPLv2.1.txt); no GPL parts or"
+            echo "external libraries are enabled."
+            echo
+            echo "It copies streams between containers and does not encode."
+          } > pkg/README.txt
+          (cd pkg && zip -9 ../ffmpeg-min-win64.zip *)
+          sha256sum ffmpeg-min-win64.zip > ffmpeg-min-win64.zip.sha256
+          ls -l pkg ffmpeg-min-win64.zip
+          cat ffmpeg-min-win64.zip.sha256
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" ffmpeg-min-win64.zip ffmpeg-min-win64.zip.sha256 \
+            --title "ffmpeg (small build) $FFMPEG_VERSION for ODM" \
+            --notes-file pkg/README.txt --latest=false

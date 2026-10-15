@@ -149,6 +149,9 @@ type Settings struct {
 	// video sites' pages such as YouTube's. Empty: look next to ODM, then
 	// on PATH.
 	YtDlpPath string `json:"ytdlp_path,omitempty"`
+	// ToolUpdates says whether ODM may download yt-dlp and ffmpeg itself
+	// and keep them updated: "" (not asked yet), "auto" or "off".
+	ToolUpdates string `json:"tool_updates,omitempty"`
 }
 
 // DefaultQueue is the queue used when none is specified.

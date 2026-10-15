@@ -30,6 +30,7 @@ import (
 	"odm/internal/quarantine"
 	"odm/internal/server"
 	"odm/internal/sysproxy"
+	"odm/internal/tools"
 	"odm/internal/ui"
 	"odm/internal/version"
 )
@@ -150,6 +151,14 @@ func main() {
 	mgr.Begin(ctx)
 	go mgr.Start(ctx)
 
+	// yt-dlp and ffmpeg: ODM's own copies, downloaded when needed once the
+	// person agreed (Settings.ToolUpdates) and kept up to date silently.
+	keeper := tools.NewKeeper(&tools.Installer{Dir: tools.Dir(), Client: mgr.HTTPClient()},
+		func() string { return mgr.Settings().ToolUpdates })
+	keeper.Log = log.Printf
+	engine.EnsureTool = keeper.Ensure
+	go keeper.Run(ctx, 24*time.Hour)
+
 	// Scheduler "when done" actions for headless runs. The desktop UI installs
 	// its own handler, which asks for confirmation before shutting down.
 	mgr.SetActionHandler(func(act engine.Action) {
@@ -253,7 +262,7 @@ func main() {
 				return false
 			}
 		}
-		if err := ui.Run(ctx, mgr, ui.Options{Show: showUI, Prompt: promptUI, Hidden: *hidden}); err != nil {
+		if err := ui.Run(ctx, mgr, ui.Options{Show: showUI, Prompt: promptUI, Hidden: *hidden, Tools: keeper}); err != nil {
 			log.Println("ui:", err)
 		}
 		stopServers()

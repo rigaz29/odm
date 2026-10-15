@@ -34,6 +34,37 @@ type SiteJob struct {
 // a missing program from a page yt-dlp could not read.
 var ErrNoYtDlp = ytdlp.ErrNotFound
 
+// EnsureTool, when set, provides a companion program that was not found
+// ("yt-dlp", "ffmpeg"): ODM's own copy, downloaded when the person allowed
+// it (see tools.Keeper). It returns the program's path.
+var EnsureTool func(ctx context.Context, name string) (string, error)
+
+// locateYtDlp finds yt-dlp, or has it installed.
+func locateYtDlp(ctx context.Context) (string, error) {
+	bin, err := ytdlp.Locate(ytdlpConfigured())
+	if err != nil && EnsureTool != nil && ytdlpConfigured() == "" {
+		p, eerr := EnsureTool(ctx, "yt-dlp")
+		if eerr != nil {
+			return "", fmt.Errorf("%w; %v", err, eerr)
+		}
+		return p, nil
+	}
+	return bin, err
+}
+
+// locateFFmpeg finds ffmpeg, or has it installed.
+func locateFFmpeg(ctx context.Context) (string, error) {
+	bin, err := ffmpeg.Locate(ffmpegConfigured())
+	if err != nil && EnsureTool != nil && ffmpegConfigured() == "" {
+		p, eerr := EnsureTool(ctx, "ffmpeg")
+		if eerr != nil {
+			return "", fmt.Errorf("%w; %v", err, eerr)
+		}
+		return p, nil
+	}
+	return bin, err
+}
+
 // ytdlpSetting is the configured yt-dlp path (Settings.YtDlpPath), read
 // from download goroutines.
 var ytdlpSetting atomic.Pointer[string]
@@ -68,7 +99,7 @@ func (c *SiteChoices) Quality(label string) int {
 // matches ErrNoYtDlp; a live stream or a page with nothing to download is
 // refused (ErrStreamRefused).
 func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, error) {
-	bin, err := ytdlp.Locate(ytdlpConfigured())
+	bin, err := locateYtDlp(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -122,14 +153,22 @@ func (d *Download) runSite(ctx context.Context) {
 // fetchSite runs yt-dlp until the video is in the work folder and returns
 // the file it made.
 func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
-	bin, err := ytdlp.Locate(ytdlpConfigured())
+	bin, err := locateYtDlp(ctx)
 	if err != nil {
 		return "", err
 	}
 	if err := os.MkdirAll(work, 0o755); err != nil {
 		return "", err
 	}
-	ff, _ := ffmpeg.Locate(ffmpegConfigured()) // "": yt-dlp looks itself
+	// Video and audio apart ("137+140", or yt-dlp's own best) are joined
+	// by ffmpeg; "" lets yt-dlp look for it itself.
+	ff, _ := ffmpeg.Locate(ffmpegConfigured())
+	d.mu.Lock()
+	joins := d.Site.Format == "" || strings.Contains(d.Site.Format, "+")
+	d.mu.Unlock()
+	if ff == "" && joins {
+		ff, _ = locateFFmpeg(ctx)
+	}
 	d.mu.Lock()
 	o := ytdlp.Options{
 		Page: d.URL, Format: d.Site.Format, Out: filepath.Join(work, "media"),

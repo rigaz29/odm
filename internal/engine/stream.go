@@ -1198,7 +1198,7 @@ func (d *Download) assembleStream(ctx context.Context, tracks []*streamTrack) er
 	}
 	_ = out.Close()
 
-	bin, err := ffmpeg.Locate(ffmpegConfigured())
+	bin, err := locateFFmpeg(ctx)
 	if err != nil {
 		// The segments stay; resuming after installing ffmpeg only redoes
 		// the assembly.

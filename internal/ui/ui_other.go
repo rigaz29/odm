@@ -7,6 +7,7 @@ import (
 	"errors"
 
 	"odm/internal/engine"
+	"odm/internal/tools"
 )
 
 // Available reports whether this build includes the desktop UI.
@@ -17,6 +18,7 @@ type Options struct {
 	Show   <-chan struct{}
 	Prompt <-chan engine.AddOptions
 	Hidden bool
+	Tools  *tools.Keeper
 }
 
 // Run is unavailable in headless builds (built without the fyne tag); the web

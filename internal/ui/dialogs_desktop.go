@@ -30,6 +30,7 @@ import (
 	"odm/internal/ffmpeg"
 	"odm/internal/media"
 	"odm/internal/osutil"
+	"odm/internal/tools"
 	"odm/internal/update"
 	"odm/internal/version"
 	"odm/internal/ytdlp"
@@ -864,6 +865,7 @@ func (a *application) openOptionsTab(tab int) {
 		}, w).Show()
 	})
 	checkYtDlp(0)
+	toolsCheck, toolsBox := a.toolsOptions(settings, func() { checkFFmpeg(0); checkYtDlp(0) })
 	downloadsTab := container.NewVBox(
 		header(T("Default download settings")),
 		startCheck,
@@ -891,6 +893,8 @@ func (a *application) openOptionsTab(tab int) {
 		widget.NewLabel(T("yt-dlp (downloads videos from YouTube and similar sites):")),
 		container.NewBorder(nil, nil, nil, ytBrowse, ytEntry),
 		ytStatus,
+		toolsBox,
+		hint(T("ODM keeps its own copies in its folder, checked against the checksums of their releases, and uses them unless a path is chosen above.")),
 	)
 
 	// Connection
@@ -1239,6 +1243,10 @@ func (a *application) openOptionsTab(tab int) {
 		next.UserAgent = strings.TrimSpace(uaEntry.Text)
 		next.FFmpegPath = strings.TrimSpace(ffEntry.Text)
 		next.YtDlpPath = strings.TrimSpace(ytEntry.Text)
+		next.ToolUpdates = toolMode(settings.ToolUpdates, toolsCheck.Checked)
+		if next.ToolUpdates == tools.ModeAuto && settings.ToolUpdates != tools.ModeAuto && a.keeper != nil {
+			defer a.keeper.Kick() // once the setting is saved
+		}
 		next.DuplicateAuto = engine.DuplicateSkip
 		if dupSelect.Selected == dupAgain {
 			next.DuplicateAuto = engine.DuplicateAgain

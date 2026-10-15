@@ -40,6 +40,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"odm/internal/tools"
 )
 
 // ErrNotFound means no yt-dlp was configured, bundled or on PATH.
@@ -53,7 +55,8 @@ func exeName() string {
 }
 
 // Locate returns the yt-dlp to use, in order: the configured path (a file,
-// or a folder containing yt-dlp), one next to the ODM executable, then PATH.
+// or a folder containing yt-dlp), the copy ODM installed (tools.Dir), one
+// next to the ODM executable, then PATH.
 func Locate(configured string) (string, error) {
 	if configured = strings.TrimSpace(configured); configured != "" {
 		if st, err := os.Stat(configured); err == nil && st.IsDir() {
@@ -63,6 +66,9 @@ func Locate(configured string) (string, error) {
 			return configured, nil
 		}
 		return "", fmt.Errorf("%w (looked at %s)", ErrNotFound, configured)
+	}
+	if p := tools.Find(exeName()); p != "" {
+		return p, nil
 	}
 	if self, err := os.Executable(); err == nil {
 		p := filepath.Join(filepath.Dir(self), exeName())

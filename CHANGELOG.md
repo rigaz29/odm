@@ -8,6 +8,17 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- yt-dlp and ffmpeg no longer need installing. The first time one is
+  needed (a YouTube video, a stream whose video and audio are apart), ODM
+  asks once whether it may download them; then it downloads yt-dlp from
+  its releases and a small ffmpeg built for ODM (`scripts/ffmpeg-min.sh`,
+  LGPL: it only copies streams between MP4, WebM/Matroska, MPEG-TS and
+  audio containers), checks each against the SHA-256 its release lists,
+  keeps them in `%LocalAppData%\odm\tools`, and updates them silently once
+  a day, a running copy included. Options → Downloads turns this on or
+  off and updates them now; a path chosen there still wins. The
+  `ffmpeg-min` workflow builds that ffmpeg from FFmpeg's signed release
+  and publishes it with its checksum, script and licence.
 - YouTube videos, through [yt-dlp](https://github.com/yt-dlp/yt-dlp), an
   optional program like ffmpeg (next to ODM, on PATH, or chosen in
   Options → Downloads, which shows the version found). On YouTube's watch

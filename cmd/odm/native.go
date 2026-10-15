@@ -33,6 +33,9 @@ func runNativeHost(configDir string) {
 		start = func() error { return startODM(path) }
 	}
 	client := ipc.Client(path, 10*time.Second)
+	// Reading a playlist or a video page can take a while, more so when
+	// ODM first downloads yt-dlp for it.
+	slow := ipc.Client(path, 4*time.Minute)
 
 	err := native.Serve(os.Stdin, os.Stdout, func(m native.Message) native.Reply {
 		switch m.Type {
@@ -45,9 +48,9 @@ func runNativeHost(configDir string) {
 		case "", "download":
 			return relayStarting(func() native.Reply { return relayDownload(client, m) }, start)
 		case "streams":
-			return relayStarting(func() native.Reply { return relayStreams(client, m) }, start)
+			return relayStarting(func() native.Reply { return relayStreams(slow, m) }, start)
 		case "site-formats":
-			return relayStarting(func() native.Reply { return relaySite(client, m) }, start)
+			return relayStarting(func() native.Reply { return relaySite(slow, m) }, start)
 		}
 		return native.Reply{Error: "unknown message type: " + m.Type}
 	})

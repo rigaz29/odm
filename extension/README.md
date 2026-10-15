@@ -90,10 +90,11 @@ the system tray first. Then:
   so the button offers the video itself, and ODM asks
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) for its qualities (resolution,
   bitrate, codecs, container, expected size, and audio alone). ODM
-  downloads the one picked through yt-dlp. yt-dlp must be installed: next
-  to `ODM.exe`, on PATH, or chosen in ODM's *Options → Downloads*. It reads
-  the page itself; the browser's cookies are not given to it, so videos
-  that need a sign-in are not available. The pieces the player fetches
+  downloads the one picked through yt-dlp. The first time, ODM asks whether
+  it may download yt-dlp and ffmpeg itself (then it keeps them updated);
+  open the menu again once they are in. yt-dlp reads the page itself; the
+  browser's cookies are not given to it, so videos that need a sign-in are
+  not available. The pieces the player fetches
   (`googlevideo.com`) are no longer listed.
 - **Right-click** a link, video, audio or image → **Download with ODM**.
 - **Toolbar popup:** the icon's badge counts the media the page has loaded

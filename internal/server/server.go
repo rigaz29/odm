@@ -331,7 +331,8 @@ func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an http(s) page address is required"})
 		return
 	}
-	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	// Room for ODM to download yt-dlp first, when it may.
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()
 	c, err := s.mgr.ProbeSite(ctx, req.URL)
 	switch {

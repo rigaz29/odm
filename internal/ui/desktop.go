@@ -28,6 +28,7 @@ import (
 
 	"odm/internal/clipmon"
 	"odm/internal/engine"
+	"odm/internal/tools"
 )
 
 // Available reports whether this build includes the desktop UI.
@@ -43,6 +44,9 @@ type Options struct {
 	Prompt <-chan engine.AddOptions
 	// Hidden starts in the system tray (login autostart) when a tray exists.
 	Hidden bool
+	// Tools keeps yt-dlp and ffmpeg; the window asks the person whether
+	// it may and tells them when they are ready.
+	Tools *tools.Keeper
 }
 
 // Run starts the desktop UI and blocks until ODM quits or ctx ends.
@@ -66,6 +70,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	a.win.SetIcon(icon)
 	a.notify = a.fyneApp.SendNotification
 	a.beep = playSound
+	a.hookTools(opts.Tools)
 	// Not in front until a window gets the focus: Windows may start ODM
 	// behind the window that launched it.
 	a.foreground.Store(false)
@@ -187,6 +192,7 @@ type application struct {
 	mgr     *engine.Manager
 	fyneApp fyne.App
 	win     fyne.Window
+	keeper  *tools.Keeper
 
 	table *downloadTable
 	cats  *widget.List

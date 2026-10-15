@@ -94,10 +94,17 @@ queues. It runs as a desktop app, or headless with a JSON API.
   video's qualities and audio-only formats as
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) reads them, and ODM downloads
   the one you pick through yt-dlp, with its progress, pause and resume.
-  yt-dlp is optional, like ffmpeg: next to ODM, on PATH, or chosen in
-  Options > Downloads. A YouTube address pasted into *New Download* works
-  the same way. yt-dlp reads the page itself; the browser's cookies are not
-  given to it.
+  A YouTube address pasted into *New Download* works the same way. yt-dlp
+  reads the page itself; the browser's cookies are not given to it.
+- yt-dlp and ffmpeg need no installing. The first time one is needed, ODM
+  asks whether it may download them (about 25 MB): yt-dlp from its own
+  releases, and a small ffmpeg built for ODM that only copies streams
+  between containers (`scripts/ffmpeg-min.sh`, published by the
+  `ffmpeg-min` workflow, LGPL). Each is checked against the SHA-256 its
+  release lists, kept in `%LocalAppData%\odm\tools`, and updated silently
+  once a day. Options > Downloads turns this off, updates them now, or
+  points at copies of your own, which ODM otherwise also finds next to it
+  or on PATH.
 - The extension's toolbar icon counts the media a page has loaded, and its
   popup lists them (from every frame) for players the button cannot find.
 - A clipboard monitor queues downloadable URLs you copy. You can turn it on

@@ -19,6 +19,7 @@ import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
@@ -70,8 +71,15 @@ func (a *application) openAddDialog() {
 // openAddWindow shows the New Download form in its own window, prefilled,
 // for a download handed over by the browser. A separate window (rather than
 // a dialog on the main window) works while ODM sits hidden in the tray.
+//
+// It stays above other windows: the browser keeps the focus, as Windows
+// does not let a background process take it, and the window would open
+// behind the browser.
 func (a *application) openAddWindow(pre engine.AddOptions) {
 	w := a.fyneApp.NewWindow(T("New Download"))
+	if dw, ok := w.(desktop.Window); ok {
+		dw.RequestAlwaysOnTop() // before Show
+	}
 	content, buttons := a.newAddForm(w, pre, w.Close, func() {
 		width := w.Canvas().Size().Width // keep a width the person chose
 		if width < 640 {

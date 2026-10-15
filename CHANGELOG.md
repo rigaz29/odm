@@ -117,6 +117,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- The New Download window that opens for a download from the browser stays
+  above other windows until it is answered. The browser keeps the focus,
+  as Windows does not let ODM take it from there, so the window used to
+  open behind the browser.
 - A connection four or more times slower than a freed one hands it all the
   work it has left, instead of keeping the last piece that halving left it
   while every other connection had finished; a freed connection waits for

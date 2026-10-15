@@ -126,6 +126,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A stream's playlist or decryption key whose server stops sending part
+  way fails after the 30-second stall limit, as a segment does, instead of
+  holding the download until it is paused.
 - A long toolbar label goes on two lines instead of pushing the last
   buttons out of the window, and a column header too long for its column
   ends with an ellipsis instead of running into the next one.

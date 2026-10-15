@@ -222,9 +222,9 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 	if resp.StatusCode != http.StatusOK {
 		return nil, nil, fmt.Errorf("manifest: %s", resp.Status)
 	}
-	data, err := io.ReadAll(io.LimitReader(resp.Body, maxManifestSize+1))
+	data, err := readAllIdle(ctx, resp.Body, maxManifestSize+1, d.readStall())
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("manifest: %w", err)
 	}
 	if len(data) > maxManifestSize {
 		return nil, nil, errors.New("manifest is too large")
@@ -1149,9 +1149,9 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 	default:
 		return nil, fmt.Errorf("decryption key: %s", resp.Status)
 	}
-	k, err = io.ReadAll(io.LimitReader(resp.Body, 17))
+	k, err = readAllIdle(ctx, resp.Body, 17, s.d.readStall())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("decryption key: %w", err)
 	}
 	if len(k) != 16 {
 		return nil, fmt.Errorf("decryption key has %d bytes, want 16", len(k))

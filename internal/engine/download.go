@@ -1103,6 +1103,27 @@ func (d *Download) readStall() time.Duration {
 	return DefaultStallTimeout
 }
 
+// readAllIdle reads body to its end, or to limit bytes, with the stall
+// limit on each read, as a file connection has: a manifest or key whose
+// server stops sending part way fails with errStalled instead of holding
+// the download until it is paused.
+func readAllIdle(ctx context.Context, body io.ReadCloser, limit int64, idle time.Duration) ([]byte, error) {
+	var out []byte
+	buf := make([]byte, 32*1024)
+	for int64(len(out)) < limit {
+		next := buf[:min(int64(len(buf)), limit-int64(len(out)))]
+		n, err := readWithIdle(ctx, body, next, idle)
+		out = append(out, next[:n]...)
+		if err == io.EOF {
+			return out, nil
+		}
+		if err != nil {
+			return out, err
+		}
+	}
+	return out, nil
+}
+
 // readWithIdle returns the next read, or errStalled when idle elapses with
 // no bytes. Closing the body unblocks a Read left behind in that case.
 func readWithIdle(ctx context.Context, body io.ReadCloser, buf []byte, idle time.Duration) (int, error) {

@@ -118,7 +118,8 @@ dikerjakan.
 - [x] Test engine memakai data acak, bukan pola `byte(i)` yang berulang
       tiap 256 byte. **K** 12 tempat di 9 file test kini memakai
       `randomData(n)`.
-- [ ] Batas stall untuk body manifest dan kunci AES. **K**
+- [x] Batas stall untuk body manifest dan kunci AES. **K** Keduanya dibaca
+      lewat `readAllIdle` dengan batas yang sama seperti segmen (30 detik).
 - [ ] Map `bypass` di extension dibersihkan dari entri lama. **K**
 - [x] `/api/settings` bisa diubah sebagian (PATCH). **K** PUT dan PATCH
       sama-sama hanya mengubah field yang dikirim. Ditemukan saat merapikan

@@ -129,6 +129,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Downloads from HTTPS servers that speak HTTP/2 (most of them) failed with
+  "malformed HTTP response" as soon as they used more than one connection.
+  The connections for byte ranges, which use HTTP/1.1, still offered HTTP/2
+  when connecting, and the server took it.
 - A file replaced on a server that sends no ETag or Last-Modified is
   downloaded again from the start when its size changes mid-download. Each
   connection now checks the total size in `Content-Range` (and that the

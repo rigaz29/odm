@@ -3,6 +3,7 @@ package engine
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -45,6 +46,14 @@ func TestSegmentTransportDisablesHTTP2(t *testing.T) {
 	}
 	if segmentTransport(nil).TLSNextProto == nil {
 		t.Fatal("nil base left HTTP/2 on")
+	}
+	// A base that already made an HTTPS request offers h2 in ALPN.
+	used := &http.Transport{TLSClientConfig: &tls.Config{NextProtos: []string{"h2", "http/1.1"}}}
+	if got := segmentTransport(used).TLSClientConfig.NextProtos; len(got) != 1 || got[0] != "http/1.1" {
+		t.Fatalf("segment transport offers %q, want only http/1.1", got)
+	}
+	if got := used.TLSClientConfig.NextProtos; len(got) != 2 || got[0] != "h2" {
+		t.Fatalf("the shared transport's ALPN list changed to %q", got)
 	}
 }
 
@@ -115,5 +124,45 @@ func TestNoRangeKeepsSharedClient(t *testing.T) {
 	}
 	if d.h1 != nil {
 		t.Fatal("a single stream built an HTTP/1.1 client")
+	}
+}
+
+// Once the shared transport has made an HTTPS request, net/http has added
+// "h2" to its TLS config's ALPN list. A clone kept offering h2 while it
+// could only speak HTTP/1.1, so a server that picked h2 answered in frames
+// the clone read as a malformed response: every segmented HTTPS download
+// from an HTTP/2 server failed.
+func TestSegmentedDownloadOverHTTP2Server(t *testing.T) {
+	data := randomData(512 * 1024)
+	srv := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		serveRange(w, r, data)
+	}))
+	srv.EnableHTTP2 = true
+	srv.StartTLS()
+	defer srv.Close()
+	client := srv.Client()
+	// Use the shared transport first, as the probe does.
+	resp, err := client.Get(srv.URL + "/warm")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = resp.Body.Close()
+	if resp.ProtoMajor != 2 {
+		t.Fatalf("test server speaks HTTP/%d, want 2", resp.ProtoMajor)
+	}
+
+	dir := t.TempDir()
+	d := New("h2", srv.URL+"/file.bin", dir, 4, nil, 0, client)
+	d.Start(context.Background())
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q", info.Status, info.Error)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatal("downloaded bytes do not match the source")
 	}
 }

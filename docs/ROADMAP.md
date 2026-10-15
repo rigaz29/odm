@@ -145,8 +145,9 @@ setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
       `SanitizeName`, yang dilalui nama dari server, API, dan form.
 - [ ] `fsync` berkala sebelum progres disimpan, agar resume setelah listrik
       mati tidak meninggalkan lubang di file. **K** Ditunda.
-- [ ] Validasi akhir dan total ukuran di `Content-Range`, bukan hanya byte
-      awal. **K**
+- [x] Validasi akhir dan total ukuran di `Content-Range`, bukan hanya byte
+      awal. **K** Total yang berubah = file di server berganti → unduh ulang
+      dari awal. Akhir range yang melebihi permintaan tetap diterima.
 - [ ] Verifikasi checksum SHA-256/SHA-1/MD5 setelah selesai (= item Fase 1). **S**
 - [ ] Koneksi yang jauh lebih lambat dari yang lain diambil alih seluruh
       sisanya, agar tidak ada "ekor" di akhir unduhan. **S**

@@ -129,6 +129,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A file replaced on a server that sends no ETag or Last-Modified is
+  downloaded again from the start when its size changes mid-download. Each
+  connection now checks the total size in `Content-Range` (and that the
+  range is well formed), not only where the range starts; the new file's
+  bytes used to be spliced into the old one.
 - Queue names are the same queue whatever their case. A download added,
   moved or imported into "night" joins the listed queue Night, so it gets
   Night's schedule and runs and stops with it; deleting "night" deletes

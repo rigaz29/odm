@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func TestRepresentationDiffers(t *testing.T) {
@@ -333,4 +334,41 @@ func writeRanged(w http.ResponseWriter, r *http.Request, data []byte, etag, modi
 	w.Header().Set("Content-Length", strconv.Itoa(len(body)))
 	w.WriteHeader(http.StatusPartialContent)
 	_, _ = w.Write(body)
+}
+
+// A server without ETag or Last-Modified gives no validator for If-Range.
+// When the file is replaced mid-download, the size in Content-Range is the
+// only sign; the download used to splice the new file's bytes into the old.
+func TestContentRangeTotalChangeRestarts(t *testing.T) {
+	first := randomData(512 * 1024)
+	second := randomData(768 * 1024)
+	var ranged atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		data := first
+		if strings.HasPrefix(r.Header.Get("Range"), "bytes=") && !strings.HasSuffix(r.Header.Get("Range"), "=0-0") {
+			if ranged.Add(1) > 1 {
+				data = second // replaced after the first chunk was asked for
+			}
+		} else if ranged.Load() > 1 {
+			data = second
+		}
+		writeRanged(w, r, data, "", "")
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	d := New("swap", srv.URL+"/swap.bin", dir, 4, nil, 0, srv.Client())
+	d.retryBase = 10 * time.Millisecond
+	d.Start(context.Background())
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q", info.Status, info.Error)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, second) {
+		t.Fatalf("file is %d bytes and not the new file: parts of both were kept", len(got))
+	}
 }

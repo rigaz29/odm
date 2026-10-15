@@ -842,8 +842,20 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	if rangeOK {
 		switch resp.StatusCode {
 		case http.StatusPartialContent:
-			if cs, _, _, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok && cs != reqStart {
-				return fmt.Errorf("range mismatch: asked %d, got %d", reqStart, cs)
+			if cs, ce, ct, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok {
+				switch {
+				case cs != reqStart:
+					return fmt.Errorf("range mismatch: asked %d, got %d", reqStart, cs)
+				case ce < cs:
+					return fmt.Errorf("range mismatch: got %d-%d", cs, ce)
+				case total > 0 && ct > 0 && ct != total:
+					// The file on the server has another size: it is not
+					// the file the other connections are fetching, even
+					// when the server sends no validator to say so. A
+					// range that ends past the one asked for is kept; only
+					// the bytes of this chunk are read from it.
+					return errRepresentationChanged
+				}
 			}
 		case http.StatusOK:
 			// A 200 is the whole file. A shorter length is not that file.

@@ -70,6 +70,9 @@ All notable changes to ODM are documented here. The format is based on
   same session no longer leaves an earlier handle open, which on Windows
   made the final rename fail ("being used by another process"). This also
   affected HLS and DASH streams.
+- A speed limit below 64 KB/s no longer stops a download for good. One
+  read can be larger than a second's worth of the limit; it is now let
+  through and the next read waits until the limit is met again.
 
 ## [0.2.0] - 2026-10-13
 

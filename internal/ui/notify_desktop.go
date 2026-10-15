@@ -27,9 +27,9 @@ func (a *application) announce(d engine.Info, failed, dialogShown bool) {
 	if name == "" {
 		name = d.URL
 	}
-	title, body := "Download complete", name
+	title, body := T("Download complete"), name
 	if failed {
-		title = "Download failed"
+		title = T("Download failed")
 		if d.Error != "" {
 			body = name + ": " + d.Error
 		}

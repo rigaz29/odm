@@ -53,7 +53,7 @@ func (a *application) openAddDialog() {
 	var dlg *dialog.CustomDialog
 	content, buttons := a.newAddForm(a.win, engine.AddOptions{}, func() { dlg.Hide() },
 		func() { dlg.Resize(fyne.NewSize(620, 1)) })
-	dlg = dialog.NewCustomWithoutButtons("New Download", content, a.win)
+	dlg = dialog.NewCustomWithoutButtons(T("New Download"), content, a.win)
 	dlg.SetButtons(buttons)
 	dlg.Resize(fyne.NewSize(620, 1)) // height clamps to content: no empty band above the buttons
 	dlg.Show()
@@ -63,7 +63,7 @@ func (a *application) openAddDialog() {
 // for a download handed over by the browser. A separate window (rather than
 // a dialog on the main window) works while ODM sits hidden in the tray.
 func (a *application) openAddWindow(pre engine.AddOptions) {
-	w := a.fyneApp.NewWindow("New Download")
+	w := a.fyneApp.NewWindow(T("New Download"))
 	content, buttons := a.newAddForm(w, pre, w.Close, func() {
 		width := w.Canvas().Size().Width // keep a width the person chose
 		if width < 640 {
@@ -111,7 +111,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	// Preview lists a ZIP archive's contents before it is downloaded; shown
 	// once the probe finds a ZIP on a server that sends parts of files.
 	var previewURL, previewName string
-	previewBtn := widget.NewButton("Preview…", func() {
+	previewBtn := widget.NewButton(T("Preview…"), func() {
 		a.showZipPreview(parent, previewURL, previewName, pre.Headers)
 	})
 	previewBtn.Hide()
@@ -146,7 +146,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			}
 		}
 		if len(audioSelect.Options) == 0 {
-			audioSelect.Options = []string{"In the video"}
+			audioSelect.Options = []string{T("In the video")}
 		}
 		audioSelect.SetSelectedIndex(0)
 		if len(audioSelect.Options) > 1 {
@@ -163,8 +163,8 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			return
 		}
 		streamRows = true
-		form.Append("Quality", qualitySelect)
-		form.Append("Audio", audioSelect)
+		form.Append(T("Quality"), qualitySelect)
+		form.Append(T("Audio"), audioSelect)
 		if relayout != nil {
 			relayout()
 		}
@@ -188,10 +188,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		switch {
 		case errors.Is(err, engine.ErrStreamRefused):
 			streamErr = err
-			card.problem("This stream cannot be downloaded", err.Error())
+			card.problem(T("This stream cannot be downloaded"), err.Error())
 		case err != nil:
-			card.warn("The playlist could not be read just now",
-				"Start lets ODM pick the best quality when it runs · "+err.Error())
+			card.warn(T("The playlist could not be read just now"),
+				T("Start lets ODM pick the best quality when it runs · ")+err.Error())
 		}
 		if err != nil {
 			qualitySelect.Disable()
@@ -208,13 +208,13 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		}
 		qualitySelect.Enable()
 		qualitySelect.SetSelectedIndex(0) // OnChanged fills the audio list
-		info := strings.ToUpper(string(c.Kind)) + " stream"
+		info := Tf("%s stream", strings.ToUpper(string(c.Kind)))
 		if c.Note != "" {
 			info += " · " + c.Note
 		}
 		title := nameEntry.Text
 		if title == "" {
-			title = "Video stream"
+			title = T("Video stream")
 		}
 		card.stream(title, info)
 	}
@@ -249,7 +249,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			card.idle()
 			return
 		case !strings.HasPrefix(s, "http"):
-			card.warn("Not checked", "Only http and https addresses are checked before they are added.")
+			card.warn(T("Not checked"), T("Only http and https addresses are checked before they are added."))
 			return
 		}
 		card.check()
@@ -292,11 +292,11 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 				case kind != "":
 					// A typed address that only looked like a stream (an
 					// .m3u music list, say) is downloaded as the file it is.
-					card.warn("Not a stream ODM can read", "It downloads as a file · "+err.Error())
+					card.warn(T("Not a stream ODM can read"), T("It downloads as a file · ")+err.Error())
 					return
 				}
 				if err != nil {
-					card.problem("The file could not be checked", err.Error())
+					card.problem(T("The file could not be checked"), err.Error())
 					return
 				}
 				if nameEntry.Text == "" {
@@ -312,7 +312,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		})
 	}
 
-	browseButton := widget.NewButtonWithIcon("Browse…", theme.FolderOpenIcon(), func() {
+	browseButton := widget.NewButtonWithIcon(T("Browse…"), theme.FolderOpenIcon(), func() {
 		dialog.NewFolderOpen(func(dir fyne.ListableURI, err error) {
 			if err != nil || dir == nil {
 				return
@@ -323,20 +323,20 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	folderRow := container.NewBorder(nil, nil, nil, browseButton, folderEntry)
 
 	form = widget.NewForm(
-		widget.NewFormItem("URL", urlEntry),
-		widget.NewFormItem("Category", catSelect),
-		widget.NewFormItem("Save folder", folderRow),
-		widget.NewFormItem("File name", nameEntry),
-		widget.NewFormItem("Description", descEntry),
-		widget.NewFormItem("Connections", connEntry),
-		widget.NewFormItem("Queue", queueSelect),
+		widget.NewFormItem(T("URL"), urlEntry),
+		widget.NewFormItem(T("Category"), catSelect),
+		widget.NewFormItem(T("Save folder"), folderRow),
+		widget.NewFormItem(T("File name"), nameEntry),
+		widget.NewFormItem(T("Description"), descEntry),
+		widget.NewFormItem(T("Connections"), connEntry),
+		widget.NewFormItem(T("Queue"), queueSelect),
 	)
 	urlEntry.SetText(pre.URL) // after OnChanged and the form, so a prefilled URL is probed
 	if pre.Stream != nil {
 		// Known to be a playlist: add the rows before the window is shown,
 		// so it is sized for them, and fill them once the playlist is read.
 		addStreamRows()
-		qualitySelect.PlaceHolder = "Reading the playlist…"
+		qualitySelect.PlaceHolder = T("Reading the playlist…")
 		qualitySelect.Disable()
 		audioSelect.Disable()
 		setVideoCategory()
@@ -396,10 +396,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		}
 	}
 
-	startBtn := widget.NewButtonWithIcon("Start Download", theme.ConfirmIcon(), func() { create(true, false) })
+	startBtn := widget.NewButtonWithIcon(T("Start Download"), theme.ConfirmIcon(), func() { create(true, false) })
 	startBtn.Importance = widget.HighImportance
-	laterBtn := widget.NewButtonWithIcon("Download Later", theme.ContentAddIcon(), func() { create(false, false) })
-	cancelBtn := widget.NewButton("Cancel", done)
+	laterBtn := widget.NewButtonWithIcon(T("Download Later"), theme.ContentAddIcon(), func() { create(false, false) })
+	cancelBtn := widget.NewButton(T("Cancel"), done)
 	return container.NewVBox(form, card.root), []fyne.CanvasObject{laterBtn, cancelBtn, startBtn}
 }
 
@@ -415,10 +415,10 @@ func (a *application) openOptionsTab(tab int) {
 		return
 	}
 	settings := a.mgr.Settings()
-	w := a.fyneApp.NewWindow("ODM Options")
+	w := a.fyneApp.NewWindow(T("ODM Options"))
 	a.optionsWin = w
 	browseDir := func(e *widget.Entry) *widget.Button {
-		return widget.NewButtonWithIcon("Browse", theme.FolderOpenIcon(), func() {
+		return widget.NewButtonWithIcon(T("Browse"), theme.FolderOpenIcon(), func() {
 			dialog.NewFolderOpen(func(u fyne.ListableURI, err error) {
 				if err == nil && u != nil {
 					e.SetText(u.Path())
@@ -445,9 +445,9 @@ func (a *application) openOptionsTab(tab int) {
 	}
 
 	// General
-	clipCheck := widget.NewCheck("Automatically start downloading of URLs placed to the clipboard", nil)
+	clipCheck := widget.NewCheck(T("Automatically start downloading of URLs placed to the clipboard"), nil)
 	clipCheck.SetChecked(settings.Clipboard)
-	updCheck := widget.NewCheck("Check for updates at start-up", nil)
+	updCheck := widget.NewCheck(T("Check for updates at start-up"), nil)
 	updCheck.SetChecked(!settings.NoUpdateCheck)
 	// Browser integration status: an icon and coloured line (all set /
 	// partly set / not registered), a hint for the next step, and a brief
@@ -493,18 +493,18 @@ func (a *application) openOptionsTab(tab int) {
 		case here > 0 && other == 0 && missing == 0:
 			statusIcon.SetResource(theme.NewSuccessThemedResource(theme.ConfirmIcon()))
 			browserStatus.Importance = widget.SuccessImportance
-			browserHint.SetText("Install the ODM extension in each browser (see the README), then restart the browser once.")
-			regBtn.SetText("Register again")
+			browserHint.SetText(T("Install the ODM extension in each browser (see the README), then restart the browser once."))
+			regBtn.SetText(T("Register again"))
 		case here == 0 && other == 0:
 			statusIcon.SetResource(theme.NewErrorThemedResource(theme.CancelIcon()))
 			browserStatus.Importance = widget.DangerImportance
-			browserHint.SetText("Register so browsers can hand downloads to ODM.")
-			regBtn.SetText("Register")
+			browserHint.SetText(T("Register so browsers can hand downloads to ODM."))
+			regBtn.SetText(T("Register"))
 		default:
 			statusIcon.SetResource(theme.NewWarningThemedResource(theme.WarningIcon()))
 			browserStatus.Importance = widget.WarningImportance
-			browserHint.SetText("Register to point every browser at this ODM.")
-			regBtn.SetText("Register")
+			browserHint.SetText(T("Register to point every browser at this ODM."))
+			regBtn.SetText(T("Register"))
 		}
 		browserStatus.Refresh()
 		if here+other > 0 {
@@ -516,14 +516,14 @@ func (a *application) openOptionsTab(tab int) {
 			flash()
 		}
 	}
-	regBtn = widget.NewButtonWithIcon("Register", theme.LoginIcon(), func() {
+	regBtn = widget.NewButtonWithIcon(T("Register"), theme.LoginIcon(), func() {
 		a.registerBrowser(w)
 		refreshBrowser(true)
 	})
 	regBtn.Importance = widget.HighImportance
-	unregBtn = widget.NewButtonWithIcon("Unregister", theme.DeleteIcon(), func() {
-		dialog.ShowConfirm("Unregister browser integration",
-			"Browsers will stop handing downloads to ODM until you register again. Continue?", func(yes bool) {
+	unregBtn = widget.NewButtonWithIcon(T("Unregister"), theme.DeleteIcon(), func() {
+		dialog.ShowConfirm(T("Unregister browser integration"),
+			T("Browsers will stop handing downloads to ODM until you register again. Continue?"), func(yes bool) {
 				if !yes {
 					return
 				}
@@ -535,24 +535,27 @@ func (a *application) openOptionsTab(tab int) {
 				}
 				refreshBrowser(true)
 				if len(failed) > 0 {
-					dialog.ShowError(fmt.Errorf("could not unregister:\n%s", strings.Join(failed, "\n")), w)
+					dialog.ShowError(fmt.Errorf(T("could not unregister:\n%s"), strings.Join(failed, "\n")), w)
 				}
 			}, w)
 	})
 	refreshBrowser(false)
-	startupCheck := widget.NewCheck("Launch ODM on startup (in the system tray)", nil)
+	startupCheck := widget.NewCheck(T("Launch ODM on startup (in the system tray)"), nil)
 	startupWas := autostart.Enabled()
 	startupCheck.SetChecked(startupWas)
-	trayCheck := widget.NewCheck("Keep ODM running in the system tray when the window is closed", nil)
+	trayCheck := widget.NewCheck(T("Keep ODM running in the system tray when the window is closed"), nil)
 	trayCheck.SetChecked(!settings.NoCloseToTray)
 	prefs := a.fyneApp.Preferences()
 	themeWas, accentWas := prefs.StringWithFallback(prefTheme, themeSystem), prefs.String(prefAccent)
 	themeSelect := widget.NewSelect(themeChoices(), nil)
 	themeSelect.SetSelectedIndex(themeIndex(themeWas))
+	langWas := prefs.StringWithFallback(prefLanguage, langSystem)
+	langSelect := widget.NewSelect(languageChoices(), nil)
+	langSelect.SetSelectedIndex(languageIndex(langWas))
 	accentRow, accentPicked := newAccentPicker(accentWas)
 	generalTab := container.NewVBox(
-		header("Browser / system integration"),
-		widget.NewLabelWithStyle("Browser extension (Chrome, Edge, Chromium, Firefox)", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		header(T("Browser / system integration")),
+		widget.NewLabelWithStyle(T("Browser extension (Chrome, Edge, Chromium, Firefox)"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		statusRow,
 		browserHint,
 		container.NewHBox(regBtn, unregBtn),
@@ -561,10 +564,12 @@ func (a *application) openOptionsTab(tab int) {
 		trayCheck,
 		clipCheck,
 		updCheck,
-		header("Appearance"),
+		header(T("Appearance")),
 		container.New(layout.NewFormLayout(),
-			widget.NewLabel("Theme"), container.NewHBox(small(themeSelect, 200)),
-			widget.NewLabel("Accent colour"), accentRow),
+			widget.NewLabel(T("Theme")), container.NewHBox(small(themeSelect, 200)),
+			widget.NewLabel(T("Accent colour")), accentRow,
+			widget.NewLabel(T("Language")), container.NewHBox(small(langSelect, 200))),
+		hint(T("A new language shows after ODM is started again.")),
 	)
 
 	// File types
@@ -572,23 +577,23 @@ func (a *application) openOptionsTab(tab int) {
 	typesEntry.Wrapping = fyne.TextWrapWord
 	typesEntry.SetText(strings.ToUpper(strings.Join(settings.FileTypes, " ")))
 	typesEntry.SetMinRowsVisible(6)
-	typesDefault := widget.NewButton("Default", func() {
+	typesDefault := widget.NewButton(T("Default"), func() {
 		typesEntry.SetText(strings.ToUpper(strings.Join(engine.DefaultFileTypes(), " ")))
 	})
 	typesTab := container.NewVBox(
-		header("Downloaded file types"),
-		widget.NewLabel("Automatically start downloading the following file types:"),
+		header(T("Downloaded file types")),
+		widget.NewLabel(T("Automatically start downloading the following file types:")),
 		typesEntry,
 		container.NewHBox(layout.NewSpacer(), typesDefault),
-		hint("Used by the clipboard monitor and the site grabber. Separate extensions with spaces."),
+		hint(T("Used by the clipboard monitor and the site grabber. Separate extensions with spaces.")),
 	)
 
 	// Save to
 	dirEntry := widget.NewEntry()
 	dirEntry.SetText(settings.Dir)
-	catsCheck := widget.NewCheck("Put files in category subfolders", nil)
+	catsCheck := widget.NewCheck(T("Put files in category subfolders"), nil)
 	catsCheck.SetChecked(settings.Categories)
-	rememberCheck := widget.NewCheck("Remember the folder last chosen in the New Download window", nil)
+	rememberCheck := widget.NewCheck(T("Remember the folder last chosen in the New Download window"), nil)
 	rememberCheck.SetChecked(!settings.NoRememberDir)
 	catDirs := map[string]string{}
 	for k, v := range settings.CategoryDirs {
@@ -600,44 +605,44 @@ func (a *application) openOptionsTab(tab int) {
 	// gets. Other is always last and takes everything else.
 	cats := newCategoryEditor(w, engine.CategoriesInUse(), catDirs, catFolder, dirEntry)
 	saveTab := container.NewVBox(
-		header("Categories and folders"),
-		widget.NewForm(widget.NewFormItem("Default download folder",
+		header(T("Categories and folders")),
+		widget.NewForm(widget.NewFormItem(T("Default download folder"),
 			container.NewBorder(nil, nil, nil, browseDir(dirEntry), dirEntry))),
 		catsCheck,
 		rememberCheck,
-		hint("Downloads added from the clipboard, the site grabber or the API use the default folder."),
+		hint(T("Downloads added from the clipboard, the site grabber or the API use the default folder.")),
 		widget.NewSeparator(),
-		widget.NewForm(widget.NewFormItem("Category", container.NewBorder(nil, nil, nil,
+		widget.NewForm(widget.NewFormItem(T("Category"), container.NewBorder(nil, nil, nil,
 			container.NewHBox(cats.newBtn, cats.delBtn, cats.resetBtn), cats.sel))),
-		widget.NewForm(widget.NewFormItem("File types", cats.exts)),
+		widget.NewForm(widget.NewFormItem(T("File types"), cats.exts)),
 		cats.note,
-		widget.NewForm(widget.NewFormItem("Folder for this category",
+		widget.NewForm(widget.NewFormItem(T("Folder for this category"),
 			container.NewBorder(nil, nil, nil, browseDir(catFolder), catFolder))),
-		hint("Empty keeps <default folder>/<category>. Category folders apply when subfolders are on."),
+		hint(T("Empty keeps <default folder>/<category>. Category folders apply when subfolders are on.")),
 	)
 
 	// Downloads
-	startCheck := widget.NewCheck("Show the New Download window for downloads from the browser", nil)
+	startCheck := widget.NewCheck(T("Show the New Download window for downloads from the browser"), nil)
 	startCheck.SetChecked(!settings.NoStartDialog)
 	excludeEntry := widget.NewMultiLineEntry()
 	excludeEntry.SetText(strings.Join(settings.ExcludeSites, " "))
 	excludeEntry.SetPlaceHolder("*.update.microsoft.com example.org")
 	excludeEntry.SetMinRowsVisible(2)
-	progCheck := widget.NewCheck("Show the progress window when a download starts", nil)
+	progCheck := widget.NewCheck(T("Show the progress window when a download starts"), nil)
 	progCheck.SetChecked(!settings.NoProgressDialog)
-	doneCheck := widget.NewCheck("Show the download complete dialog", nil)
+	doneCheck := widget.NewCheck(T("Show the download complete dialog"), nil)
 	doneCheck.SetChecked(!settings.NoCompleteDialog)
-	notifyCheck := widget.NewCheck("Show a notification when a download finishes or fails", nil)
+	notifyCheck := widget.NewCheck(T("Show a notification when a download finishes or fails"), nil)
 	notifyCheck.SetChecked(!settings.NoNotifications)
-	soundCheck := widget.NewCheck("Play a sound when a download finishes or fails", nil)
+	soundCheck := widget.NewCheck(T("Play a sound when a download finishes or fails"), nil)
 	soundCheck.SetChecked(settings.Sounds)
 	announceBox := container.NewVBox(notifyCheck)
 	if soundSupported {
 		announceBox.Add(soundCheck)
 	}
-	const (
-		dupSkip  = "Skip it"
-		dupAgain = "Download it again"
+	var (
+		dupSkip  = T("Skip it")
+		dupAgain = T("Download it again")
 	)
 	dupSelect := widget.NewSelect([]string{dupSkip, dupAgain}, nil)
 	if settings.DuplicateAuto == engine.DuplicateAgain {
@@ -655,7 +660,7 @@ func (a *application) openOptionsTab(tab int) {
 	// changed while it ran) is dropped by the generation counter.
 	ffEntry := widget.NewEntry()
 	ffEntry.SetText(settings.FFmpegPath)
-	ffEntry.SetPlaceHolder("Found automatically")
+	ffEntry.SetPlaceHolder(T("Found automatically"))
 	ffStatus := hint("")
 	var ffGen int
 	var ffTimer *time.Timer
@@ -675,7 +680,7 @@ func (a *application) openOptionsTab(tab int) {
 		})
 	}
 	ffEntry.OnChanged = func(string) { checkFFmpeg(600 * time.Millisecond) }
-	ffBrowse := widget.NewButtonWithIcon("Browse", theme.FolderOpenIcon(), func() {
+	ffBrowse := widget.NewButtonWithIcon(T("Browse"), theme.FolderOpenIcon(), func() {
 		dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err == nil && r != nil {
 				_ = r.Close()
@@ -685,27 +690,27 @@ func (a *application) openOptionsTab(tab int) {
 	})
 	checkFFmpeg(0)
 	downloadsTab := container.NewVBox(
-		header("Default download settings"),
+		header(T("Default download settings")),
 		startCheck,
 		progCheck,
 		doneCheck,
-		hint("These settings do not apply to queue processing."),
+		hint(T("These settings do not apply to queue processing.")),
 		widget.NewSeparator(),
 		announceBox,
-		hint("A finished download is not notified when its complete dialog is shown while ODM is in front."),
+		hint(T("A finished download is not notified when its complete dialog is shown while ODM is in front.")),
 		widget.NewSeparator(),
-		widget.NewLabel("If a link that is already in the list is added by the browser, clipboard or grabber:"),
+		widget.NewLabel(T("If a link that is already in the list is added by the browser, clipboard or grabber:")),
 		small(dupSelect, 220),
-		hint("Adding a duplicate by hand always asks."),
+		hint(T("Adding a duplicate by hand always asks.")),
 		widget.NewSeparator(),
-		widget.NewLabel("User-Agent for downloads:"),
+		widget.NewLabel(T("User-Agent for downloads:")),
 		uaEntry,
 		widget.NewSeparator(),
-		widget.NewLabel("The browser extension leaves downloads from these sites alone:"),
+		widget.NewLabel(T("The browser extension leaves downloads from these sites alone:")),
 		excludeEntry,
-		hint("Separate names by spaces. A leading *. matches subdomains."),
+		hint(T("Separate names by spaces. A leading *. matches subdomains.")),
 		widget.NewSeparator(),
-		widget.NewLabel("ffmpeg (joins the video and audio of some streams):"),
+		widget.NewLabel(T("ffmpeg (joins the video and audio of some streams):")),
 		container.NewBorder(nil, nil, nil, ffBrowse, ffEntry),
 		ffStatus,
 	)
@@ -721,7 +726,7 @@ func (a *application) openOptionsTab(tab int) {
 	limitEntry := numEntry(int(settings.SpeedLimit / 1024))
 	// The value stays when the limiter is off, so it can be turned on again
 	// from the menu or the tray without retyping it.
-	limitCheck := widget.NewCheck("On", nil)
+	limitCheck := widget.NewCheck(T("On"), nil)
 	limitCheck.SetChecked(settings.EffectiveSpeedLimit() > 0)
 	type hostRow struct {
 		host string
@@ -753,7 +758,7 @@ func (a *application) openOptionsTab(tab int) {
 	hostTable.ShowHeaderColumn = false
 	hostTable.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(nil) }
 	hostTable.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		o.(*headerLabel).SetText([]string{"Server", "Number"}[id.Col])
+		o.(*headerLabel).SetText([]string{T("Server"), T("Number")}[id.Col])
 	}
 	hostTable.SetColumnWidth(0, 300)
 	hostTable.SetColumnWidth(1, 80)
@@ -762,13 +767,13 @@ func (a *application) openOptionsTab(tab int) {
 		hostTable.UnselectAll()
 		hostTable.Refresh()
 	}
-	newHost := widget.NewButton("New", func() {
+	newHost := widget.NewButton(T("New"), func() {
 		host := widget.NewEntry()
 		host.SetPlaceHolder("cdn.example.com")
 		num := widget.NewSelect(connOpts, nil)
 		num.SetSelected("4")
-		dialog.ShowForm("Connection exception", "Add", "Cancel", []*widget.FormItem{
-			widget.NewFormItem("Server", host), widget.NewFormItem("Connections", num),
+		dialog.ShowForm(T("Connection exception"), T("Add"), T("Cancel"), []*widget.FormItem{
+			widget.NewFormItem(T("Server"), host), widget.NewFormItem(T("Connections"), num),
 		}, func(ok bool) {
 			h := strings.ToLower(strings.TrimSpace(host.Text))
 			if !ok || h == "" {
@@ -780,7 +785,7 @@ func (a *application) openOptionsTab(tab int) {
 			hostTable.Refresh()
 		}, w)
 	})
-	delHost := widget.NewButton("Delete", func() {
+	delHost := widget.NewButton(T("Delete"), func() {
 		if hostSel >= 0 && hostSel < len(hosts) {
 			hosts = append(hosts[:hostSel], hosts[hostSel+1:]...)
 			hostSel = -1
@@ -788,11 +793,11 @@ func (a *application) openOptionsTab(tab int) {
 		}
 	})
 	lim := settings.Limits
-	limOn := widget.NewCheck("Download limits", nil)
+	limOn := widget.NewCheck(T("Download limits"), nil)
 	limOn.SetChecked(lim.Enabled)
 	limMB := numEntry(lim.MB)
 	limHours := numEntry(lim.Hours)
-	limWarn := widget.NewCheck("Show a warning when downloads are stopped", nil)
+	limWarn := widget.NewCheck(T("Show a warning when downloads are stopped"), nil)
 	limWarn.SetChecked(!lim.NoWarning)
 	syncLimits := func(on bool) {
 		for _, c := range []fyne.Disableable{limMB, limHours, limWarn} {
@@ -807,19 +812,19 @@ func (a *application) openOptionsTab(tab int) {
 	syncLimits(lim.Enabled)
 	connTab := container.NewBorder(
 		container.NewVBox(
-			header("Connections and limits"),
+			header(T("Connections and limits")),
 			widget.NewForm(
-				widget.NewFormItem("Default max. connections", small(connSelect, 90)),
-				widget.NewFormItem("Simultaneous downloads", small(concEntry, 90)),
-				widget.NewFormItem("Global speed limit", container.NewHBox(limitCheck, small(limitEntry, 90), widget.NewLabel("KB/s"))),
+				widget.NewFormItem(T("Default max. connections"), small(connSelect, 90)),
+				widget.NewFormItem(T("Simultaneous downloads"), small(concEntry, 90)),
+				widget.NewFormItem(T("Global speed limit"), container.NewHBox(limitCheck, small(limitEntry, 90), widget.NewLabel("KB/s"))),
 			),
-			widget.NewLabel("Exceptions:"),
+			widget.NewLabel(T("Exceptions:")),
 		),
 		container.NewVBox(
 			widget.NewSeparator(),
 			limOn,
-			container.NewHBox(widget.NewLabel("Download no more than"), small(limMB, 70), widget.NewLabel("MBytes every"),
-				small(limHours, 60), widget.NewLabel("hours")),
+			container.NewHBox(widget.NewLabel(T("Download no more than")), small(limMB, 70), widget.NewLabel(T("MBytes every")),
+				small(limHours, 60), widget.NewLabel(T("hours"))),
 			limWarn,
 		),
 		nil,
@@ -828,10 +833,10 @@ func (a *application) openOptionsTab(tab int) {
 	)
 
 	// Proxy / Socks
-	const (
-		pxNone   = "No proxy"
-		pxSystem = "Use system settings"
-		pxManual = "Manual proxy configuration"
+	var (
+		pxNone   = T("No proxy")
+		pxSystem = T("Use system settings")
+		pxManual = T("Manual proxy configuration")
 	)
 	pxMode := widget.NewRadioGroup([]string{pxNone, pxSystem, pxManual}, nil)
 	pxType := widget.NewSelect([]string{"HTTP", "SOCKS5"}, nil)
@@ -880,17 +885,16 @@ func (a *application) openOptionsTab(tab int) {
 		pxType.SetSelected("HTTP")
 	}
 	proxyTab := container.NewVBox(
-		header("Proxy / socks configuration"),
+		header(T("Proxy / socks configuration")),
 		pxMode,
 		widget.NewForm(
-			widget.NewFormItem("Type", small(pxType, 120)),
-			widget.NewFormItem("Proxy server", pxHost),
-			widget.NewFormItem("Port", small(pxPort, 90)),
-			widget.NewFormItem("User name", pxUser),
-			widget.NewFormItem("Password", pxPass),
+			widget.NewFormItem(T("Type"), small(pxType, 120)),
+			widget.NewFormItem(T("Proxy server"), pxHost),
+			widget.NewFormItem(T("Port"), small(pxPort, 90)),
+			widget.NewFormItem(T("User name"), pxUser),
+			widget.NewFormItem(T("Password"), pxPass),
 		),
-		hint("System settings use HTTP(S)_PROXY, and on Windows the proxy entered in Internet Options. "+
-			"Automatic configuration scripts (PAC) are not evaluated."),
+		hint(T("System settings use HTTP(S)_PROXY, and on Windows the proxy entered in Internet Options. Automatic configuration scripts (PAC) are not evaluated.")),
 	)
 
 	// Site logins
@@ -913,7 +917,7 @@ func (a *application) openOptionsTab(tab int) {
 	loginsTable.ShowHeaderColumn = false
 	loginsTable.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(nil) }
 	loginsTable.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		o.(*headerLabel).SetText([]string{"Site", "User", "Password"}[id.Col])
+		o.(*headerLabel).SetText([]string{T("Site"), T("User"), T("Password")}[id.Col])
 	}
 	loginsTable.SetColumnWidth(0, 250)
 	loginsTable.SetColumnWidth(1, 130)
@@ -933,8 +937,8 @@ func (a *application) openOptionsTab(tab int) {
 		site.SetPlaceHolder("files.example.com")
 		user.SetText(cur.User)
 		pass.SetText(cur.Pass)
-		dialog.ShowForm("Site login", "OK", "Cancel", []*widget.FormItem{
-			widget.NewFormItem("Site", site), widget.NewFormItem("User", user), widget.NewFormItem("Password", pass),
+		dialog.ShowForm(T("Site login"), T("OK"), T("Cancel"), []*widget.FormItem{
+			widget.NewFormItem(T("Site"), site), widget.NewFormItem(T("User"), user), widget.NewFormItem(T("Password"), pass),
 		}, func(ok bool) {
 			if !ok || strings.TrimSpace(site.Text) == "" {
 				return
@@ -949,15 +953,15 @@ func (a *application) openOptionsTab(tab int) {
 		}, w)
 	}
 	loginsTab := container.NewBorder(
-		header("User names and passwords for sites"),
+		header(T("User names and passwords for sites")),
 		container.NewHBox(
-			widget.NewButton("New", func() { editLogin(-1) }),
-			widget.NewButton("Edit", func() {
+			widget.NewButton(T("New"), func() { editLogin(-1) }),
+			widget.NewButton(T("Edit"), func() {
 				if loginSel >= 0 && loginSel < len(logins) {
 					editLogin(loginSel)
 				}
 			}),
-			widget.NewButton("Remove", func() {
+			widget.NewButton(T("Remove"), func() {
 				if loginSel >= 0 && loginSel < len(logins) {
 					logins = append(logins[:loginSel], logins[loginSel+1:]...)
 					loginSel = -1
@@ -969,13 +973,13 @@ func (a *application) openOptionsTab(tab int) {
 	)
 
 	tabs := container.NewAppTabs(
-		container.NewTabItem("General", generalTab),
-		container.NewTabItem("File types", typesTab),
-		container.NewTabItem("Save to", saveTab),
-		container.NewTabItem("Downloads", downloadsTab),
-		container.NewTabItem("Connection", connTab),
-		container.NewTabItem("Proxy / Socks", proxyTab),
-		container.NewTabItem("Site logins", loginsTab),
+		container.NewTabItem(T("General"), generalTab),
+		container.NewTabItem(T("File types"), typesTab),
+		container.NewTabItem(T("Save to"), saveTab),
+		container.NewTabItem(T("Downloads"), downloadsTab),
+		container.NewTabItem(T("Connection"), connTab),
+		container.NewTabItem(T("Proxy / Socks"), proxyTab),
+		container.NewTabItem(T("Site logins"), loginsTab),
 	)
 	tabs.SelectIndex(tab)
 
@@ -1018,7 +1022,7 @@ func (a *application) openOptionsTab(tab int) {
 			}
 			if proxy.Host == "" {
 				tabs.SelectIndex(5)
-				dialog.ShowInformation("Proxy", "Enter the proxy server address, or choose another option.", w)
+				dialog.ShowInformation(T("Proxy"), T("Enter the proxy server address, or choose another option."), w)
 				return
 			}
 		}
@@ -1069,6 +1073,10 @@ func (a *application) openOptionsTab(tab int) {
 			prefs.SetString(prefAccent, accent)
 			a.applyTheme()
 		}
+		if mode := languageModes[langSelect.SelectedIndex()]; mode != langWas {
+			prefs.SetString(prefLanguage, mode)
+			dialog.ShowInformation(T("Language"), T("The new language shows after ODM is started again."), a.win)
+		}
 		if startupCheck.Checked != startupWas {
 			exe, err := os.Executable()
 			if err == nil {
@@ -1078,15 +1086,15 @@ func (a *application) openOptionsTab(tab int) {
 				err = autostart.Set(startupCheck.Checked, exe)
 			}
 			if err != nil {
-				dialog.ShowError(fmt.Errorf("could not change start-up launch: %w", err), a.win)
+				dialog.ShowError(fmt.Errorf(T("could not change start-up launch: %w"), err), a.win)
 			}
 		}
 		a.refresh()
 		closeWin()
 	}
-	okBtn := widget.NewButton("OK", save)
+	okBtn := widget.NewButton(T("OK"), save)
 	okBtn.Importance = widget.HighImportance
-	buttons := container.NewHBox(layout.NewSpacer(), okBtn, widget.NewButton("Cancel", closeWin))
+	buttons := container.NewHBox(layout.NewSpacer(), okBtn, widget.NewButton(T("Cancel"), closeWin))
 	w.SetContent(container.New(layout.NewCustomPaddedLayout(8, 10, 10, 10),
 		container.NewBorder(nil, buttons, nil, nil, tabs)))
 	w.Resize(fyne.NewSize(640, 560))
@@ -1099,23 +1107,22 @@ func ffmpegStatus(typed string) string {
 	bin, err := ffmpeg.Locate(typed)
 	if err != nil {
 		if strings.TrimSpace(typed) == "" {
-			return "Not found. Streams that keep video and audio apart need it: " +
-				"put ffmpeg next to ODM, add it to PATH, or choose it here."
+			return T("Not found. Streams that keep video and audio apart need it: put ffmpeg next to ODM, add it to PATH, or choose it here.")
 		}
-		return "No ffmpeg at this path. Leave it empty to search next to ODM and on PATH."
+		return T("No ffmpeg at this path. Leave it empty to search next to ODM and on PATH.")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 	v, err := ffmpeg.Version(ctx, bin)
 	if err != nil {
-		return "Found " + bin + ", but it did not run: " + err.Error()
+		return Tf("Found %s, but it did not run: %s", bin, err.Error())
 	}
 	// "ffmpeg version 7.1 Copyright (c) 2000-2024 the FFmpeg developers"
 	v, _, _ = strings.Cut(v, " Copyright")
 	if v == "" {
-		v = "unknown version"
+		v = T("unknown version")
 	}
-	return "Using " + bin + " (" + v + ")"
+	return Tf("Using %s (%s)", bin, v)
 }
 
 // parseFileTypes turns "torrent, .SRT nupkg" into ["torrent" "srt" "nupkg"].
@@ -1138,18 +1145,18 @@ func parseFileTypes(s string) []string {
 // them show that entry, download it again (it gets a numbered file name),
 // or cancel.
 func (a *application) askDuplicate(parent fyne.Window, existing engine.Info, again func()) {
-	msg := widget.NewLabel(fmt.Sprintf("This address is already in the list as %q (%s).\n"+
-		"Downloading it again saves it under a numbered name.", existing.FileName, statusText(existing)))
+	msg := widget.NewLabel(Tf("This address is already in the list as %q (%s).\nDownloading it again saves it under a numbered name.",
+		existing.FileName, statusText(existing)))
 	msg.Wrapping = fyne.TextWrapWord
 	var dlg *dialog.CustomDialog
-	show := widget.NewButton("Show existing", func() {
+	show := widget.NewButton(T("Show existing"), func() {
 		dlg.Hide()
 		a.openProgressWindow(existing.ID)
 	})
-	dl := widget.NewButton("Download again", func() { dlg.Hide(); again() })
+	dl := widget.NewButton(T("Download again"), func() { dlg.Hide(); again() })
 	dl.Importance = widget.HighImportance
-	dlg = dialog.NewCustomWithoutButtons("Duplicate download", msg, parent)
-	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton("Cancel", func() { dlg.Hide() }), show, dl})
+	dlg = dialog.NewCustomWithoutButtons(T("Duplicate download"), msg, parent)
+	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton(T("Cancel"), func() { dlg.Hide() }), show, dl})
 	dlg.Resize(fyne.NewSize(460, 1))
 	dlg.Show()
 }
@@ -1160,10 +1167,10 @@ func (a *application) refreshAddress(d engine.Info) {
 	entry := widget.NewEntry()
 	entry.SetText(d.URL)
 	entry.MultiLine = false
-	note := widget.NewLabel("Paste the new address of the same file. Progress is kept if the server supports resuming.")
+	note := widget.NewLabel(T("Paste the new address of the same file. Progress is kept if the server supports resuming."))
 	note.Wrapping = fyne.TextWrapWord
 	note.Importance = widget.LowImportance
-	dlg := dialog.NewCustomConfirm("Refresh download address", "Change", "Cancel",
+	dlg := dialog.NewCustomConfirm(T("Refresh download address"), T("Change"), T("Cancel"),
 		container.NewVBox(widget.NewLabel(d.FileName), entry, note), func(ok bool) {
 			if !ok || strings.TrimSpace(entry.Text) == "" || strings.TrimSpace(entry.Text) == d.URL {
 				return
@@ -1202,7 +1209,7 @@ func selfExe() (string, error) {
 func (a *application) registerBrowser(parent fyne.Window) {
 	exe, err := selfExe()
 	if err != nil {
-		dialog.ShowError(fmt.Errorf("cannot locate the ODM executable: %w", err), parent)
+		dialog.ShowError(fmt.Errorf(T("cannot locate the ODM executable: %w"), err), parent)
 		return
 	}
 	var failed []string
@@ -1214,7 +1221,7 @@ func (a *application) registerBrowser(parent fyne.Window) {
 	// Success shows in the status line on the Options window; a dialog is
 	// worth it only when a browser could not be registered.
 	if len(failed) > 0 {
-		dialog.ShowError(fmt.Errorf("could not register:\n%s", strings.Join(failed, "\n")), parent)
+		dialog.ShowError(fmt.Errorf(T("could not register:\n%s"), strings.Join(failed, "\n")), parent)
 	}
 }
 
@@ -1231,33 +1238,33 @@ func (a *application) checkForUpdates(manual bool) {
 			switch {
 			case err != nil:
 				if manual {
-					dialog.ShowError(fmt.Errorf("could not check for updates: %w", err), a.win)
+					dialog.ShowError(fmt.Errorf(T("could not check for updates: %w"), err), a.win)
 				}
 			case update.Newer(rel.Tag, version.Version):
 				a.showUpdate(rel)
 			case manual:
-				dialog.ShowInformation("Check for updates",
-					fmt.Sprintf("You are running the latest version (%s).", version.Version), a.win)
+				dialog.ShowInformation(T("Check for updates"),
+					Tf("You are running the latest version (%s).", version.Version), a.win)
 			}
 		})
 	}()
 }
 
 func (a *application) showUpdate(rel update.Release) {
-	head := widget.NewLabel(fmt.Sprintf("ODM %s is available — you have %s.", rel.Tag, version.Version))
+	head := widget.NewLabel(Tf("ODM %s is available — you have %s.", rel.Tag, version.Version))
 	notes := widget.NewRichTextFromMarkdown(rel.Notes)
 	notes.Wrapping = fyne.TextWrapWord
 	scroll := container.NewVScroll(notes)
 	scroll.SetMinSize(fyne.NewSize(480, 220))
-	dlg := dialog.NewCustomWithoutButtons("Update available", container.NewBorder(head, nil, nil, nil, scroll), a.win)
-	open := widget.NewButtonWithIcon("Open release page", theme.DownloadIcon(), func() {
+	dlg := dialog.NewCustomWithoutButtons(T("Update available"), container.NewBorder(head, nil, nil, nil, scroll), a.win)
+	open := widget.NewButtonWithIcon(T("Open release page"), theme.DownloadIcon(), func() {
 		if u, err := url.Parse(rel.URL); err == nil {
 			_ = a.fyneApp.OpenURL(u)
 		}
 		dlg.Hide()
 	})
 	open.Importance = widget.HighImportance
-	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton("Later", dlg.Hide), open})
+	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton(T("Later"), dlg.Hide), open})
 	dlg.Show()
 }
 
@@ -1270,9 +1277,9 @@ func (a *application) handleAction(act engine.Action) {
 		openPath(act.Path)
 	case engine.ActionLimit:
 		lim := a.mgr.Settings().Limits
-		dialog.ShowInformation("Download limit reached", fmt.Sprintf(
-			"More than %d MB were downloaded in the last %d hours, so downloads were stopped.\n"+
-				"They can start again once the window has passed.", lim.MB, lim.Hours), a.win)
+		dialog.ShowInformation(T("Download limit reached"), Tf(
+			T("More than %d MB were downloaded in the last %d hours, so downloads were stopped.\nThey can start again once the window has passed."),
+			lim.MB, lim.Hours), a.win)
 	case engine.ActionExit, engine.ActionSleep, engine.ActionHibernate, engine.ActionShutdown:
 		a.confirmWhenDone(act.Kind)
 	}
@@ -1283,14 +1290,14 @@ func (a *application) handleAction(act engine.Action) {
 func (a *application) confirmWhenDone(action string) {
 	const wait = 30
 	verb := map[string]string{
-		engine.ActionExit:      "ODM will exit",
-		engine.ActionSleep:     "The computer will go to sleep",
-		engine.ActionHibernate: "The computer will hibernate",
-		engine.ActionShutdown:  "The computer will shut down",
+		engine.ActionExit:      T("ODM will exit"),
+		engine.ActionSleep:     T("The computer will go to sleep"),
+		engine.ActionHibernate: T("The computer will hibernate"),
+		engine.ActionShutdown:  T("The computer will shut down"),
 	}[action]
 	msg := widget.NewLabel("")
 	left := wait
-	update := func() { msg.SetText(fmt.Sprintf("All queues have finished.\n%s in %d s.", verb, left)) }
+	update := func() { msg.SetText(Tf("All queues have finished.\n%s in %d s.", verb, left)) }
 	update()
 
 	var dlg *dialog.CustomDialog
@@ -1305,10 +1312,10 @@ func (a *application) confirmWhenDone(action string) {
 			}
 		})
 	}
-	dlg = dialog.NewCustomWithoutButtons("Queues finished", msg, a.win)
-	nowBtn := widget.NewButton("Now", func() { finish(true) })
+	dlg = dialog.NewCustomWithoutButtons(T("Queues finished"), msg, a.win)
+	nowBtn := widget.NewButton(T("Now"), func() { finish(true) })
 	nowBtn.Importance = widget.DangerImportance
-	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton("Cancel", func() { finish(false) }), nowBtn})
+	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton(T("Cancel"), func() { finish(false) }), nowBtn})
 	dlg.Show()
 
 	go func() {
@@ -1336,12 +1343,12 @@ func (a *application) runWhenDone(action string) {
 	case engine.ActionSleep, engine.ActionHibernate:
 		// ODM keeps running and carries on after the computer wakes.
 		if err := osutil.Suspend(action == engine.ActionHibernate); err != nil {
-			dialog.ShowError(fmt.Errorf("could not %s: %w", action, err), a.win)
+			dialog.ShowError(fmt.Errorf(T("could not %s: %w"), action, err), a.win)
 		}
 		return
 	case engine.ActionShutdown:
 		if err := osutil.Shutdown(); err != nil {
-			dialog.ShowError(fmt.Errorf("could not shut down: %w", err), a.win)
+			dialog.ShowError(fmt.Errorf(T("could not shut down: %w"), err), a.win)
 			return
 		}
 	}
@@ -1361,21 +1368,21 @@ func (a *application) openGrabberDialog() {
 	pagesEntry.SetText("50")
 	filesEntry := widget.NewEntry()
 	filesEntry.SetText("100")
-	sameHost := widget.NewCheck("Stay on the same host", nil)
+	sameHost := widget.NewCheck(T("Stay on the same host"), nil)
 	sameHost.SetChecked(true)
-	startNow := widget.NewCheck("Start downloads immediately", nil)
+	startNow := widget.NewCheck(T("Start downloads immediately"), nil)
 	startNow.SetChecked(true)
 	info := widget.NewLabel("")
 
 	form := widget.NewForm(
-		widget.NewFormItem("Start page", urlEntry),
-		widget.NewFormItem("Depth", depthEntry),
-		widget.NewFormItem("Max pages", pagesEntry),
-		widget.NewFormItem("Max files", filesEntry),
+		widget.NewFormItem(T("Start page"), urlEntry),
+		widget.NewFormItem(T("Depth"), depthEntry),
+		widget.NewFormItem(T("Max pages"), pagesEntry),
+		widget.NewFormItem(T("Max files"), filesEntry),
 	)
 	content := container.NewVBox(form, sameHost, startNow, info)
 
-	dlg := dialog.NewCustomWithoutButtons("ODM Site Grabber", content, a.win)
+	dlg := dialog.NewCustomWithoutButtons(T("ODM Site Grabber"), content, a.win)
 	start := func() {
 		depth, pages, files := 1, 50, 100
 		fmt.Sscanf(depthEntry.Text, "%d", &depth)
@@ -1391,27 +1398,27 @@ func (a *application) openGrabberDialog() {
 			Start:    startNow.Checked,
 		}
 		if opts.URL == "" {
-			info.SetText("Enter a start page.")
+			info.SetText(T("Enter a start page."))
 			return
 		}
-		info.SetText("Exploring…")
+		info.SetText(T("Exploring…"))
 		go func() {
 			res, err := a.mgr.Grab(context.Background(), opts, func(p, f int) {
-				fyne.Do(func() { info.SetText(fmt.Sprintf("Exploring… %d pages, %d files", p, f)) })
+				fyne.Do(func() { info.SetText(Tf("Exploring… %d pages, %d files", p, f)) })
 			})
 			fyne.Do(func() {
 				if err != nil {
-					info.SetText("Failed: " + err.Error())
+					info.SetText(T("Failed: ") + err.Error())
 					return
 				}
-				info.SetText(fmt.Sprintf("Done: %d pages explored, %d files queued.", res.Pages, len(res.Files)))
+				info.SetText(Tf("Done: %d pages explored, %d files queued.", res.Pages, len(res.Files)))
 				a.refresh()
 			})
 		}()
 	}
-	startBtn := widget.NewButtonWithIcon("Start", theme.MediaPlayIcon(), start)
+	startBtn := widget.NewButtonWithIcon(T("Start"), theme.MediaPlayIcon(), start)
 	startBtn.Importance = widget.HighImportance
-	closeBtn := widget.NewButton("Close", func() { dlg.Hide() })
+	closeBtn := widget.NewButton(T("Close"), func() { dlg.Hide() })
 	dlg.SetButtons([]fyne.CanvasObject{closeBtn, startBtn})
 	dlg.Resize(fyne.NewSize(560, 1))
 	dlg.Show()
@@ -1474,7 +1481,7 @@ func (a *application) openProgressWindow(id string) {
 	}
 
 	v := &progressView{}
-	v.win = a.fyneApp.NewWindow("Download")
+	v.win = a.fyneApp.NewWindow(T("Download"))
 
 	newValue := func() *widget.Label {
 		l := widget.NewLabel("")
@@ -1486,7 +1493,7 @@ func (a *application) openProgressWindow(id string) {
 	v.bar = widget.NewProgressBar()
 	v.bar.TextFormatter = func() string {
 		if v.live {
-			return "Recording"
+			return T("Recording")
 		}
 		return fmt.Sprintf("%.1f%%", v.bar.Value*100)
 	}
@@ -1497,12 +1504,12 @@ func (a *application) openProgressWindow(id string) {
 	statusTab := container.NewVBox(
 		v.url,
 		infoGrid(
-			caption("Status"), v.status,
-			caption("File size"), v.size,
-			caption("Downloaded"), v.done,
-			caption("Transfer rate"), v.rate,
-			caption("Time left"), v.eta,
-			caption("Resumable"), v.resume,
+			caption(T("Status")), v.status,
+			caption(T("File size")), v.size,
+			caption(T("Downloaded")), v.done,
+			caption(T("Transfer rate")), v.rate,
+			caption(T("Time left")), v.eta,
+			caption(T("Resumable")), v.resume,
 		),
 		v.graph,
 	)
@@ -1510,7 +1517,7 @@ func (a *application) openProgressWindow(id string) {
 	// Speed limiter: applied as soon as it changes, like the reference UI.
 	limitEntry := widget.NewEntry()
 	limitEntry.SetText("500")
-	useLimit := widget.NewCheck("Use speed limiter", nil)
+	useLimit := widget.NewCheck(T("Use speed limiter"), nil)
 	apply := func() {
 		kb := 0
 		fmt.Sscanf(strings.TrimSpace(limitEntry.Text), "%d", &kb)
@@ -1536,33 +1543,33 @@ func (a *application) openProgressWindow(id string) {
 	}
 	limitEntry.OnChanged = func(string) { apply() }
 	limitTab := container.NewVBox(
-		infoGrid(caption("Transfer rate"), v.limitRate),
+		infoGrid(caption(T("Transfer rate")), v.limitRate),
 		useLimit,
-		infoGrid(caption("Maximum speed"), container.NewBorder(nil, nil, nil, widget.NewLabel("KB/s"), limitEntry)),
+		infoGrid(caption(T("Maximum speed")), container.NewBorder(nil, nil, nil, widget.NewLabel("KB/s"), limitEntry)),
 	)
 
 	// Options on completion
 	settings := a.mgr.Settings()
-	completeCheck := widget.NewCheck("Show download complete dialog", func(on bool) {
+	completeCheck := widget.NewCheck(T("Show download complete dialog"), func(on bool) {
 		next := a.mgr.Settings()
 		next.NoCompleteDialog = !on
 		a.mgr.UpdateSettings(next)
 	})
 	completeCheck.SetChecked(!settings.NoCompleteDialog)
-	v.openCheck = widget.NewCheck("Open the file when done", func(b bool) { a.mgr.SetOpenWhenDone(id, b) })
+	v.openCheck = widget.NewCheck(T("Open the file when done"), func(b bool) { a.mgr.SetOpenWhenDone(id, b) })
 	compTab := container.NewVBox(
-		infoGrid(caption("Save to"), v.saveTo),
+		infoGrid(caption(T("Save to")), v.saveTo),
 		completeCheck,
 		v.openCheck,
 	)
 
 	tabs := container.NewAppTabs(
-		container.NewTabItem("Download status", statusTab),
-		container.NewTabItem("Speed limiter", limitTab),
-		container.NewTabItem("Options on completion", compTab),
+		container.NewTabItem(T("Download status"), statusTab),
+		container.NewTabItem(T("Speed limiter"), limitTab),
+		container.NewTabItem(T("Options on completion"), compTab),
 	)
 
-	v.pauseBtn = widget.NewButtonWithIcon("Pause", theme.MediaPauseIcon(), func() {
+	v.pauseBtn = widget.NewButtonWithIcon(T("Pause"), theme.MediaPauseIcon(), func() {
 		if d, ok := a.mgr.Get(id); ok {
 			if d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued {
 				a.mgr.Pause(id)
@@ -1574,11 +1581,11 @@ func (a *application) openProgressWindow(id string) {
 	})
 	// Cancel stops the transfer and closes the window; closing the window
 	// with its title-bar button leaves the download running.
-	cancelBtn := widget.NewButton("Cancel", func() {
+	cancelBtn := widget.NewButton(T("Cancel"), func() {
 		a.mgr.Pause(id)
 		v.win.Close()
 	})
-	v.hideBtn = widget.NewButton("<< Hide details", func() { a.toggleProgressDetails(v) })
+	v.hideBtn = widget.NewButton(T("<< Hide details"), func() { a.toggleProgressDetails(v) })
 
 	// Connection table with a header row (N. / Downloaded / Info).
 	v.conns = widget.NewTableWithHeaders(
@@ -1616,7 +1623,7 @@ func (a *application) openProgressWindow(id string) {
 	v.conns.ShowHeaderColumn = false
 	v.conns.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(nil) }
 	v.conns.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		o.(*headerLabel).SetText([]string{"N.", "Downloaded", "Info"}[id.Col])
+		o.(*headerLabel).SetText([]string{"N.", T("Downloaded"), T("Info")}[id.Col])
 	}
 	v.conns.SetColumnWidth(0, 44)
 	v.conns.SetColumnWidth(1, 130)
@@ -1624,7 +1631,7 @@ func (a *application) openProgressWindow(id string) {
 
 	buttons := container.NewHBox(v.hideBtn, layout.NewSpacer(), v.pauseBtn, cancelBtn)
 	v.top = container.NewVBox(tabs, v.bar, buttons)
-	v.mapLabel = widget.NewLabelWithStyle("Connection map", fyne.TextAlignCenter, fyne.TextStyle{})
+	v.mapLabel = widget.NewLabelWithStyle(T("Connection map"), fyne.TextAlignCenter, fyne.TextStyle{})
 	v.connBox = framed(v.conns)
 	v.details = container.NewBorder(container.NewVBox(v.mapLabel, v.strip), nil, nil, nil, v.connBox)
 
@@ -1645,11 +1652,11 @@ func (a *application) toggleProgressDetails(v *progressView) {
 	w := v.win.Canvas().Size().Width
 	if v.detailsOff {
 		v.details.Hide()
-		v.hideBtn.SetText("Show details >>")
+		v.hideBtn.SetText(T("Show details >>"))
 		v.win.Resize(fyne.NewSize(w, v.top.MinSize().Height+20))
 	} else {
 		v.details.Show()
-		v.hideBtn.SetText("<< Hide details")
+		v.hideBtn.SetText(T("<< Hide details"))
 		v.win.Resize(fyne.NewSize(w, detailsHeight(v)))
 	}
 }
@@ -1668,7 +1675,7 @@ func segmentsText(d engine.Info) string {
 	if d.Segments <= 0 {
 		return ""
 	}
-	return fmt.Sprintf("%d of %d", d.SegmentsDone, d.Segments)
+	return Tf("%d of %d", d.SegmentsDone, d.Segments)
 }
 
 // autoProgress opens the progress window for a download the user just
@@ -1691,7 +1698,7 @@ func (a *application) updateProgressWindow(id string) {
 	// A recording's Total follows Done, so its percentage means nothing.
 	v.live = d.Live && d.Status == engine.StatusDownloading
 	if v.live {
-		v.win.SetTitle("Recording " + d.FileName)
+		v.win.SetTitle(Tf("Recording %s", d.FileName))
 	} else {
 		v.win.SetTitle(fmt.Sprintf("%.0f%% %s", d.Progress, d.FileName))
 	}
@@ -1699,17 +1706,17 @@ func (a *application) updateProgressWindow(id string) {
 	// Same wording as the list's Status column, minus the percentage that
 	// the Downloaded row already shows.
 	status := map[engine.Status]string{
-		engine.StatusQueued:      "Queued",
-		engine.StatusDownloading: "Receiving data…",
-		engine.StatusPaused:      "Paused",
-		engine.StatusComplete:    "Complete",
-		engine.StatusError:       "Error",
+		engine.StatusQueued:      T("Queued"),
+		engine.StatusDownloading: T("Receiving data…"),
+		engine.StatusPaused:      T("Paused"),
+		engine.StatusComplete:    T("Complete"),
+		engine.StatusError:       T("Error"),
 	}[d.Status]
 	if status == "" {
 		status = string(d.Status)
 	}
 	if v.live {
-		status = "Recording live stream…"
+		status = T("Recording live stream…")
 	}
 	if d.Error != "" {
 		status += " — " + d.Error
@@ -1732,9 +1739,9 @@ func (a *application) updateProgressWindow(id string) {
 		v.eta.SetText(dash(etaText(d)))
 	}
 	if d.RangeOK {
-		v.resume.SetText("Yes")
+		v.resume.SetText(T("Yes"))
 	} else {
-		v.resume.SetText("No")
+		v.resume.SetText(T("No"))
 	}
 	if d.FileName != "" {
 		v.saveTo.SetText(filepath.Join(d.Dir, d.FileName))
@@ -1753,16 +1760,16 @@ func (a *application) updateProgressWindow(id string) {
 		segs, have := d.Segments, d.SegmentsDone
 		text := segmentsText(d)
 		if segs == 0 && d.Status == engine.StatusComplete {
-			segs, have, text = 1, 1, "complete"
+			segs, have, text = 1, 1, T("complete")
 		}
 		if d.Live && d.Status != engine.StatusComplete {
 			text = ""
 			if d.SegmentsDone > 0 {
-				text = fmt.Sprintf("%d recorded", d.SegmentsDone)
+				text = Tf("%d recorded", d.SegmentsDone)
 			}
 			segs, have = 0, 0 // nothing to fill toward
 		}
-		v.mapLabel.SetText("Segments: " + dash(text))
+		v.mapLabel.SetText(T("Segments: ") + dash(text))
 		var bar []engine.ChunkInfo
 		if segs > 0 {
 			bar = []engine.ChunkInfo{{End: int64(segs) - 1, Done: int64(have)}}
@@ -1774,13 +1781,13 @@ func (a *application) updateProgressWindow(id string) {
 	}
 	if v.live {
 		// Pausing a recording ends it and saves the file (live.go).
-		v.pauseBtn.SetText("Stop")
+		v.pauseBtn.SetText(T("Stop"))
 		v.pauseBtn.SetIcon(theme.MediaStopIcon())
 	} else if d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued {
-		v.pauseBtn.SetText("Pause")
+		v.pauseBtn.SetText(T("Pause"))
 		v.pauseBtn.SetIcon(theme.MediaPauseIcon())
 	} else {
-		v.pauseBtn.SetText("Start")
+		v.pauseBtn.SetText(T("Start"))
 		v.pauseBtn.SetIcon(theme.MediaPlayIcon())
 	}
 	v.openCheck.SetChecked(d.OpenWhenDone)
@@ -1796,28 +1803,28 @@ func (a *application) updateProgressWindow(id string) {
 // showComplete is the window shown when a download finishes: what was saved
 // where, with Open / Open folder / Close.
 func (a *application) showComplete(d engine.Info) {
-	w := a.fyneApp.NewWindow("Download complete")
+	w := a.fyneApp.NewWindow(T("Download complete"))
 	path := filepath.Join(d.Dir, d.FileName)
 	value := func(s string) *widget.Label {
 		l := widget.NewLabel(s)
 		l.Truncation = fyne.TextTruncateEllipsis
 		return l
 	}
-	again := widget.NewCheck("Don't show this dialog again", func(on bool) {
+	again := widget.NewCheck(T("Don't show this dialog again"), func(on bool) {
 		next := a.mgr.Settings()
 		next.NoCompleteDialog = on
 		a.mgr.UpdateSettings(next)
 	})
-	openBtn := widget.NewButtonWithIcon("Open", theme.FileIcon(), func() { openPath(path); w.Close() })
+	openBtn := widget.NewButtonWithIcon(T("Open"), theme.FileIcon(), func() { openPath(path); w.Close() })
 	openBtn.Importance = widget.HighImportance
-	folderBtn := widget.NewButtonWithIcon("Open folder", theme.FolderOpenIcon(), func() { revealPath(path); w.Close() })
-	closeBtn := widget.NewButton("Close", w.Close)
+	folderBtn := widget.NewButtonWithIcon(T("Open folder"), theme.FolderOpenIcon(), func() { revealPath(path); w.Close() })
+	closeBtn := widget.NewButton(T("Close"), w.Close)
 	content := container.New(layout.NewCustomPaddedLayout(8, 10, 12, 12), container.NewVBox(
-		widget.NewLabelWithStyle("Download complete", fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
+		widget.NewLabelWithStyle(T("Download complete"), fyne.TextAlignLeading, fyne.TextStyle{Bold: true}),
 		infoGrid(
-			caption("Address"), value(d.URL),
-			caption("File size"), value(dash(humanBytes(d.Total))),
-			caption("Saved to"), value(path),
+			caption(T("Address")), value(d.URL),
+			caption(T("File size")), value(dash(humanBytes(d.Total))),
+			caption(T("Saved to")), value(path),
 		),
 		again,
 		container.NewHBox(layout.NewSpacer(), openBtn, folderBtn, closeBtn),

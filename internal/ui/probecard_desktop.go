@@ -71,13 +71,13 @@ func (c *probeCard) show(icon fyne.Resource, title, detail, resume string) {
 
 // idle is the card before an address is typed.
 func (c *probeCard) idle() {
-	c.show(theme.SearchIcon(), "No address yet",
-		"Paste or type one: ODM checks the file's size and type before adding it.", "")
+	c.show(theme.SearchIcon(), T("No address yet"),
+		T("Paste or type one: ODM checks the file's size and type before adding it."), "")
 }
 
 // check shows that the address is being checked.
 func (c *probeCard) check() {
-	c.show(theme.SearchIcon(), "Checking the address…", "", "")
+	c.show(theme.SearchIcon(), T("Checking the address…"), "", "")
 	c.checking = true
 	c.icon.Hide()
 	c.spinner.Show()
@@ -87,9 +87,9 @@ func (c *probeCard) check() {
 // file shows a checked file: name, then size, type and server.
 func (c *probeCard) file(p *engine.Probe, name string) {
 	if name == "" {
-		name = "Unnamed file"
+		name = T("Unnamed file")
 	}
-	size := "Size unknown"
+	size := T("Size unknown")
 	if p.Total > 0 {
 		size = humanBytes(p.Total)
 	}
@@ -100,9 +100,9 @@ func (c *probeCard) file(p *engine.Probe, name string) {
 	if u, err := url.Parse(p.FinalURL); err == nil && u.Host != "" {
 		parts = append(parts, u.Hostname())
 	}
-	resume, look := "Resumable", widget.SuccessImportance
+	resume, look := T("Resumable"), widget.SuccessImportance
 	if !p.RangeOK {
-		resume, look = "Cannot resume", widget.WarningImportance
+		resume, look = T("Cannot resume"), widget.WarningImportance
 	}
 	c.show(iconForCategory(engine.Category(name)), name, strings.Join(parts, " · "), resume)
 	c.resume.Importance = look

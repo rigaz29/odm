@@ -28,21 +28,22 @@ const (
 	columnCount
 )
 
-// columns describes each column: its header, its name in the column menu,
-// the key it is saved under, and its default width. The columns without one
+// columns describes each column: its header, its name in the column menu
+// (both in English, shown through T), the key it is saved under, and its
+// default width. The columns without one
 // share the space the others leave.
 var columns = [columnCount]struct {
 	title, name, key string
 	width            float32
 }{
-	colName:        {"File Name", "File name", "name", 0},
-	colQueue:       {"Q", "Queue", "queue", 44},
-	colSize:        {"Size", "Size", "size", 80},
-	colStatus:      {"Status", "Status", "status", 112},
-	colETA:         {"Time left", "Time left", "eta", 78},
-	colRate:        {"Transfer rate", "Transfer rate", "rate", 100},
-	colLastTry:     {"Last attempt", "Last attempt", "lasttry", 92},
-	colDescription: {"Description", "Description", "description", 0},
+	colName:        {markT("File Name"), markT("File name"), "name", 0},
+	colQueue:       {markT("Q"), markT("Queue"), "queue", 44},
+	colSize:        {markT("Size"), markT("Size"), "size", 80},
+	colStatus:      {markT("Status"), markT("Status"), "status", 112},
+	colETA:         {markT("Time left"), markT("Time left"), "eta", 78},
+	colRate:        {markT("Transfer rate"), markT("Transfer rate"), "rate", 100},
+	colLastTry:     {markT("Last attempt"), markT("Last attempt"), "lasttry", 92},
+	colDescription: {markT("Description"), markT("Description"), "description", 0},
 }
 
 // A dragged column stops shrinking at minColumnWidth. Below their minimums
@@ -292,11 +293,11 @@ func (a *application) columnMenuItems() []*fyne.MenuItem {
 	var items []*fyne.MenuItem
 	for c := colName + 1; c < columnCount; c++ {
 		c := c
-		it := fyne.NewMenuItem(columns[c].name, func() { a.setColumnShown(c, !a.columnShown(c)) })
+		it := fyne.NewMenuItem(T(columns[c].name), func() { a.setColumnShown(c, !a.columnShown(c)) })
 		it.Checked = a.columnShown(c)
 		items = append(items, it)
 	}
-	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem("Reset columns", a.resetColumns))
+	return append(items, fyne.NewMenuItemSeparator(), fyne.NewMenuItem(T("Reset columns"), a.resetColumns))
 }
 
 // headerGrip is how far from a column's right border, on either side, a

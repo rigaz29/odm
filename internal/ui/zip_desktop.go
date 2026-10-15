@@ -4,7 +4,6 @@ package ui
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -18,7 +17,7 @@ import (
 // showZipPreview lists what a ZIP archive holds, reading only its end from
 // the server, so the person can check it before downloading all of it.
 func (a *application) showZipPreview(parent fyne.Window, url, name string, headers map[string]string) {
-	status := widget.NewLabel("Reading the list of contents…")
+	status := widget.NewLabel(T("Reading the list of contents…"))
 	status.Wrapping = fyne.TextWrapWord
 	var entries []engine.ZipEntry
 	table := widget.NewTableWithHeaders(
@@ -35,12 +34,12 @@ func (a *application) showZipPreview(parent fyne.Window, url, name string, heade
 			case 0:
 				label := e.Name
 				if e.Encrypted {
-					label += "  (encrypted)"
+					label += T("  (encrypted)")
 				}
 				c.setText(label)
 			case 1:
 				if e.Dir {
-					c.setText("folder")
+					c.setText(T("folder"))
 				} else {
 					c.setText(humanBytes(e.Size))
 				}
@@ -54,15 +53,15 @@ func (a *application) showZipPreview(parent fyne.Window, url, name string, heade
 	table.ShowHeaderColumn = false
 	table.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(nil) }
 	table.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		o.(*headerLabel).SetText([]string{"Name", "Size", "Modified"}[id.Col])
+		o.(*headerLabel).SetText([]string{T("Name"), T("Size"), T("Modified")}[id.Col])
 	}
 	for i, w := range []float32{380, 90, 130} {
 		table.SetColumnWidth(i, w)
 	}
 	table.Hide()
 
-	title := "Contents of " + name
-	d := dialog.NewCustom(title, "Close", container.NewBorder(status, nil, nil, nil, framed(table)), parent)
+	title := Tf("Contents of %s", name)
+	d := dialog.NewCustom(title, T("Close"), container.NewBorder(status, nil, nil, nil, framed(table)), parent)
 	d.Resize(fyne.NewSize(660, 440))
 	d.Show()
 
@@ -76,12 +75,11 @@ func (a *application) showZipPreview(parent fyne.Window, url, name string, heade
 				return
 			}
 			entries = list.Entries
-			files := "files"
+			format := markT("%d files, %s when extracted · %s read to list them")
 			if list.Files == 1 {
-				files = "file"
+				format = markT("%d file, %s when extracted · %s read to list them")
 			}
-			status.SetText(fmt.Sprintf("%d %s, %s when extracted · %s read to list them",
-				list.Files, files, dash(humanBytes(list.Size)), dash(humanBytes(list.Fetched))))
+			status.SetText(Tf(format, list.Files, dash(humanBytes(list.Size)), dash(humanBytes(list.Fetched))))
 			table.Show()
 			table.Refresh()
 		})

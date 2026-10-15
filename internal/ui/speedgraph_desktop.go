@@ -91,7 +91,7 @@ func (r *speedGraphRenderer) Refresh() {
 	_, peak := r.g.snapshot()
 	r.peak.Text = ""
 	if peak > 0 {
-		r.peak.Text = "Peak " + humanBytes(peak) + "/s"
+		r.peak.Text = Tf("Peak %s/s", humanBytes(peak))
 	}
 	r.peak.Color = theme.PlaceHolderColor()
 	r.peak.Refresh()

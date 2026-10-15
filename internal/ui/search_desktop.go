@@ -22,7 +22,7 @@ type searchEntry struct {
 func newSearchEntry(onChanged func(string), onEscape func()) *searchEntry {
 	e := &searchEntry{onEscape: onEscape}
 	e.ExtendBaseWidget(e)
-	e.SetPlaceHolder("Search downloads (Ctrl+F)")
+	e.SetPlaceHolder(T("Search downloads (Ctrl+F)"))
 	e.OnChanged = onChanged
 	clear := widget.NewButtonWithIcon("", theme.CancelIcon(), func() { e.SetText("") })
 	clear.Importance = widget.LowImportance

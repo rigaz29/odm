@@ -90,14 +90,14 @@ var accents = []struct {
 	key, name string
 	color     color.NRGBA
 }{
-	{"blue", "Blue", color.NRGBA{R: 0x4F, G: 0x7C, B: 0xFF, A: 0xFF}},
-	{"indigo", "Indigo", color.NRGBA{R: 0x63, G: 0x66, B: 0xF1, A: 0xFF}},
-	{"purple", "Purple", color.NRGBA{R: 0x9B, G: 0x5D, B: 0xE5, A: 0xFF}},
-	{"pink", "Pink", color.NRGBA{R: 0xDE, G: 0x4F, B: 0x98, A: 0xFF}},
-	{"red", "Red", color.NRGBA{R: 0xE0, G: 0x48, B: 0x4E, A: 0xFF}},
-	{"orange", "Orange", color.NRGBA{R: 0xE2, G: 0x74, B: 0x2A, A: 0xFF}},
-	{"green", "Green", color.NRGBA{R: 0x2C, G: 0xA0, B: 0x6A, A: 0xFF}},
-	{"teal", "Teal", color.NRGBA{R: 0x1C, G: 0x9C, B: 0xAB, A: 0xFF}},
+	{"blue", markT("Blue"), color.NRGBA{R: 0x4F, G: 0x7C, B: 0xFF, A: 0xFF}},
+	{"indigo", markT("Indigo"), color.NRGBA{R: 0x63, G: 0x66, B: 0xF1, A: 0xFF}},
+	{"purple", markT("Purple"), color.NRGBA{R: 0x9B, G: 0x5D, B: 0xE5, A: 0xFF}},
+	{"pink", markT("Pink"), color.NRGBA{R: 0xDE, G: 0x4F, B: 0x98, A: 0xFF}},
+	{"red", markT("Red"), color.NRGBA{R: 0xE0, G: 0x48, B: 0x4E, A: 0xFF}},
+	{"orange", markT("Orange"), color.NRGBA{R: 0xE2, G: 0x74, B: 0x2A, A: 0xFF}},
+	{"green", markT("Green"), color.NRGBA{R: 0x2C, G: 0xA0, B: 0x6A, A: 0xFF}},
+	{"teal", markT("Teal"), color.NRGBA{R: 0x1C, G: 0x9C, B: 0xAB, A: 0xFF}},
 }
 
 func accentColor(key string) color.NRGBA {
@@ -125,11 +125,11 @@ const (
 var themeModes = []string{themeSystem, themeLight, themeDark}
 
 func themeChoices() []string {
-	system := "Same as the system"
+	system := T("Same as the system")
 	if runtime.GOOS == "windows" {
-		system = "Same as Windows"
+		system = T("Same as Windows")
 	}
-	return []string{system, "Light", "Dark"}
+	return []string{system, T("Light"), T("Dark")}
 }
 
 func themeIndex(mode string) int {

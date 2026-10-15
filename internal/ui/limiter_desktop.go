@@ -17,7 +17,7 @@ const optionsTabConnection = 4
 // newLimiterItem returns a "Speed limiter" menu item that is kept checked
 // while the global limit applies; the main menu and the tray each get one.
 func (a *application) newLimiterItem() *fyne.MenuItem {
-	it := fyne.NewMenuItem("Speed limiter", a.toggleLimiter)
+	it := fyne.NewMenuItem(T("Speed limiter"), a.toggleLimiter)
 	a.limiterItems = append(a.limiterItems, it)
 	return it
 }
@@ -42,8 +42,8 @@ func (a *application) toggleLimiter() {
 func (a *application) askSpeedLimit() {
 	entry := widget.NewEntry()
 	entry.SetText("500")
-	dialog.NewForm("Speed limiter", "Turn on", "Cancel",
-		[]*widget.FormItem{widget.NewFormItem("Maximum speed (KB/s)", entry)},
+	dialog.NewForm(T("Speed limiter"), T("Turn on"), T("Cancel"),
+		[]*widget.FormItem{widget.NewFormItem(T("Maximum speed (KB/s)"), entry)},
 		func(ok bool) {
 			if !ok {
 				return
@@ -51,7 +51,7 @@ func (a *application) askSpeedLimit() {
 			kb := 0
 			fmt.Sscanf(strings.TrimSpace(entry.Text), "%d", &kb)
 			if kb <= 0 {
-				dialog.ShowInformation("Speed limiter", "Enter a speed above 0 KB/s.", a.win)
+				dialog.ShowInformation(T("Speed limiter"), T("Enter a speed above 0 KB/s."), a.win)
 				return
 			}
 			a.mgr.SetSpeedLimiter(true, int64(kb)*1024)
@@ -67,9 +67,9 @@ func (a *application) syncLimiter(rate int64) {
 		return
 	}
 	a.limiterShown = state
-	label := "Speed limiter"
+	label := T("Speed limiter")
 	if rate > 0 {
-		label = fmt.Sprintf("Speed limiter (%s/s)", humanBytes(rate))
+		label = Tf("Speed limiter (%s/s)", humanBytes(rate))
 	}
 	for _, it := range a.limiterItems {
 		it.Checked = rate > 0

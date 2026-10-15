@@ -708,7 +708,7 @@ func newAccentPicker(key string) (row fyne.CanvasObject, selected func() string)
 		}
 		for _, a := range accents {
 			if a.key == k {
-				name.SetText(a.name)
+				name.SetText(T(a.name))
 			}
 		}
 	}

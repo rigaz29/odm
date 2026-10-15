@@ -54,6 +54,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		sortCol:         -1,
 	}
 	a.fyneApp = app.NewWithID("com.ochi.odm")
+	a.applyLanguage() // before any text is made
 	a.applyTheme()
 	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
 	a.win.Resize(fyne.NewSize(1140, 660)) // the toolbar and the search box fit
@@ -126,14 +127,14 @@ func (a *application) setupTray() {
 	}
 	a.trayOK = true
 	a.trayMenu = fyne.NewMenu("ODM",
-		fyne.NewMenuItem("Show ODM", a.showWindow),
-		fyne.NewMenuItem("Add URL…", func() { a.showWindow(); a.openAddDialog() }),
+		fyne.NewMenuItem(T("Show ODM"), a.showWindow),
+		fyne.NewMenuItem(T("Add URL…"), func() { a.showWindow(); a.openAddDialog() }),
 		fyne.NewMenuItemSeparator(),
-		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
-		fyne.NewMenuItem("Resume all", func() { a.mgr.ResumeAll(); a.refresh() }),
+		fyne.NewMenuItem(T("Pause all"), func() { a.mgr.PauseAll(); a.refresh() }),
+		fyne.NewMenuItem(T("Resume all"), func() { a.mgr.ResumeAll(); a.refresh() }),
 		a.newLimiterItem(),
 		fyne.NewMenuItemSeparator(),
-		&fyne.MenuItem{Label: "Exit", IsQuit: true, Action: a.fyneApp.Quit},
+		&fyne.MenuItem{Label: T("Exit"), IsQuit: true, Action: a.fyneApp.Quit},
 	)
 	desk.SetSystemTrayMenu(a.trayMenu)
 	a.limiterShown = "" // the new item has not been synced yet
@@ -149,8 +150,8 @@ func (a *application) setupTray() {
 		a.foreground.Store(false)
 		if !a.trayHinted {
 			a.trayHinted = true
-			a.fyneApp.SendNotification(fyne.NewNotification("ODM is still running",
-				"Downloads continue in the background. Use the tray icon to open ODM or exit."))
+			a.fyneApp.SendNotification(fyne.NewNotification(T("ODM is still running"),
+				T("Downloads continue in the background. Use the tray icon to open ODM or exit.")))
 		}
 	})
 }
@@ -385,24 +386,24 @@ func (a *application) build() {
 		return container.New(layout.NewCustomPaddedLayout(8, 8, 4, 4), widget.NewSeparator())
 	}
 	toolbar := container.NewHBox(
-		tool("add", theme.ContentAddIcon(), colorToolAdd, "Add URL", a.openAddDialog),
-		tool("resume", theme.DownloadIcon(), colorToolRun, "Resume", a.resumeSelected),
-		tool("stop", theme.MediaStopIcon(), colorToolStop, "Stop", a.stopSelected),
-		tool("stopall", theme.MediaPauseIcon(), colorToolStop, "Stop All", func() { a.mgr.StopAll(); a.refresh() }),
-		tool("delete", theme.DeleteIcon(), colorToolDelete, "Delete", a.deleteSelected),
-		tool("cleardone", theme.ContentClearIcon(), colorToolDelete, "Clear Done", func() { a.mgr.ClearCompleted(); a.refresh() }),
+		tool("add", theme.ContentAddIcon(), colorToolAdd, T("Add URL"), a.openAddDialog),
+		tool("resume", theme.DownloadIcon(), colorToolRun, T("Resume"), a.resumeSelected),
+		tool("stop", theme.MediaStopIcon(), colorToolStop, T("Stop"), a.stopSelected),
+		tool("stopall", theme.MediaPauseIcon(), colorToolStop, T("Stop All"), func() { a.mgr.StopAll(); a.refresh() }),
+		tool("delete", theme.DeleteIcon(), colorToolDelete, T("Delete"), a.deleteSelected),
+		tool("cleardone", theme.ContentClearIcon(), colorToolDelete, T("Clear Done"), func() { a.mgr.ClearCompleted(); a.refresh() }),
 		sep(),
-		tool("options", theme.SettingsIcon(), colorToolConfig, "Options", func() { a.openOptionsTab(0) }),
-		tool("scheduler", theme.HistoryIcon(), colorToolSched, "Scheduler", a.openScheduler),
-		tool("startq", theme.MediaPlayIcon(), colorToolQueue, "Start Queue", a.startQueue),
-		tool("stopq", theme.MediaStopIcon(), colorToolQueue, "Stop Queue", a.stopQueue),
+		tool("options", theme.SettingsIcon(), colorToolConfig, T("Options"), func() { a.openOptionsTab(0) }),
+		tool("scheduler", theme.HistoryIcon(), colorToolSched, T("Scheduler"), a.openScheduler),
+		tool("startq", theme.MediaPlayIcon(), colorToolQueue, T("Start Queue"), a.startQueue),
+		tool("stopq", theme.MediaStopIcon(), colorToolQueue, T("Stop Queue"), a.stopQueue),
 		sep(),
-		tool("progress", theme.InfoIcon(), colorToolRun, "Progress", func() {
+		tool("progress", theme.InfoIcon(), colorToolRun, T("Progress"), func() {
 			if d, ok := a.current(); ok {
 				a.openProgressWindow(d.ID)
 			}
 		}),
-		tool("folder", theme.FolderOpenIcon(), colorToolSched, "Open folder", func() {
+		tool("folder", theme.FolderOpenIcon(), colorToolSched, T("Open folder"), func() {
 			if d, ok := a.current(); ok {
 				revealPath(d.FilePath)
 			}
@@ -484,7 +485,7 @@ func (a *application) build() {
 
 	hideBtn := widget.NewButtonWithIcon("", theme.CancelIcon(), a.toggleSidebar)
 	hideBtn.Importance = widget.LowImportance
-	sideTitle := widget.NewLabel("Categories")
+	sideTitle := widget.NewLabel(T("Categories"))
 	sideHeader := container.NewBorder(nil, widget.NewSeparator(), sideTitle, hideBtn)
 	sidebar := framed(container.NewBorder(sideHeader, nil, nil, nil,
 		container.NewThemeOverride(a.cats, compact)))
@@ -604,80 +605,80 @@ func withKey(item *fyne.MenuItem, key fyne.KeyName, mod fyne.KeyModifier) *fyne.
 
 func (a *application) buildMenu() *fyne.MainMenu {
 	ctrl := fyne.KeyModifierShortcutDefault
-	tasks := fyne.NewMenu("Tasks",
-		withKey(fyne.NewMenuItem("Add new download…", a.openAddDialog), fyne.KeyN, ctrl),
-		fyne.NewMenuItem("Grab site…", a.openGrabberDialog),
+	tasks := fyne.NewMenu(T("Tasks"),
+		withKey(fyne.NewMenuItem(T("Add new download…"), a.openAddDialog), fyne.KeyN, ctrl),
+		fyne.NewMenuItem(T("Grab site…"), a.openGrabberDialog),
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Export download list…", a.exportList),
-		fyne.NewMenuItem("Import download list…", a.importList),
+		fyne.NewMenuItem(T("Export download list…"), a.exportList),
+		fyne.NewMenuItem(T("Import download list…"), a.importList),
 		&fyne.MenuItem{IsSeparator: true},
 		// IsQuit, or Fyne appends a Quit item of its own below Exit.
-		&fyne.MenuItem{Label: "Exit", IsQuit: true, Action: func() { a.fyneApp.Quit() }},
+		&fyne.MenuItem{Label: T("Exit"), IsQuit: true, Action: func() { a.fyneApp.Quit() }},
 	)
-	downloads := fyne.NewMenu("Downloads",
-		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
-		fyne.NewMenuItem("Stop all (and stop queues)", func() { a.mgr.StopAll(); a.refresh() }),
-		fyne.NewMenuItem("Clear completed", func() { a.mgr.ClearCompleted(); a.refresh() }),
+	downloads := fyne.NewMenu(T("Downloads"),
+		fyne.NewMenuItem(T("Pause all"), func() { a.mgr.PauseAll(); a.refresh() }),
+		fyne.NewMenuItem(T("Stop all (and stop queues)"), func() { a.mgr.StopAll(); a.refresh() }),
+		fyne.NewMenuItem(T("Clear completed"), func() { a.mgr.ClearCompleted(); a.refresh() }),
 		&fyne.MenuItem{IsSeparator: true},
 		a.newLimiterItem(),
-		fyne.NewMenuItem("Speed limiter settings…", func() { a.openOptionsTab(optionsTabConnection) }),
+		fyne.NewMenuItem(T("Speed limiter settings…"), func() { a.openOptionsTab(optionsTabConnection) }),
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Start queue", a.startQueue),
-		fyne.NewMenuItem("Stop queue", a.stopQueue),
-		fyne.NewMenuItem("New queue…", a.openNewQueueDialog),
-		fyne.NewMenuItem("Scheduler…", a.openScheduler),
+		fyne.NewMenuItem(T("Start queue"), a.startQueue),
+		fyne.NewMenuItem(T("Stop queue"), a.stopQueue),
+		fyne.NewMenuItem(T("New queue…"), a.openNewQueueDialog),
+		fyne.NewMenuItem(T("Scheduler…"), a.openScheduler),
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Options…", func() { a.openOptionsTab(0) }),
+		fyne.NewMenuItem(T("Options…"), func() { a.openOptionsTab(0) }),
 	)
 	a.columnsMenu = fyne.NewMenu("", a.columnMenuItems()...)
-	columnsItem := fyne.NewMenuItem("Columns", nil)
+	columnsItem := fyne.NewMenuItem(T("Columns"), nil)
 	columnsItem.ChildMenu = a.columnsMenu
-	view := fyne.NewMenu("View",
-		withKey(fyne.NewMenuItem("Search downloads", a.focusSearch), fyne.KeyF, ctrl),
+	view := fyne.NewMenu(T("View"),
+		withKey(fyne.NewMenuItem(T("Search downloads"), a.focusSearch), fyne.KeyF, ctrl),
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Hide categories", a.toggleSidebar),
+		fyne.NewMenuItem(T("Hide categories"), a.toggleSidebar),
 		columnsItem,
 		&fyne.MenuItem{IsSeparator: true},
-		fyne.NewMenuItem("Sort by name", func() { a.sortBy(colName) }),
-		fyne.NewMenuItem("Sort by size", func() { a.sortBy(colSize) }),
-		fyne.NewMenuItem("Sort by status", func() { a.sortBy(colStatus) }),
-		fyne.NewMenuItem("Sort by time left", func() { a.sortBy(colETA) }),
-		fyne.NewMenuItem("Sort by transfer rate", func() { a.sortBy(colRate) }),
-		fyne.NewMenuItem("Sort by description", func() { a.sortBy(colDescription) }),
+		fyne.NewMenuItem(T("Sort by name"), func() { a.sortBy(colName) }),
+		fyne.NewMenuItem(T("Sort by size"), func() { a.sortBy(colSize) }),
+		fyne.NewMenuItem(T("Sort by status"), func() { a.sortBy(colStatus) }),
+		fyne.NewMenuItem(T("Sort by time left"), func() { a.sortBy(colETA) }),
+		fyne.NewMenuItem(T("Sort by transfer rate"), func() { a.sortBy(colRate) }),
+		fyne.NewMenuItem(T("Sort by description"), func() { a.sortBy(colDescription) }),
 	)
-	help := fyne.NewMenu("Help",
-		fyne.NewMenuItem("Keyboard shortcuts", a.showShortcuts),
-		fyne.NewMenuItem("Check for updates…", func() { a.checkForUpdates(true) }),
-		fyne.NewMenuItem("About ODM", a.showAbout),
+	help := fyne.NewMenu(T("Help"),
+		fyne.NewMenuItem(T("Keyboard shortcuts"), a.showShortcuts),
+		fyne.NewMenuItem(T("Check for updates…"), func() { a.checkForUpdates(true) }),
+		fyne.NewMenuItem(T("About ODM"), a.showAbout),
 	)
 	return fyne.NewMainMenu(tasks, downloads, view, help)
 }
 
 func (a *application) showAbout() {
-	dialog.ShowInformation("About",
-		"Ochi Download Manager (ODM)\n\nA segmented, resumable download manager.\nBuilt with Go and Fyne.",
+	dialog.ShowInformation(T("About"),
+		T("Ochi Download Manager (ODM)\n\nA segmented, resumable download manager.\nBuilt with Go and Fyne."),
 		a.win)
 }
 
 // shortcuts lists the keys of the main window, for Help → Keyboard shortcuts.
 var shortcuts = [][2]string{
-	{"Ctrl+N", "Add a new download"},
-	{"Ctrl+F", "Search the list (Esc clears the search)"},
-	{"Ctrl+A", "Select every download in the list"},
-	{"Enter", "Show the progress of the selected download"},
-	{"Space", "Pause or resume the selected downloads"},
-	{"Del", "Remove the selected downloads from the list"},
-	{"Shift+Del", "Remove them and delete their files"},
-	{"Up / Down", "Move the selection (with Shift: extend it)"},
+	{"Ctrl+N", markT("Add a new download")},
+	{"Ctrl+F", markT("Search the list (Esc clears the search)")},
+	{"Ctrl+A", markT("Select every download in the list")},
+	{"Enter", markT("Show the progress of the selected download")},
+	{"Space", markT("Pause or resume the selected downloads")},
+	{"Del", markT("Remove the selected downloads from the list")},
+	{"Shift+Del", markT("Remove them and delete their files")},
+	{"Up / Down", markT("Move the selection (with Shift: extend it)")},
 }
 
 func (a *application) showShortcuts() {
 	grid := container.New(layout.NewFormLayout())
 	for _, s := range shortcuts {
 		grid.Add(widget.NewLabelWithStyle(s[0], fyne.TextAlignTrailing, fyne.TextStyle{Bold: true}))
-		grid.Add(widget.NewLabel(s[1]))
+		grid.Add(widget.NewLabel(T(s[1])))
 	}
-	dialog.ShowCustom("Keyboard shortcuts", "Close", grid, a.win)
+	dialog.ShowCustom(T("Keyboard shortcuts"), T("Close"), grid, a.win)
 }
 
 func (a *application) exportList() {
@@ -716,7 +717,7 @@ func (a *application) importList() {
 			return
 		}
 		a.refresh()
-		dialog.ShowInformation("Import", fmt.Sprintf("Imported %d download(s).", n), a.win)
+		dialog.ShowInformation(T("Import"), Tf("Imported %d download(s).", n), a.win)
 	}, a.win)
 	d.Show()
 }
@@ -758,7 +759,7 @@ func (a *application) buildEntries(all []engine.Info) []sidebarEntry {
 
 	folder := theme.FolderIcon()
 	out := []sidebarEntry{
-		{text: label("All Downloads", len(all)), kind: "all", icon: theme.FolderOpenIcon(), node: "all", expanded: allOpen},
+		{text: label(T("All Downloads"), len(all)), kind: "all", icon: theme.FolderOpenIcon(), node: "all", expanded: allOpen},
 	}
 	if allOpen {
 		for _, c := range engine.Categories() {
@@ -768,8 +769,8 @@ func (a *application) buildEntries(all []engine.Info) []sidebarEntry {
 		}
 	}
 	out = append(out,
-		sidebarEntry{text: label("Unfinished", unfinished), kind: "unfinished", icon: theme.DownloadIcon()},
-		sidebarEntry{text: label("Finished", finished), kind: "finished", icon: theme.ConfirmIcon()},
+		sidebarEntry{text: label(T("Unfinished"), unfinished), kind: "unfinished", icon: theme.DownloadIcon()},
+		sidebarEntry{text: label(T("Finished"), finished), kind: "finished", icon: theme.ConfirmIcon()},
 	)
 
 	// Downloads can carry a queue that is not in settings (imported lists,
@@ -790,7 +791,7 @@ func (a *application) buildEntries(all []engine.Info) []sidebarEntry {
 			queues = append(queues, q)
 		}
 	}
-	out = append(out, sidebarEntry{text: "Queues", icon: theme.ListIcon(), header: true, node: "queues", expanded: queuesOpen})
+	out = append(out, sidebarEntry{text: T("Queues"), icon: theme.ListIcon(), header: true, node: "queues", expanded: queuesOpen})
 	if queuesOpen {
 		scheds := a.mgr.Settings().Schedules
 		for _, q := range queues {
@@ -836,15 +837,15 @@ func (a *application) stopQueue() {
 
 func (a *application) openNewQueueDialog() {
 	entry := widget.NewEntry()
-	entry.SetPlaceHolder("Queue name")
-	d := dialog.NewCustomConfirm("New queue", "Create", "Cancel",
-		container.NewVBox(widget.NewLabel("Enter a name for the new queue:"), entry),
+	entry.SetPlaceHolder(T("Queue name"))
+	d := dialog.NewCustomConfirm(T("New queue"), T("Create"), T("Cancel"),
+		container.NewVBox(widget.NewLabel(T("Enter a name for the new queue:")), entry),
 		func(ok bool) {
 			if !ok || strings.TrimSpace(entry.Text) == "" {
 				return
 			}
 			if !a.mgr.AddQueue(entry.Text) {
-				dialog.ShowInformation("Queue", "That queue already exists.", a.win)
+				dialog.ShowInformation(T("Queue"), T("That queue already exists."), a.win)
 			}
 			a.refresh()
 		}, a.win)
@@ -902,7 +903,7 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 	case colRate:
 		c.setText(rateText(d))
 	case colLastTry:
-		c.setText(d.UpdatedAt.Format("Jan 2 15:04"))
+		c.setText(d.UpdatedAt.Format(T("Jan 2 15:04")))
 	case colDescription:
 		c.setText(d.Description)
 	}
@@ -939,23 +940,23 @@ func statusText(d engine.Info) string {
 		if d.Live {
 			// Total follows Done while recording: a percentage would
 			// read 100% throughout.
-			return "Recording"
+			return T("Recording")
 		}
 		if d.Total > 0 {
 			return fmt.Sprintf("%.2f%%", d.Progress)
 		}
-		return "Downloading"
+		return T("Downloading")
 	case engine.StatusQueued:
-		return "Queued" + pct
+		return T("Queued") + pct
 	case engine.StatusPaused:
-		return "Paused" + pct
+		return T("Paused") + pct
 	case engine.StatusComplete:
-		return "Complete"
+		return T("Complete")
 	case engine.StatusError:
 		if d.Error != "" {
-			return "Error: " + d.Error
+			return T("Error: ") + d.Error
 		}
-		return "Error" + pct
+		return T("Error") + pct
 	}
 	return string(d.Status)
 }
@@ -992,11 +993,11 @@ func (a *application) headerText(col int) string {
 	a.mu.Unlock()
 	if sc == col {
 		if asc {
-			return columns[col].title + " ▲"
+			return T(columns[col].title) + " ▲"
 		}
-		return columns[col].title + " ▼"
+		return T(columns[col].title) + " ▼"
 	}
-	return columns[col].title
+	return T(columns[col].title)
 }
 
 func (a *application) sortBy(col int) {
@@ -1140,15 +1141,15 @@ func (a *application) updateStatus() {
 // listStatus says how many downloads there are, how many of them match the
 // search, and how many are selected when that is more than one.
 func listStatus(total, shown int, searching bool, selected int) string {
-	text := fmt.Sprintf("%d items", total)
+	text := Tf("%d items", total)
 	if total == 1 {
-		text = "1 item"
+		text = T("1 item")
 	}
 	if searching {
-		text = fmt.Sprintf("%d of %s match the search", shown, text)
+		text = Tf("%d of %s match the search", shown, text)
 	}
 	if selected > 1 {
-		text += fmt.Sprintf(" · %d selected", selected)
+		text += Tf(" · %d selected", selected)
 	}
 	return text
 }
@@ -1159,15 +1160,15 @@ func activityStatus(active, queued int, speed, limit int64) string {
 	var parts []string
 	switch {
 	case active > 0 && speed > 0:
-		parts = append(parts, fmt.Sprintf("%d active at %s/s", active, humanBytes(speed)))
+		parts = append(parts, Tf("%d active at %s/s", active, humanBytes(speed)))
 	case active > 0:
-		parts = append(parts, fmt.Sprintf("%d active", active))
+		parts = append(parts, Tf("%d active", active))
 	}
 	if queued > 0 {
-		parts = append(parts, fmt.Sprintf("%d queued", queued))
+		parts = append(parts, Tf("%d queued", queued))
 	}
 	if limit > 0 {
-		parts = append(parts, fmt.Sprintf("speed limit %s/s", humanBytes(limit)))
+		parts = append(parts, Tf("speed limit %s/s", humanBytes(limit)))
 	}
 	return strings.Join(parts, " · ")
 }
@@ -1286,27 +1287,27 @@ func (a *application) showRowMenu(pos fyne.Position) {
 		return
 	}
 	sel := a.selectedItems()
-	items := []*fyne.MenuItem{withKey(fyne.NewMenuItem("Show progress", func() { a.openProgressWindow(d.ID) }), fyne.KeyEnter, 0)}
+	items := []*fyne.MenuItem{withKey(fyne.NewMenuItem(T("Show progress"), func() { a.openProgressWindow(d.ID) }), fyne.KeyEnter, 0)}
 	if d.Status == engine.StatusComplete {
-		items = append(items, fyne.NewMenuItem("Open file", func() { openPath(d.FilePath) }))
+		items = append(items, fyne.NewMenuItem(T("Open file"), func() { openPath(d.FilePath) }))
 	}
-	refresh := fyne.NewMenuItem("Refresh download address…", func() { a.refreshAddress(*d) })
+	refresh := fyne.NewMenuItem(T("Refresh download address…"), func() { a.refreshAddress(*d) })
 	// Only for unfinished, stopped downloads: the engine refuses others.
 	refresh.Disabled = d.Status == engine.StatusComplete || d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued
 	items = append(items,
-		fyne.NewMenuItem("Open folder", func() { revealPath(d.FilePath) }),
+		fyne.NewMenuItem(T("Open folder"), func() { revealPath(d.FilePath) }),
 		refresh,
-		withKey(fyne.NewMenuItem("Pause / Resume", a.toggleSelected), fyne.KeySpace, 0),
+		withKey(fyne.NewMenuItem(T("Pause / Resume"), a.toggleSelected), fyne.KeySpace, 0),
 	)
-	move := fyne.NewMenuItem("Move to queue", nil)
+	move := fyne.NewMenuItem(T("Move to queue"), nil)
 	move.ChildMenu = a.queueSubmenu(sel)
 	items = append(items, move,
-		fyne.NewMenuItem("Move up in queue", func() { a.mgr.MoveInQueue(d.ID, -1); a.refresh() }),
-		fyne.NewMenuItem("Move down in queue", func() { a.mgr.MoveInQueue(d.ID, +1); a.refresh() }),
+		fyne.NewMenuItem(T("Move up in queue"), func() { a.mgr.MoveInQueue(d.ID, -1); a.refresh() }),
+		fyne.NewMenuItem(T("Move down in queue"), func() { a.mgr.MoveInQueue(d.ID, +1); a.refresh() }),
 	)
 	items = append(items,
-		withKey(fyne.NewMenuItem("Remove from list", func() { a.removeSelected(false) }), fyne.KeyDelete, 0),
-		withKey(fyne.NewMenuItem("Remove + delete file", func() { a.removeSelected(true) }), fyne.KeyDelete, fyne.KeyModifierShift),
+		withKey(fyne.NewMenuItem(T("Remove from list"), func() { a.removeSelected(false) }), fyne.KeyDelete, 0),
+		withKey(fyne.NewMenuItem(T("Remove + delete file"), func() { a.removeSelected(true) }), fyne.KeyDelete, fyne.KeyModifierShift),
 	)
 	pop := widget.NewPopUpMenu(fyne.NewMenu("", items...), a.win.Canvas())
 	pop.ShowAtPosition(pos)
@@ -1324,7 +1325,7 @@ func (a *application) queueSubmenu(sel []engine.Info) *fyne.Menu {
 		}))
 	}
 	if len(out) == 0 {
-		out = append(out, &fyne.MenuItem{Label: "(no queues)", Disabled: true})
+		out = append(out, &fyne.MenuItem{Label: T("(no queues)"), Disabled: true})
 	}
 	return fyne.NewMenu("", out...)
 }
@@ -1454,13 +1455,13 @@ func (a *application) removeSelected(withFile bool) {
 	}
 	what := fmt.Sprintf("%q", sel[0].FileName)
 	if len(sel) > 1 {
-		what = fmt.Sprintf("%d downloads", len(sel))
+		what = Tf("%d downloads", len(sel))
 	}
-	msg := fmt.Sprintf("Remove %s from the list? (files are kept)", what)
+	msg := Tf("Remove %s from the list? (files are kept)", what)
 	if withFile {
-		msg = fmt.Sprintf("Remove %s from the list and delete the files from disk?", what)
+		msg = Tf("Remove %s from the list and delete the files from disk?", what)
 	}
-	dialogConfirm(a.win, "Delete", msg, func(yes bool) {
+	dialogConfirm(a.win, T("Delete"), msg, func(yes bool) {
 		if !yes {
 			return
 		}
@@ -1517,7 +1518,7 @@ func etaText(d engine.Info) string {
 	}
 	m, s := int(secs)/60, int(secs)%60
 	if m > 0 {
-		return fmt.Sprintf("%dm %ds", m, s)
+		return Tf("%dm %ds", m, s)
 	}
-	return fmt.Sprintf("%ds", s)
+	return Tf("%ds", s)
 }

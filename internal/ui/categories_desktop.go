@@ -43,9 +43,9 @@ func newCategoryEditor(win fyne.Window, defs []engine.CategoryDef, dirs map[stri
 		e.store()
 		e.load(c)
 	})
-	e.newBtn = widget.NewButtonWithIcon("New…", theme.ContentAddIcon(), e.add)
-	e.delBtn = widget.NewButtonWithIcon("Delete", theme.DeleteIcon(), e.remove)
-	e.resetBtn = widget.NewButton("Defaults", e.reset)
+	e.newBtn = widget.NewButtonWithIcon(T("New…"), theme.ContentAddIcon(), e.add)
+	e.delBtn = widget.NewButtonWithIcon(T("Delete"), theme.DeleteIcon(), e.remove)
+	e.resetBtn = widget.NewButton(T("Defaults"), e.reset)
 	e.sel.SetSelected(e.defs[0].Name)
 	return e
 }
@@ -84,7 +84,7 @@ func (e *categoryEditor) load(name string) {
 		e.exts.SetText("")
 		e.exts.Disable()
 		e.delBtn.Disable()
-		e.note.SetText("Other takes every file the categories above do not claim.")
+		e.note.SetText(T("Other takes every file the categories above do not claim."))
 		return
 	}
 	e.exts.Enable()
@@ -92,7 +92,7 @@ func (e *categoryEditor) load(name string) {
 	if i := e.index(name); i >= 0 {
 		e.exts.SetText(strings.Join(e.defs[i].Exts, " "))
 	}
-	e.note.SetText("Separate extensions with spaces. An extension listed in two categories belongs to the first.")
+	e.note.SetText(T("Separate extensions with spaces. An extension listed in two categories belongs to the first."))
 }
 
 func (e *categoryEditor) refresh(selectName string) {
@@ -103,14 +103,14 @@ func (e *categoryEditor) refresh(selectName string) {
 
 func (e *categoryEditor) add() {
 	name := widget.NewEntry()
-	name.SetPlaceHolder("Comics")
-	dialog.ShowForm("New category", "Add", "Cancel",
-		[]*widget.FormItem{widget.NewFormItem("Name", name)}, func(ok bool) {
+	name.SetPlaceHolder(T("Comics"))
+	dialog.ShowForm(T("New category"), T("Add"), T("Cancel"),
+		[]*widget.FormItem{widget.NewFormItem(T("Name"), name)}, func(ok bool) {
 			if !ok {
 				return
 			}
 			if msg := e.addNamed(name.Text); msg != "" {
-				dialog.ShowInformation("New category", msg, e.win)
+				dialog.ShowInformation(T("New category"), msg, e.win)
 				return
 			}
 			e.win.Canvas().Focus(e.exts)
@@ -122,9 +122,9 @@ func (e *categoryEditor) addNamed(name string) string {
 	n := strings.TrimSpace(name)
 	switch {
 	case n == "":
-		return "Enter a name."
+		return T("Enter a name.")
 	case e.has(n):
-		return "There is already a category named " + n + "."
+		return Tf("There is already a category named %s.", n)
 	case strings.ContainsAny(n, `\/:*?"<>|`):
 		return `A category name is also a folder name, so it cannot contain \ / : * ? " < > |.`
 	}

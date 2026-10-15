@@ -12,6 +12,12 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- The desktop window speaks Indonesian. It follows the system language by
+  default; Options → General → Language can keep it in English or
+  Indonesian (after ODM starts again). Fyne's own texts (dialog buttons,
+  the file dialog, the copy and paste menu) follow too. Category and queue
+  names, which are the user's own, and messages from the download engine
+  stay as they are.
 - The web UI looks and works like the desktop window: the same colours,
   icons, toolbar, category and queue tree, columns, search box, status
   bar and keys (Ctrl+N, Ctrl+F, Ctrl+A, Enter, Space, Del, Shift+Del), a

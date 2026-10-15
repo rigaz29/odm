@@ -62,32 +62,36 @@ type schedulerView struct {
 	limMB, limHours *widget.Entry
 }
 
-const (
-	modeOnce  = "Once at"
-	modeDaily = "Daily"
+// The start modes, in English: the radio buttons show T(mode).
+var (
+	modeOnce  = markT("Once at")
+	modeDaily = markT("Daily")
 )
 
 // The "when done" choices, in the order shown, with the action each runs.
+// The radio buttons show T(label).
 var finishChoices = []struct{ label, action string }{
-	{"Do nothing", ""},
-	{"Exit ODM", engine.ActionExit},
-	{"Sleep", engine.ActionSleep},
-	{"Hibernate", engine.ActionHibernate},
-	{"Turn off computer", engine.ActionShutdown},
+	{markT("Do nothing"), ""},
+	{markT("Exit ODM"), engine.ActionExit},
+	{markT("Sleep"), engine.ActionSleep},
+	{markT("Hibernate"), engine.ActionHibernate},
+	{markT("Turn off computer"), engine.ActionShutdown},
 }
 
+// finishLabel is the shown label of the choice that runs action.
 func finishLabel(action string) string {
 	for _, c := range finishChoices {
 		if c.action == action {
-			return c.label
+			return T(c.label)
 		}
 	}
-	return finishChoices[0].label
+	return T(finishChoices[0].label)
 }
 
+// finishAction is the action of the choice shown as label.
 func finishAction(label string) string {
 	for _, c := range finishChoices {
-		if c.label == label {
+		if T(c.label) == label {
 			return c.action
 		}
 	}
@@ -105,7 +109,7 @@ func (a *application) openScheduler() {
 	for q, sc := range st.Schedules {
 		v.sched[q] = sc
 	}
-	v.win = a.fyneApp.NewWindow("Scheduler")
+	v.win = a.fyneApp.NewWindow(T("Scheduler"))
 	v.build()
 	v.reloadQueues()
 	v.select_(engine.DefaultQueue)
@@ -127,7 +131,7 @@ func (v *schedulerView) build() {
 			icon, label := row.Objects[0].(*widget.Icon), row.Objects[1].(*widget.Label)
 			if v.names[id] == limitsEntry {
 				icon.SetResource(theme.WarningIcon())
-				label.SetText("Download limits")
+				label.SetText(T("Download limits"))
 				return
 			}
 			icon.SetResource(queueIcon(v.sched[v.names[id]]))
@@ -139,34 +143,34 @@ func (v *schedulerView) build() {
 			v.select_(v.names[id])
 		}
 	}
-	newBtn := widget.NewButton("New queue", v.newQueue)
-	v.delBtn = widget.NewButton("Delete", v.deleteQueue)
-	left := container.NewBorder(widget.NewLabelWithStyle("Queues", fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
+	newBtn := widget.NewButton(T("New queue"), v.newQueue)
+	v.delBtn = widget.NewButton(T("Delete"), v.deleteQueue)
+	left := container.NewBorder(widget.NewLabelWithStyle(T("Queues"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true}),
 		container.NewGridWithColumns(2, newBtn, v.delBtn), nil, nil, framed(v.list))
 
 	v.queueBox = container.NewAppTabs(
-		container.NewTabItem("Schedule", v.buildSchedule()),
-		container.NewTabItem("Files in the queue", v.buildFiles()),
+		container.NewTabItem(T("Schedule"), v.buildSchedule()),
+		container.NewTabItem(T("Files in the queue"), v.buildFiles()),
 	)
 	v.limitBox = v.buildLimits()
 	v.title = widget.NewLabelWithStyle("", fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	v.body = container.NewStack(v.queueBox, v.limitBox)
 	right := container.NewBorder(v.title, nil, nil, nil, v.body)
 
-	v.startBtn = widget.NewButtonWithIcon("Start now", theme.MediaPlayIcon(), func() {
+	v.startBtn = widget.NewButtonWithIcon(T("Start now"), theme.MediaPlayIcon(), func() {
 		v.apply() // start with what is on screen
 		v.a.mgr.StartQueue(v.current)
 		v.a.refresh()
 		v.updateButtons()
 	})
-	v.stopBtn = widget.NewButtonWithIcon("Stop", theme.MediaStopIcon(), func() {
+	v.stopBtn = widget.NewButtonWithIcon(T("Stop"), theme.MediaStopIcon(), func() {
 		v.a.mgr.StopQueue(v.current)
 		v.a.refresh()
 		v.updateButtons()
 	})
-	v.applyBtn = widget.NewButton("Apply", func() { v.apply() })
+	v.applyBtn = widget.NewButton(T("Apply"), func() { v.apply() })
 	v.applyBtn.Importance = widget.HighImportance
-	closeBtn := widget.NewButton("Close", v.close)
+	closeBtn := widget.NewButton(T("Close"), v.close)
 	buttons := container.NewHBox(v.startBtn, v.stopBtn, layout.NewSpacer(), v.applyBtn, closeBtn)
 
 	split := container.NewHSplit(left, container.NewBorder(nil, buttons, nil, nil, right))
@@ -193,26 +197,26 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 		e.OnChanged = func(string) { mark() }
 		return e
 	}
-	v.syncOn = check("Synchronization queue: check finished files and download them again when they change on the server")
-	v.onStartup = check("Start download on ODM startup")
-	v.startOn = check("Start download at")
+	v.syncOn = check(T("Synchronization queue: check finished files and download them again when they change on the server"))
+	v.onStartup = check(T("Start download on ODM startup"))
+	v.startOn = check(T("Start download at"))
 	v.startAt = entry("HH:MM")
-	v.mode = widget.NewRadioGroup([]string{modeOnce, modeDaily}, func(string) { mark(); v.syncEnabled() })
+	v.mode = widget.NewRadioGroup([]string{T(modeOnce), T(modeDaily)}, func(string) { mark(); v.syncEnabled() })
 	v.mode.Horizontal = true
 	v.onceDate = widget.NewDateEntry()
 	v.onceDate.OnChanged = func(*time.Time) { mark() }
 	dayGrid := container.NewGridWithColumns(4)
-	for _, d := range []string{"Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"} {
+	for _, d := range []string{T("Sunday"), T("Monday"), T("Tuesday"), T("Wednesday"), T("Thursday"), T("Friday"), T("Saturday")} {
 		c := check(d)
 		v.days = append(v.days, c)
 		dayGrid.Add(c)
 	}
-	v.stopOn = check("Stop download at")
+	v.stopOn = check(T("Stop download at"))
 	v.stopAt = entry("HH:MM")
-	v.retryOn = check("Number of retries for each file if downloading failed:")
+	v.retryOn = check(T("Number of retries for each file if downloading failed:"))
 	v.retries = entry("10")
-	v.openOn = check("Open the following file when done:")
-	v.openPath = entry("file to open")
+	v.openOn = check(T("Open the following file when done:"))
+	v.openPath = entry(T("file to open"))
 	browse := widget.NewButton("…", func() {
 		dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
 			if err == nil && r != nil {
@@ -223,11 +227,11 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 	})
 	var labels []string
 	for _, c := range finishChoices {
-		labels = append(labels, c.label)
+		labels = append(labels, T(c.label))
 	}
 	v.finish = widget.NewRadioGroup(labels, func(string) { mark() })
 	v.finish.Horizontal = true
-	v.repeatOn = check("Start the queue again every")
+	v.repeatOn = check(T("Start the queue again every"))
 	v.repeatMins = entry("60")
 
 	fixed := func(o fyne.CanvasObject, w float32) fyne.CanvasObject {
@@ -235,23 +239,23 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 	}
 	return container.NewVScroll(container.NewVBox(
 		v.syncOn,
-		schedHint("The new copy replaces the local file once it is complete. With \"Start the queue again\" below, the check runs every so many minutes."),
+		schedHint(T("The new copy replaces the local file once it is complete. With \"Start the queue again\" below, the check runs every so many minutes.")),
 		widget.NewSeparator(),
 		v.onStartup,
 		widget.NewSeparator(),
 		container.NewHBox(v.startOn, fixed(v.startAt, 90)),
 		container.NewHBox(v.mode, fixed(v.onceDate, 170)),
 		container.New(layout.NewCustomPaddedLayout(0, 0, 24, 0), dayGrid),
-		container.NewHBox(v.repeatOn, fixed(v.repeatMins, 70), widget.NewLabel("minutes, until it is stopped")),
+		container.NewHBox(v.repeatOn, fixed(v.repeatMins, 70), widget.NewLabel(T("minutes, until it is stopped"))),
 		widget.NewSeparator(),
 		container.NewHBox(v.stopOn, fixed(v.stopAt, 90)),
 		container.NewHBox(v.retryOn, fixed(v.retries, 70)),
 		widget.NewSeparator(),
 		v.openOn,
 		container.NewBorder(nil, nil, nil, browse, v.openPath),
-		widget.NewLabel("When the queue has finished:"),
+		widget.NewLabel(T("When the queue has finished:")),
 		v.finish,
-		schedHint("A queue that starts again is never finished, so these do not run for it."),
+		schedHint(T("A queue that starts again is never finished, so these do not run for it.")),
 	))
 }
 
@@ -290,7 +294,7 @@ func (v *schedulerView) buildFiles() fyne.CanvasObject {
 	v.files.ShowHeaderColumn = false
 	v.files.CreateHeader = func() fyne.CanvasObject { return newHeaderLabel(nil) }
 	v.files.UpdateHeader = func(id widget.TableCellID, o fyne.CanvasObject) {
-		o.(*headerLabel).SetText([]string{"File Name", "Size", "Status", "Time left"}[id.Col])
+		o.(*headerLabel).SetText([]string{T("File Name"), T("Size"), T("Status"), T("Time left")}[id.Col])
 	}
 	v.files.OnSelected = func(id widget.TableCellID) {
 		v.selRow = id.Row
@@ -326,9 +330,9 @@ func (v *schedulerView) buildFiles() fyne.CanvasObject {
 		widget.NewButtonWithIcon("", theme.MoveUpIcon(), func() { move(-1) }),
 		widget.NewButtonWithIcon("", theme.DeleteIcon(), remove),
 	)
-	top := container.NewHBox(widget.NewLabel("Download"),
+	top := container.NewHBox(widget.NewLabel(T("Download")),
 		container.NewGridWrap(fyne.NewSize(56, v.parallel.MinSize().Height), v.parallel),
-		widget.NewLabel("files at the same time"))
+		widget.NewLabel(T("files at the same time")))
 	return container.NewBorder(top, tools, nil, nil, framed(v.files))
 }
 
@@ -340,19 +344,19 @@ func (v *schedulerView) buildLimits() fyne.CanvasObject {
 			v.updateButtons()
 		}
 	}
-	v.limOn = widget.NewCheck("Download limits", func(bool) { mark(); v.syncEnabled() })
+	v.limOn = widget.NewCheck(T("Download limits"), func(bool) { mark(); v.syncEnabled() })
 	v.limMB = widget.NewEntry()
 	v.limMB.OnChanged = func(string) { mark() }
 	v.limHours = widget.NewEntry()
 	v.limHours.OnChanged = func(string) { mark() }
-	v.limWarn = widget.NewCheck("Show a warning when downloads are stopped", func(bool) { mark() })
+	v.limWarn = widget.NewCheck(T("Show a warning when downloads are stopped"), func(bool) { mark() })
 	box := func(e *widget.Entry) fyne.CanvasObject {
 		return container.NewGridWrap(fyne.NewSize(70, e.MinSize().Height), e)
 	}
 	return container.NewVBox(
 		v.limOn,
-		container.NewHBox(widget.NewLabel("Download no more than"), box(v.limMB), widget.NewLabel("MBytes")),
-		container.NewHBox(widget.NewLabel("every"), box(v.limHours), widget.NewLabel("hours")),
+		container.NewHBox(widget.NewLabel(T("Download no more than")), box(v.limMB), widget.NewLabel(T("MBytes"))),
+		container.NewHBox(widget.NewLabel(T("every")), box(v.limHours), widget.NewLabel(T("hours"))),
 		v.limWarn,
 	)
 }
@@ -378,7 +382,7 @@ func (v *schedulerView) select_(name string) {
 	v.loading = true
 	defer func() { v.loading = false; v.syncEnabled(); v.updateButtons() }()
 	if name == limitsEntry {
-		v.title.SetText("Download limits")
+		v.title.SetText(T("Download limits"))
 		v.queueBox.Hide()
 		v.limitBox.Show()
 		v.limOn.SetChecked(v.limits.Enabled)
@@ -396,12 +400,12 @@ func (v *schedulerView) select_(name string) {
 	v.startOn.SetChecked(sc.StartEnabled)
 	v.startAt.SetText(orDefault(sc.StartAt, "23:00"))
 	if sc.OnceDate != "" {
-		v.mode.SetSelected(modeOnce)
+		v.mode.SetSelected(T(modeOnce))
 		if d, err := time.ParseInLocation("2006-01-02", sc.OnceDate, time.Local); err == nil {
 			v.onceDate.SetDate(&d)
 		}
 	} else {
-		v.mode.SetSelected(modeDaily)
+		v.mode.SetSelected(T(modeDaily))
 		now := time.Now()
 		v.onceDate.SetDate(&now)
 	}
@@ -461,7 +465,7 @@ func (v *schedulerView) store() {
 	sc.StartEnabled = v.startOn.Checked
 	sc.StartAt = strings.TrimSpace(v.startAt.Text)
 	sc.OnceDate = ""
-	if v.mode.Selected == modeOnce && v.onceDate.Date != nil {
+	if v.mode.Selected == T(modeOnce) && v.onceDate.Date != nil {
 		sc.OnceDate = v.onceDate.Date.Format("2006-01-02")
 	}
 	sc.Days = make([]bool, 7)
@@ -509,9 +513,9 @@ func (v *schedulerView) syncEnabled() {
 		}
 	}
 	set(v.startOn.Checked, v.startAt, v.mode)
-	set(v.startOn.Checked && v.mode.Selected == modeOnce, v.onceDate)
+	set(v.startOn.Checked && v.mode.Selected == T(modeOnce), v.onceDate)
 	for _, c := range v.days {
-		set(v.startOn.Checked && v.mode.Selected == modeDaily, c)
+		set(v.startOn.Checked && v.mode.Selected == T(modeDaily), c)
 	}
 	set(v.stopOn.Checked, v.stopAt)
 	set(v.retryOn.Checked, v.retries)
@@ -553,21 +557,21 @@ func (v *schedulerView) apply() bool {
 			on   bool
 			val  string
 			what string
-		}{{sc.StartEnabled, sc.StartAt, "Start"}, {sc.StopEnabled, sc.StopAt, "Stop"}} {
+		}{{sc.StartEnabled, sc.StartAt, T("Start")}, {sc.StopEnabled, sc.StopAt, T("Stop")}} {
 			if !t.on {
 				continue
 			}
 			if _, err := time.Parse("15:04", t.val); err != nil {
 				v.select_(q)
-				dialog.ShowInformation("Scheduler",
-					fmt.Sprintf("%s time %q in %q is not a time; use HH:MM, e.g. 23:00.", t.what, t.val, q), v.win)
+				dialog.ShowInformation(T("Scheduler"),
+					Tf("%s time %q in %q is not a time; use HH:MM, e.g. 23:00.", t.what, t.val, q), v.win)
 				return false
 			}
 		}
 		if sc.RepeatMinutes < 0 {
 			v.select_(q)
-			dialog.ShowInformation("Scheduler",
-				fmt.Sprintf("Enter how many minutes %q waits before it starts again (1 or more).", q), v.win)
+			dialog.ShowInformation(T("Scheduler"),
+				Tf("Enter how many minutes %q waits before it starts again (1 or more).", q), v.win)
 			return false
 		}
 	}
@@ -593,7 +597,7 @@ func (v *schedulerView) close() {
 		v.a.scheduler = nil
 		return
 	}
-	dialog.ShowConfirm("Scheduler", "Apply the changes before closing?", func(yes bool) {
+	dialog.ShowConfirm(T("Scheduler"), T("Apply the changes before closing?"), func(yes bool) {
 		if yes && !v.apply() {
 			return
 		}
@@ -604,16 +608,16 @@ func (v *schedulerView) close() {
 
 func (v *schedulerView) newQueue() {
 	entry := widget.NewEntry()
-	entry.SetText(fmt.Sprintf("Queue # %d", len(v.names)))
-	dialog.ShowCustomConfirm("Enter queue name", "OK", "Cancel",
-		container.NewVBox(widget.NewLabel("Enter a name for the new queue that will be displayed in the list of queues"), entry),
+	entry.SetText(Tf("Queue # %d", len(v.names)))
+	dialog.ShowCustomConfirm(T("Enter queue name"), T("OK"), T("Cancel"),
+		container.NewVBox(widget.NewLabel(T("Enter a name for the new queue that will be displayed in the list of queues")), entry),
 		func(ok bool) {
 			name := strings.TrimSpace(entry.Text)
 			if !ok || name == "" {
 				return
 			}
 			if !v.a.mgr.AddQueue(name) {
-				dialog.ShowInformation("Scheduler", "That queue already exists.", v.win)
+				dialog.ShowInformation(T("Scheduler"), T("That queue already exists."), v.win)
 				return
 			}
 			v.reloadQueues()
@@ -627,8 +631,8 @@ func (v *schedulerView) deleteQueue() {
 	if name == limitsEntry || name == engine.DefaultQueue {
 		return
 	}
-	dialog.ShowConfirm("Delete queue",
-		fmt.Sprintf("Delete %q? Its downloads move to %s.", name, engine.DefaultQueue), func(yes bool) {
+	dialog.ShowConfirm(T("Delete queue"),
+		Tf("Delete %q? Its downloads move to %s.", name, engine.DefaultQueue), func(yes bool) {
 			if !yes || !v.a.mgr.RemoveQueue(name) {
 				return
 			}

@@ -103,7 +103,13 @@ dikerjakan.
       dan kartu di layar sempit). Daftar sudah dicek visual (gelap, terang,
       390 px). Dialog web (New Download, Options, Progress) belum dicek
       visual: proses uji dihentikan sistem karena RAM menipis.
-- [ ] Bahasa Indonesia sebagai bahasa kedua. **B**
+- [ ] Bahasa Indonesia sebagai bahasa kedua. **B** Kode sudah masuk:
+      `T()`/`Tf()` di semua teks desktop (386 teks, `translations/id.json`),
+      teks bawaan Fyne (`fyne.id.json`), pilihan bahasa di Options →
+      General (ikut sistem / English / Bahasa Indonesia, berlaku setelah
+      restart). Test memastikan setiap teks punya terjemahan dan placeholder
+      `%d`/`%s` cocok. Belum: cek visual (teks Indonesia lebih panjang di
+      toolbar dan dialog), web UI, dan pesan error dari engine.
 
 ## Fase 4: perapian teknis
 

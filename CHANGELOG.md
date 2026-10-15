@@ -12,6 +12,15 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- The web UI looks and works like the desktop window: the same colours,
+  icons, toolbar, category and queue tree, columns, search box, status
+  bar and keys (Ctrl+N, Ctrl+F, Ctrl+A, Enter, Space, Del, Shift+Del), a
+  New Download card with the result of the check, and a speed graph in
+  the progress window. It follows the browser's light or dark setting, or
+  keeps one (the palette button, or Options). On a narrow screen the
+  categories move into a drawer and the list becomes cards.
+- `POST /api/queues/{name}/start` and `/stop` start and stop a queue
+  (`*` for all of them), for the web UI's Start Queue and Stop Queue.
 - The New Download window shows what the check of the address found as a
   card under the form: the file's type icon, name, size, type and server,
   and whether it can be resumed, or a stream, or why the check failed,

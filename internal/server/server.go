@@ -55,6 +55,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/downloads/{id}/options", s.handleOptions)
 	mux.HandleFunc("DELETE /api/downloads/{id}", s.handleDelete)
 	mux.HandleFunc("POST /api/actions/{action}", s.handleBatch)
+	mux.HandleFunc("POST /api/queues/{name}/{action}", s.handleQueue)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("POST /api/show", func(w http.ResponseWriter, _ *http.Request) {
 		if s.OnShow == nil {
@@ -305,6 +306,22 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) {
 		s.mgr.ResumeAll()
 	case "clear-completed":
 		s.mgr.ClearCompleted()
+	default:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
+		return
+	}
+	s.Broadcast()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleQueue starts or stops a queue; the name "*" means every queue.
+func (s *Server) handleQueue(w http.ResponseWriter, r *http.Request) {
+	name := r.PathValue("name")
+	switch r.PathValue("action") {
+	case "start":
+		s.mgr.StartQueue(name)
+	case "stop":
+		s.mgr.StopQueue(name)
 	default:
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "unknown action"})
 		return

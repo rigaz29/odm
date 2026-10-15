@@ -98,6 +98,11 @@ dikerjakan.
       Shift+Del (hapus beserta file), label shortcut di menu, dan Help →
       Keyboard shortcuts. Sekalian menghapus item "Quit" ganda di menu Tasks.
 - [ ] Web UI diseragamkan dengan desktop, responsif, mode terang. **S**
+      Kode sudah masuk (palet, ikon, toolbar, pohon kategori, kolom,
+      pencarian, status bar, shortcut, kartu probe, grafik, laci kategori
+      dan kartu di layar sempit). Daftar sudah dicek visual (gelap, terang,
+      390 px). Dialog web (New Download, Options, Progress) belum dicek
+      visual: proses uji dihentikan sistem karena RAM menipis.
 - [ ] Bahasa Indonesia sebagai bahasa kedua. **B**
 
 ## Fase 4: perapian teknis

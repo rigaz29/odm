@@ -1,150 +1,191 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="system">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="color-scheme" content="light dark" />
 <title>Ochi Download Manager</title>
+<script src="/theme.js"></script>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 <div class="app">
-  <header class="titlebar">
-    <div class="brand"><span class="dot"></span> Ochi Download Manager</div>
-    <div class="stat" id="globalStat">idle</div>
+  <header class="toolbar">
+    <button id="navToggle" class="tool nav-toggle" title="Categories" aria-label="Categories" data-icon="menu"></button>
+    <div class="tools" id="tools">
+      <button class="tool" data-act="add" data-icon="add" data-tint="add" title="Add URL (Ctrl+N)"><span>Add URL</span></button>
+      <button class="tool" data-act="resume" data-icon="download" data-tint="run"><span>Resume</span></button>
+      <button class="tool" data-act="stop" data-icon="stop" data-tint="stop"><span>Stop</span></button>
+      <button class="tool" data-act="stop-all" data-icon="pause" data-tint="stop"><span>Stop All</span></button>
+      <button class="tool" data-act="delete" data-icon="delete" data-tint="delete" title="Delete (Del)"><span>Delete</span></button>
+      <button class="tool" data-act="clear-done" data-icon="clear" data-tint="delete"><span>Clear Done</span></button>
+      <span class="sep"></span>
+      <button class="tool" data-act="options" data-icon="settings" data-tint="config"><span>Options</span></button>
+      <button class="tool" data-act="start-queue" data-icon="play" data-tint="queue"><span>Start Queue</span></button>
+      <button class="tool" data-act="stop-queue" data-icon="stop" data-tint="queue"><span>Stop Queue</span></button>
+      <span class="sep"></span>
+      <button class="tool" data-act="progress" data-icon="info" data-tint="run" title="Progress (Enter)"><span>Progress</span></button>
+      <button class="tool" data-act="folder" data-icon="folderOpen" data-tint="sched"><span>Open folder</span></button>
+    </div>
+    <label class="search">
+      <i data-icon="search"></i>
+      <input id="search" type="search" placeholder="Search downloads (Ctrl+F)" autocomplete="off" />
+    </label>
+    <button id="themeBtn" class="tool theme-btn" data-icon="palette" title="Theme"></button>
   </header>
 
-  <div class="toolbar">
-    <button data-act="add">＋<span>Add URL</span></button>
-    <button data-act="resume" class="ghost">▶<span>Resume</span></button>
-    <button data-act="stop" class="ghost">■<span>Stop</span></button>
-    <button data-act="stop-all" class="ghost">⏹<span>Stop All</span></button>
-    <button data-act="delete" class="ghost">✕<span>Delete</span></button>
-    <button data-act="delete-completed" class="ghost">⌫<span>Clear Done</span></button>
-    <button data-act="options" class="ghost">⚙<span>Options</span></button>
-    <span class="spacer"></span>
-    <button data-act="pause-all" class="ghost">‖<span>Pause All</span></button>
-    <button data-act="resume-all" class="ghost">▶▶<span>Resume All</span></button>
-  </div>
-
   <div class="main">
-    <aside class="sidebar" id="sidebar"></aside>
-    <section class="content">
+    <aside class="sidebar" id="sidebar">
+      <div class="side-head">Categories</div>
+      <nav id="tree"></nav>
+    </aside>
+    <div class="scrim" id="scrim"></div>
+    <section class="content" id="content">
       <table class="grid">
-        <colgroup>
-          <col class="c-name" /><col class="c-size" /><col class="c-prog" />
-          <col class="c-status" /><col class="c-eta" /><col class="c-rate" /><col class="c-path" />
-        </colgroup>
         <thead>
           <tr>
-            <th data-sort="file_name">File Name</th>
-            <th data-sort="total" class="num">Size</th>
-            <th data-sort="progress" class="num">Progress</th>
-            <th data-sort="status">Status</th>
-            <th data-sort="eta" class="num">Time left</th>
-            <th data-sort="speed" class="num">Transfer rate</th>
-            <th data-sort="dir">Path</th>
+            <th data-col="name" class="c-name">File Name</th>
+            <th data-col="queue" class="c-q">Q</th>
+            <th data-col="size" class="c-size">Size</th>
+            <th data-col="status" class="c-status">Status</th>
+            <th data-col="eta" class="c-eta">Time left</th>
+            <th data-col="rate" class="c-rate">Transfer rate</th>
+            <th data-col="last" class="c-last">Last attempt</th>
+            <th data-col="desc" class="c-desc">Description</th>
           </tr>
         </thead>
         <tbody id="rows"></tbody>
       </table>
-      <div id="empty" class="empty hidden">No downloads. Use <b>Add URL</b> to start one.</div>
+      <div id="empty" class="empty hidden"></div>
     </section>
   </div>
+
+  <footer class="statusbar">
+    <span id="stLeft"></span>
+    <span id="stRight"></span>
+  </footer>
 </div>
 
-<!-- Add / "New Download" -->
-<dialog id="addDialog" class="fileinfo">
-  <form method="dialog" id="addForm">
+<!-- New Download -->
+<dialog id="addDialog">
+  <form method="dialog" id="addForm" class="dlg">
     <h2>New Download</h2>
-    <div class="fi">
-      <div class="fi-fields">
-        <label>URL<input id="url" type="text" autocomplete="off" placeholder="https://host/file.zip" /></label>
-        <label>Category<select id="category"></select></label>
-        <label>Save folder<input id="dir" type="text" /></label>
-        <label>File name<input id="fname" type="text" /></label>
-        <label>Connections<input id="conns" type="number" min="1" max="32" /></label>
-        <label>Description<input id="desc" type="text" /></label>
-      </div>
-      <div class="fi-side">
-        <div class="fi-icon" id="fiIcon">▤</div>
-        <div id="fiSize" class="muted">—</div>
-        <div id="fiType" class="muted"></div>
-      </div>
+    <div class="form">
+      <label for="url">URL</label><input id="url" type="text" autocomplete="off" placeholder="https://host/file.zip" />
+      <label for="category">Category</label><select id="category"></select>
+      <label for="dir">Save folder</label><input id="dir" type="text" />
+      <label for="fname">File name</label><input id="fname" type="text" />
+      <label for="desc">Description</label><input id="desc" type="text" />
+      <label for="conns">Connections</label><input id="conns" type="number" min="1" max="32" />
+      <label for="queue">Queue</label><select id="queue"></select>
     </div>
-    <div class="dlg-actions">
-      <button value="later" class="ghost">Download Later</button>
+    <div class="card" id="probeCard">
+      <div class="card-icon" id="pcIcon"></div>
+      <div class="card-text">
+        <div class="card-title" id="pcTitle"></div>
+        <div class="card-detail" id="pcDetail"></div>
+      </div>
+      <span class="badge" id="pcBadge"></span>
+    </div>
+    <div class="actions">
+      <button value="later" class="ghost" data-icon="add">Download Later</button>
       <button value="cancel" class="ghost">Cancel</button>
-      <button id="btnStart" value="ok">Start Download</button>
+      <button value="ok" class="primary" data-icon="check">Start Download</button>
     </div>
   </form>
 </dialog>
 
 <!-- Options -->
 <dialog id="optionsDialog">
-  <form method="dialog" id="optionsForm">
+  <form method="dialog" id="optionsForm" class="dlg">
     <h2>Options</h2>
-    <label>Default folder<input id="setDir" type="text" /></label>
-    <label>Connections per file<input id="setConns" type="number" min="1" max="32" /></label>
-    <label>Simultaneous downloads<input id="setConcurrent" type="number" min="1" max="16" /></label>
-    <label>Global speed limit (KB/s, 0 = off)<input id="setLimit" type="number" min="0" /></label>
+    <div class="section">Downloads</div>
+    <div class="form">
+      <label for="setDir">Default folder</label><input id="setDir" type="text" />
+      <label for="setConns">Connections per file</label><input id="setConns" type="number" min="1" max="32" />
+      <label for="setConcurrent">Downloads at once</label><input id="setConcurrent" type="number" min="1" max="16" />
+      <label for="setLimit">Speed limit (KB/s)</label>
+      <span class="inline"><input id="setLimit" type="number" min="0" /><label class="check"><input id="setLimitOn" type="checkbox" /> On</label></span>
+    </div>
     <label class="check"><input id="setCategories" type="checkbox" /> Put files in category subfolders</label>
-    <label class="check"><input id="setClipboard" type="checkbox" /> Watch clipboard for downloadable URLs (Windows)</label>
-    <div class="dlg-actions">
-      <button value="cancel" class="ghost">Close</button>
-      <button id="btnSaveSettings" value="ok">Save</button>
+    <label class="check"><input id="setClipboard" type="checkbox" /> Start downloading addresses copied to the clipboard</label>
+    <div class="section">Appearance (this browser)</div>
+    <div class="form">
+      <label for="setTheme">Theme</label>
+      <select id="setTheme">
+        <option value="system">Same as the system</option>
+        <option value="light">Light</option>
+        <option value="dark">Dark</option>
+      </select>
+    </div>
+    <div class="actions">
+      <button value="cancel" class="ghost">Cancel</button>
+      <button value="ok" class="primary">OK</button>
     </div>
   </form>
 </dialog>
 
-<!-- Progress window -->
-<dialog id="progDialog" class="progress">
-  <div class="pg">
-    <div class="pg-head" id="pgTitle">Download</div>
+<!-- Progress -->
+<dialog id="progDialog" class="wide">
+  <div class="dlg">
+    <h2 class="pg-title"><span id="pgTitle">Download</span><button id="pgX" class="x" data-icon="cancel" aria-label="Close"></button></h2>
     <div class="tabs">
       <button data-tab="status" class="tab active">Download status</button>
-      <button data-tab="limit" class="tab">Speed limit</button>
-      <button data-tab="completion" class="tab">When finished</button>
+      <button data-tab="limit" class="tab">Speed limiter</button>
+      <button data-tab="completion" class="tab">Options on completion</button>
     </div>
-
     <div class="tab-panel" data-panel="status">
-      <table class="kv">
-        <tr><td>URL</td><td id="pgUrl"></td></tr>
-        <tr><td>Status</td><td id="pgStatus"></td></tr>
-        <tr><td>File size</td><td id="pgSize"></td></tr>
-        <tr><td>Downloaded</td><td id="pgDone"></td></tr>
-        <tr><td>Transfer rate</td><td id="pgRate"></td></tr>
-        <tr><td>Time left</td><td id="pgEta"></td></tr>
-        <tr><td>Resumable</td><td id="pgResume"></td></tr>
-      </table>
-      <div class="pbar big"><i id="pgBar"></i></div>
-      <div class="strip" id="pgStrip"></div>
-      <div class="strip-legend">Connection map</div>
-      <div id="pgConnWrap">
-        <table class="conns">
-          <thead><tr><th>N</th><th>Downloaded</th><th>Info</th></tr></thead>
-          <tbody id="pgConns"></tbody>
-        </table>
+      <div class="pg-url" id="pgUrl"></div>
+      <div class="kv">
+        <span>Status</span><span id="pgStatus"></span>
+        <span>File size</span><span id="pgSize"></span>
+        <span>Downloaded</span><span id="pgDone"></span>
+        <span>Transfer rate</span><span id="pgRate"></span>
+        <span>Time left</span><span id="pgEta"></span>
+        <span>Resumable</span><span id="pgResume"></span>
+      </div>
+      <div class="graph"><canvas id="pgGraph"></canvas><span id="pgPeak"></span></div>
+    </div>
+    <div class="tab-panel hidden" data-panel="limit">
+      <label class="check"><input id="pgLimitOn" type="checkbox" /> Use speed limiter</label>
+      <div class="form">
+        <label for="pgLimit">Maximum speed (KB/s)</label><input id="pgLimit" type="number" min="1" />
       </div>
     </div>
-
-    <div class="tab-panel hidden" data-panel="limit">
-      <label>Limit (KB/s, 0 = unlimited)<input id="pgLimit" type="number" min="0" /></label>
-      <div class="dlg-actions"><button id="pgApplyLimit">Apply</button></div>
-    </div>
-
     <div class="tab-panel hidden" data-panel="completion">
-      <label class="check"><input id="pgOpenWhenDone" type="checkbox" /> Open file when done</label>
+      <div class="kv"><span>Save to</span><span id="pgPath"></span></div>
+      <label class="check"><input id="pgOpenWhenDone" type="checkbox" /> Open the file when done</label>
     </div>
-
-    <div class="dlg-actions">
-      <button id="pgDetails" class="ghost">Hide details</button>
-      <button id="pgPause">Pause</button>
-      <button id="pgClose" class="ghost">Close</button>
+    <div class="pbar big"><i id="pgBar"></i><span id="pgPct"></span></div>
+    <div class="actions">
+      <button id="pgDetails" class="ghost left">Hide details</button>
+      <button id="pgPause" class="ghost">Pause</button>
+      <button id="pgCancel" class="ghost">Cancel</button>
+    </div>
+    <div id="pgDetailBox">
+      <div class="strip-legend" id="pgMapLabel">Connection map</div>
+      <div class="strip" id="pgStrip"></div>
+      <table class="conns">
+        <thead><tr><th>N.</th><th>Downloaded</th><th>Info</th></tr></thead>
+        <tbody id="pgConns"></tbody>
+      </table>
     </div>
   </div>
 </dialog>
 
-<div id="ctxMenu" class="ctx hidden"></div>
+<!-- Confirm -->
+<dialog id="askDialog">
+  <form method="dialog" class="dlg narrow">
+    <h2 id="askTitle"></h2>
+    <p id="askText"></p>
+    <div class="actions">
+      <button value="cancel" class="ghost">Cancel</button>
+      <button value="ok" class="primary" id="askOk">OK</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="ctxMenu" class="menu hidden"></div>
 <div id="toast" class="toast hidden"></div>
 
 <script src="/app.js"></script>

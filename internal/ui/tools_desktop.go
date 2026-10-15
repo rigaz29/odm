@@ -57,7 +57,7 @@ func (a *application) askTools() {
 	if dw, ok := w.(desktop.Window); ok {
 		dw.RequestAlwaysOnTop()
 	}
-	text := widget.NewLabel(T("YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 25 MB), check their checksums, and keep them up to date by itself. Download them now?"))
+	text := widget.NewLabel(T("YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 20 MB), check their checksums, and keep them up to date by itself. Download them now?"))
 	text.Wrapping = fyne.TextWrapWord
 	yes := widget.NewButtonWithIcon(T("Download now"), theme.DownloadIcon(), func() {
 		a.setToolUpdates(tools.ModeAuto)

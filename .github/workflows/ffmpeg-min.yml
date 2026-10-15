@@ -6,6 +6,8 @@
 #   git tag ffmpeg-min-n8.1-1 && git push origin ffmpeg-min-n8.1-1
 #
 # The source is FFmpeg's release tarball, checked against its signature.
+# The release is marked as a pre-release so that it never counts as this
+# repository's latest release, which ODM's update check reads.
 # The release carries the build's SHA-256, the script that made it and
 # FFmpeg's licence (LGPL 2.1 or later): what the LGPL asks of a binary.
 name: ffmpeg-min
@@ -21,7 +23,7 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Toolchain
         run: |
@@ -72,4 +74,4 @@ jobs:
         run: |
           gh release create "$GITHUB_REF_NAME" ffmpeg-min-win64.zip ffmpeg-min-win64.zip.sha256 \
             --title "ffmpeg (small build) $FFMPEG_VERSION for ODM" \
-            --notes-file pkg/README.txt --latest=false
+            --notes-file pkg/README.txt --prerelease --latest=false

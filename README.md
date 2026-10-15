@@ -97,7 +97,7 @@ queues. It runs as a desktop app, or headless with a JSON API.
   A YouTube address pasted into *New Download* works the same way. yt-dlp
   reads the page itself; the browser's cookies are not given to it.
 - yt-dlp and ffmpeg need no installing. The first time one is needed, ODM
-  asks whether it may download them (about 25 MB): yt-dlp from its own
+  asks whether it may download them (about 20 MB): yt-dlp from its own
   releases, and a small ffmpeg built for ODM that only copies streams
   between containers (`scripts/ffmpeg-min.sh`, published by the
   `ffmpeg-min` workflow, LGPL). Each is checked against the SHA-256 its

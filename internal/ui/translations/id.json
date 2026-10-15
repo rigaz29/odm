@@ -413,7 +413,7 @@
   "When the queue has finished:": "Saat antrean selesai:",
   "Yes": "Ya",
   "You are running the latest version (%s).": "Anda sudah memakai versi terbaru (%s).",
-  "YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 25 MB), check their checksums, and keep them up to date by itself. Download them now?": "Video YouTube membutuhkan yt-dlp, dan menggabungkan video dengan audionya membutuhkan ffmpeg. ODM bisa mengunduh keduanya dari rilis resminya (sekitar 25 MB), memeriksa checksum-nya, dan memperbaruinya sendiri. Unduh sekarang?",
+  "YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 20 MB), check their checksums, and keep them up to date by itself. Download them now?": "Video YouTube membutuhkan yt-dlp, dan menggabungkan video dengan audionya membutuhkan ffmpeg. ODM bisa mengunduh keduanya dari rilis resminya (sekitar 20 MB), memeriksa checksum-nya, dan memperbaruinya sendiri. Unduh sekarang?",
   "yt-dlp (downloads videos from YouTube and similar sites):": "yt-dlp (mengunduh video dari YouTube dan situs serupa):",
   "yt-dlp could not read the page just now": "yt-dlp belum bisa membaca halaman ini saat ini"
 }

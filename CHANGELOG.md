@@ -12,6 +12,7 @@ All notable changes to ODM are documented here. The format is based on
   downloads whose file name, address or description contains every word
   typed. It works together with the category or queue picked in the
   sidebar, and Esc clears it.
+- `POST /api/actions/stop-all`, which the web UI's Stop All button now uses.
 - The extension's toolbar icon shows how many videos, audio files and
   streams the page has loaded, and its popup lists them (from every frame,
   with how long ago each was seen) to send one to ODM. This covers pages
@@ -99,6 +100,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- Stop All (toolbar, Downloads menu, web UI) now also stops the queues that
+  were started, instead of doing the same as Pause All. A file resumed later
+  no longer carries its queue on, and a queue's exit or shut-down action can
+  no longer fire after everything was stopped. Pause All still leaves
+  started queues started.
 - The extension sends a media address as the page requested it, without
   removing any site's byte-range parameters; only the `#fragment` is
   dropped.

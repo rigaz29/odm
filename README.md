@@ -205,7 +205,7 @@ only.
 | POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` | Control a download |
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |
-| POST | `/api/actions/pause-all` \| `/resume-all` \| `/clear-completed` | Batch actions |
+| POST | `/api/actions/pause-all` \| `/stop-all` \| `/resume-all` \| `/clear-completed` | Batch actions (`stop-all` also stops started queues) |
 | GET | `/api/events` | Server-Sent Events stream of the list |
 
 ## How a download works

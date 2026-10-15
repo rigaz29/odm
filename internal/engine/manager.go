@@ -941,7 +941,8 @@ func (m *Manager) resume(d *Download) {
 	m.pump()
 }
 
-// PauseAll pauses every active or queued download.
+// PauseAll pauses every active or queued download. A started queue stays
+// started: resuming its files carries on with the queue.
 func (m *Manager) PauseAll() {
 	m.mu.Lock()
 	ids := append([]string(nil), m.order...)
@@ -949,6 +950,17 @@ func (m *Manager) PauseAll() {
 	for _, id := range ids {
 		m.Pause(id)
 	}
+}
+
+// StopAll pauses every download and stops every started queue, so nothing
+// carries on by itself: a file resumed later does not pick its queue back
+// up, and no queue's exit or shut-down action can fire afterwards. An exit
+// or shut-down already waiting for the other queues is dropped too.
+func (m *Manager) StopAll() {
+	m.mu.Lock()
+	m.pendingEnd = ""
+	m.mu.Unlock()
+	m.StopQueue("*")
 }
 
 // ResumeAll restarts every paused or failed download.

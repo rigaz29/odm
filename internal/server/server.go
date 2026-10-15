@@ -294,6 +294,8 @@ func (s *Server) handleBatch(w http.ResponseWriter, r *http.Request) {
 	switch r.PathValue("action") {
 	case "pause-all":
 		s.mgr.PauseAll()
+	case "stop-all":
+		s.mgr.StopAll()
 	case "resume-all":
 		s.mgr.ResumeAll()
 	case "clear-completed":

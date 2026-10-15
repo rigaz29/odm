@@ -329,7 +329,7 @@ func (a *application) build() {
 		tool("add", theme.ContentAddIcon(), colorToolAdd, "Add URL", a.openAddDialog),
 		tool("resume", theme.DownloadIcon(), colorToolRun, "Resume", a.resumeSelected),
 		tool("stop", theme.MediaStopIcon(), colorToolStop, "Stop", a.stopSelected),
-		tool("stopall", theme.MediaPauseIcon(), colorToolStop, "Stop All", func() { a.mgr.PauseAll(); a.refresh() }),
+		tool("stopall", theme.MediaPauseIcon(), colorToolStop, "Stop All", func() { a.mgr.StopAll(); a.refresh() }),
 		tool("delete", theme.DeleteIcon(), colorToolDelete, "Delete", a.deleteSelected),
 		tool("cleardone", theme.ContentClearIcon(), colorToolDelete, "Clear Done", func() { a.mgr.ClearCompleted(); a.refresh() }),
 		sep(),
@@ -592,7 +592,7 @@ func (a *application) buildMenu() *fyne.MainMenu {
 	)
 	downloads := fyne.NewMenu("Downloads",
 		fyne.NewMenuItem("Pause all", func() { a.mgr.PauseAll(); a.refresh() }),
-		fyne.NewMenuItem("Stop all", func() { a.mgr.PauseAll(); a.refresh() }),
+		fyne.NewMenuItem("Stop all (and stop queues)", func() { a.mgr.StopAll(); a.refresh() }),
 		fyne.NewMenuItem("Clear completed", func() { a.mgr.ClearCompleted(); a.refresh() }),
 		&fyne.MenuItem{IsSeparator: true},
 		fyne.NewMenuItem("Start queue", a.startQueue),

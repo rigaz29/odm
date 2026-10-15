@@ -92,7 +92,7 @@ async function toolbar(action) {
       case "stop":
         actionOnSelection((d) => post(`/api/downloads/${d.id}/pause`), () => post("/api/actions/pause-all"));
         break;
-      case "stop-all":
+      case "stop-all": await post("/api/actions/stop-all"); break;
       case "pause-all": await post("/api/actions/pause-all"); break;
       case "resume-all": await post("/api/actions/resume-all"); break;
       case "delete": {

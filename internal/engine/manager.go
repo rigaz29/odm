@@ -70,6 +70,9 @@ type Manager struct {
 	// authz answers authentication challenges for requests the manager
 	// sends itself (the Add window's probe, a new address, grabber pages).
 	authz *authorizer
+	// repeatFrom holds when each queue was last started, for queues that
+	// start again every so many minutes; a stopped queue has no entry.
+	repeatFrom map[string]time.Time
 }
 
 // NewManager builds a manager from persisted settings.
@@ -91,6 +94,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 		limiter:   NewLimiter(settings.EffectiveSpeedLimit()),
 
 		schedFired: map[string]string{},
+		repeatFrom: map[string]time.Time{},
 	}
 	m.authz = newAuthorizer(m.credentials)
 	return m
@@ -199,17 +203,19 @@ func (m *Manager) SetOnChange(fn func()) { m.onChange = fn }
 
 // Action is something the scheduler asks the host application to do.
 type Action struct {
-	Kind  string // ActionOpen, ActionExit, ActionShutdown or ActionLimit
+	Kind  string // one of the Action kinds below
 	Queue string // queue that triggered it, if any
 	Path  string // file to open, for ActionOpen
 }
 
 // Scheduler action kinds.
 const (
-	ActionOpen     = "open"
-	ActionExit     = "exit"
-	ActionShutdown = "shutdown"
-	ActionLimit    = "limit" // download limit reached; downloads were paused
+	ActionOpen      = "open"
+	ActionExit      = "exit"
+	ActionSleep     = "sleep"     // ODM keeps running after the computer wakes
+	ActionHibernate = "hibernate" // likewise
+	ActionShutdown  = "shutdown"
+	ActionLimit     = "limit" // download limit reached; downloads were paused
 )
 
 type limitSample struct {
@@ -482,6 +488,7 @@ func (m *Manager) RemoveQueue(name string) bool {
 	delete(next.Schedules, name)
 	m.settings = next
 	delete(m.queueRun, name)
+	delete(m.repeatFrom, name)
 	var moved []*Download
 	for _, d := range m.downloads {
 		if queueOf(d) == name {
@@ -502,8 +509,17 @@ func (m *Manager) RemoveQueue(name string) bool {
 
 // StartQueue resumes every unfinished download of a queue ("*" = all queues)
 // and runs each started queue sequentially, in queue order.
-func (m *Manager) StartQueue(name string) {
+func (m *Manager) StartQueue(name string) { m.startQueueAt(name, time.Now()) }
+
+// startQueueAt is StartQueue at now, which also begins (or continues) the
+// repeat cycle of a queue set to start again every so many minutes.
+func (m *Manager) startQueueAt(name string, now time.Time) {
 	m.mu.Lock()
+	for _, q := range m.settings.Queues {
+		if queueMatches(q, name) {
+			m.repeatFrom[q] = now
+		}
+	}
 	ids := append([]string(nil), m.order...)
 	m.mu.Unlock()
 	var matched []*Download
@@ -540,6 +556,11 @@ func (m *Manager) StopQueue(name string) {
 	for q := range m.queueRun {
 		if queueMatches(q, name) {
 			delete(m.queueRun, q)
+		}
+	}
+	for q := range m.repeatFrom { // a stopped queue stops repeating
+		if queueMatches(q, name) {
+			delete(m.repeatFrom, q)
 		}
 	}
 	ids := append([]string(nil), m.order...)
@@ -1310,11 +1331,36 @@ func (m *Manager) checkSchedule(now time.Time) {
 			m.StartQueue(q)
 		}
 		// Stop only touches a queue the scheduler (or Start Queue) is running,
-		// so downloads started by hand in that queue are left alone.
-		if sc.StopEnabled && sc.StopAt == hm && m.isRunning(q) && m.firstToday(q+"\x00stop", day) {
+		// or one that is repeating, so downloads started by hand in that queue
+		// are left alone.
+		if sc.StopEnabled && sc.StopAt == hm && (m.isRunning(q) || m.repeating(q)) && m.firstToday(q+"\x00stop", day) {
 			m.StopQueue(q)
 		}
+		if sc.RepeatMinutes > 0 && m.repeatDue(q, sc.RepeatMinutes, now) {
+			m.startQueueAt(q, now)
+		}
 	}
+}
+
+// repeating reports whether q is in a repeat cycle: started, not stopped.
+func (m *Manager) repeating(q string) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	_, ok := m.repeatFrom[q]
+	return ok
+}
+
+// repeatDue reports whether a repeating queue should start again: it is in
+// a repeat cycle, is not running now (a paused file keeps it running), and
+// was last started at least minutes ago.
+func (m *Manager) repeatDue(q string, minutes int, now time.Time) bool {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	from, ok := m.repeatFrom[q]
+	if !ok || m.queueRun[q] {
+		return false
+	}
+	return !now.Before(from.Add(time.Duration(minutes) * time.Minute))
 }
 
 // startDay reports whether the start time applies on now's date: the one
@@ -1334,6 +1380,15 @@ func (m *Manager) isRunning(q string) bool {
 
 // QueueRunning reports whether a queue was started and is still working.
 func (m *Manager) QueueRunning(q string) bool { return m.isRunning(q) }
+
+// QueueRepeating reports whether a queue set to start again every so many
+// minutes is in its repeat cycle (started and not stopped), running or not.
+func (m *Manager) QueueRepeating(q string) bool {
+	m.mu.Lock()
+	sc := m.settings.Schedules[q]
+	m.mu.Unlock()
+	return sc.RepeatMinutes > 0 && m.repeating(q)
+}
 
 // firstToday reports whether action has not run yet on day, recording it.
 func (m *Manager) firstToday(action, day string) bool {
@@ -1357,14 +1412,14 @@ func (m *Manager) whenDone() {
 	var opens []Action
 	for _, q := range drained {
 		sc := m.settings.Schedules[q]
+		if sc.RepeatMinutes > 0 {
+			continue // it starts again; it has not finished
+		}
 		if sc.OpenWhenDone != "" {
 			opens = append(opens, Action{Kind: ActionOpen, Queue: q, Path: sc.OpenWhenDone})
 		}
-		switch {
-		case sc.ShutdownWhenDone:
-			m.pendingEnd = ActionShutdown
-		case sc.ExitWhenDone && m.pendingEnd == "":
-			m.pendingEnd = ActionExit
+		if a := sc.FinishAction(); finishRank(a) > finishRank(m.pendingEnd) {
+			m.pendingEnd = a
 		}
 	}
 	var end string

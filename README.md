@@ -50,8 +50,10 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - Named queues with a run order. Each queue can download a set number of files
   at once.
 - A scheduler per queue: start with ODM, start at a set time (once or on chosen
-  weekdays), stop at a set time, retry failed files, and open a file, exit or
-  shut down when the queue finishes.
+  weekdays), start again every so many minutes until stopped, stop at a set
+  time, retry failed files, and open a file, exit, sleep, hibernate or shut
+  down when the queue finishes (after a 30-second countdown that can be
+  cancelled).
 - Site logins (HTTP Digest or Basic, sent only to a host that asks), import
   and export of the download list, and a site
   grabber that crawls a page and queues the files it links to.

@@ -1255,7 +1255,7 @@ func (a *application) handleAction(act engine.Action) {
 		dialog.ShowInformation("Download limit reached", fmt.Sprintf(
 			"More than %d MB were downloaded in the last %d hours, so downloads were stopped.\n"+
 				"They can start again once the window has passed.", lim.MB, lim.Hours), a.win)
-	case engine.ActionExit, engine.ActionShutdown:
+	case engine.ActionExit, engine.ActionSleep, engine.ActionHibernate, engine.ActionShutdown:
 		a.confirmWhenDone(act.Kind)
 	}
 }
@@ -1264,10 +1264,12 @@ func (a *application) handleAction(act engine.Action) {
 // user can cancel a shutdown they did not expect.
 func (a *application) confirmWhenDone(action string) {
 	const wait = 30
-	verb := "ODM will exit"
-	if action == "shutdown" {
-		verb = "The computer will shut down"
-	}
+	verb := map[string]string{
+		engine.ActionExit:      "ODM will exit",
+		engine.ActionSleep:     "The computer will go to sleep",
+		engine.ActionHibernate: "The computer will hibernate",
+		engine.ActionShutdown:  "The computer will shut down",
+	}[action]
 	msg := widget.NewLabel("")
 	left := wait
 	update := func() { msg.SetText(fmt.Sprintf("All queues have finished.\n%s in %d s.", verb, left)) }
@@ -1312,7 +1314,14 @@ func (a *application) confirmWhenDone(action string) {
 }
 
 func (a *application) runWhenDone(action string) {
-	if action == "shutdown" {
+	switch action {
+	case engine.ActionSleep, engine.ActionHibernate:
+		// ODM keeps running and carries on after the computer wakes.
+		if err := osutil.Suspend(action == engine.ActionHibernate); err != nil {
+			dialog.ShowError(fmt.Errorf("could not %s: %w", action, err), a.win)
+		}
+		return
+	case engine.ActionShutdown:
 		if err := osutil.Shutdown(); err != nil {
 			dialog.ShowError(fmt.Errorf("could not shut down: %w", err), a.win)
 			return

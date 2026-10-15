@@ -18,6 +18,14 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- A queue can start again every so many minutes until it is stopped (by
+  hand, at its stop time or by Stop all), which picks up files added or
+  failed since. A repeating queue never counts as finished, so it runs no
+  finish action. Scheduler → Schedule.
+- A queue can put the computer to sleep or into hibernation when it
+  finishes, next to exiting ODM and shutting down; the choices are now one
+  list, and when queues finish together the strongest is carried out. ODM
+  keeps running after the computer wakes.
 - The New Download window offers the save folder chosen there last time,
   for downloads added by hand and those handed over by the browser. A
   folder that no longer exists, a new default folder, or turning the option

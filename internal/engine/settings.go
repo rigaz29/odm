@@ -53,10 +53,18 @@ type QueueSchedule struct {
 	// Retries re-queues a file that failed while the queue was running.
 	RetriesEnabled bool `json:"retries_enabled,omitempty"`
 	Retries        int  `json:"retries,omitempty"`
-	// What to do once the queue has run out of work on its own.
-	OpenWhenDone     string `json:"open_when_done,omitempty"` // file to open
-	ExitWhenDone     bool   `json:"exit_when_done,omitempty"`
-	ShutdownWhenDone bool   `json:"shutdown_when_done,omitempty"`
+	// What to do once the queue has run out of work on its own. At most one
+	// of exit, sleep, hibernate and shut down is kept (the strongest).
+	OpenWhenDone      string `json:"open_when_done,omitempty"` // file to open
+	ExitWhenDone      bool   `json:"exit_when_done,omitempty"`
+	SleepWhenDone     bool   `json:"sleep_when_done,omitempty"`
+	HibernateWhenDone bool   `json:"hibernate_when_done,omitempty"`
+	ShutdownWhenDone  bool   `json:"shutdown_when_done,omitempty"`
+	// RepeatMinutes starts the queue again that many minutes after it was
+	// last started, whenever it is not running, until it is stopped (by
+	// hand, at StopAt or by Stop all). 0 is off. A repeating queue never
+	// finishes, so the actions above do not run for it.
+	RepeatMinutes int `json:"repeat_minutes,omitempty"`
 	// Parallel is how many of the queue's files download at once.
 	Parallel int `json:"parallel,omitempty"`
 }
@@ -313,9 +321,61 @@ func (sc *QueueSchedule) normalize() {
 	if sc.Parallel < 1 {
 		sc.Parallel = 1
 	}
+	if sc.RepeatMinutes < 0 {
+		sc.RepeatMinutes = 0
+	}
+	// One finish action: the strongest of those ticked.
+	switch {
+	case sc.ShutdownWhenDone:
+		sc.ExitWhenDone, sc.SleepWhenDone, sc.HibernateWhenDone = false, false, false
+	case sc.HibernateWhenDone:
+		sc.ExitWhenDone, sc.SleepWhenDone = false, false
+	case sc.SleepWhenDone:
+		sc.ExitWhenDone = false
+	}
 	if sc.Retries <= 0 {
 		sc.Retries = 10
 	}
+}
+
+// FinishAction is the action the queue runs when it finishes on its own:
+// ActionShutdown, ActionHibernate, ActionSleep, ActionExit or "" for none.
+func (sc QueueSchedule) FinishAction() string {
+	switch {
+	case sc.ShutdownWhenDone:
+		return ActionShutdown
+	case sc.HibernateWhenDone:
+		return ActionHibernate
+	case sc.SleepWhenDone:
+		return ActionSleep
+	case sc.ExitWhenDone:
+		return ActionExit
+	}
+	return ""
+}
+
+// SetFinishAction ticks exactly the finish action named (or none for "").
+func (sc *QueueSchedule) SetFinishAction(action string) {
+	sc.ExitWhenDone = action == ActionExit
+	sc.SleepWhenDone = action == ActionSleep
+	sc.HibernateWhenDone = action == ActionHibernate
+	sc.ShutdownWhenDone = action == ActionShutdown
+}
+
+// finishRank orders finish actions: when several queues finish together,
+// the strongest one is the one carried out.
+func finishRank(action string) int {
+	switch action {
+	case ActionShutdown:
+		return 4
+	case ActionHibernate:
+		return 3
+	case ActionSleep:
+		return 2
+	case ActionExit:
+		return 1
+	}
+	return 0
 }
 
 // validClock reports whether s is an empty string or a HH:MM time.

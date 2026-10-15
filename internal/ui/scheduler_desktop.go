@@ -45,11 +45,11 @@ type schedulerView struct {
 	delBtn   *widget.Button
 
 	// Schedule tab
-	onStartup, startOn, stopOn, retryOn, openOn, exitOn, offOn *widget.Check
-	startAt, stopAt, retries, openPath                         *widget.Entry
-	mode                                                       *widget.RadioGroup
-	onceDate                                                   *widget.DateEntry
-	days                                                       []*widget.Check
+	onStartup, startOn, stopOn, retryOn, openOn, repeatOn *widget.Check
+	startAt, stopAt, retries, openPath, repeatMins        *widget.Entry
+	mode, finish                                          *widget.RadioGroup
+	onceDate                                              *widget.DateEntry
+	days                                                  []*widget.Check
 
 	// Files tab
 	parallel *widget.Entry
@@ -66,6 +66,33 @@ const (
 	modeOnce  = "Once at"
 	modeDaily = "Daily"
 )
+
+// The "when done" choices, in the order shown, with the action each runs.
+var finishChoices = []struct{ label, action string }{
+	{"Do nothing", ""},
+	{"Exit ODM", engine.ActionExit},
+	{"Sleep", engine.ActionSleep},
+	{"Hibernate", engine.ActionHibernate},
+	{"Turn off computer", engine.ActionShutdown},
+}
+
+func finishLabel(action string) string {
+	for _, c := range finishChoices {
+		if c.action == action {
+			return c.label
+		}
+	}
+	return finishChoices[0].label
+}
+
+func finishAction(label string) string {
+	for _, c := range finishChoices {
+		if c.label == label {
+			return c.action
+		}
+	}
+	return ""
+}
 
 func (a *application) openScheduler() {
 	if a.scheduler != nil {
@@ -193,8 +220,14 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 			}
 		}, v.win).Show()
 	})
-	v.exitOn = check("Exit ODM when done")
-	v.offOn = check("Turn off computer when done")
+	var labels []string
+	for _, c := range finishChoices {
+		labels = append(labels, c.label)
+	}
+	v.finish = widget.NewRadioGroup(labels, func(string) { mark() })
+	v.finish.Horizontal = true
+	v.repeatOn = check("Start the queue again every")
+	v.repeatMins = entry("60")
 
 	fixed := func(o fyne.CanvasObject, w float32) fyne.CanvasObject {
 		return container.NewGridWrap(fyne.NewSize(w, o.MinSize().Height), o)
@@ -205,14 +238,16 @@ func (v *schedulerView) buildSchedule() fyne.CanvasObject {
 		container.NewHBox(v.startOn, fixed(v.startAt, 90)),
 		container.NewHBox(v.mode, fixed(v.onceDate, 170)),
 		container.New(layout.NewCustomPaddedLayout(0, 0, 24, 0), dayGrid),
+		container.NewHBox(v.repeatOn, fixed(v.repeatMins, 70), widget.NewLabel("minutes, until it is stopped")),
 		widget.NewSeparator(),
 		container.NewHBox(v.stopOn, fixed(v.stopAt, 90)),
 		container.NewHBox(v.retryOn, fixed(v.retries, 70)),
 		widget.NewSeparator(),
 		v.openOn,
 		container.NewBorder(nil, nil, nil, browse, v.openPath),
-		v.exitOn,
-		v.offOn,
+		widget.NewLabel("When the queue has finished:"),
+		v.finish,
+		schedHint("A queue that starts again is never finished, so these do not run for it."),
 	))
 }
 
@@ -374,11 +409,24 @@ func (v *schedulerView) select_(name string) {
 	v.retries.SetText(fmt.Sprint(sc.Retries))
 	v.openOn.SetChecked(sc.OpenWhenDone != "")
 	v.openPath.SetText(sc.OpenWhenDone)
-	v.exitOn.SetChecked(sc.ExitWhenDone)
-	v.offOn.SetChecked(sc.ShutdownWhenDone)
+	v.finish.SetSelected(finishLabel(sc.FinishAction()))
+	v.repeatOn.SetChecked(sc.RepeatMinutes > 0)
+	mins := "60"
+	if sc.RepeatMinutes > 0 {
+		mins = fmt.Sprint(sc.RepeatMinutes)
+	}
+	v.repeatMins.SetText(mins)
 	v.parallel.SetText(fmt.Sprint(sc.Parallel))
 	v.selRow = -1
 	v.refreshFiles()
+}
+
+// schedHint is a small explanatory line under scheduler options.
+func schedHint(s string) *widget.Label {
+	l := widget.NewLabel(s)
+	l.Wrapping = fyne.TextWrapWord
+	l.Importance = widget.LowImportance
+	return l
 }
 
 func orDefault(s, def string) string {
@@ -414,8 +462,15 @@ func (v *schedulerView) store() {
 	if v.openOn.Checked {
 		sc.OpenWhenDone = strings.TrimSpace(v.openPath.Text)
 	}
-	sc.ExitWhenDone = v.exitOn.Checked
-	sc.ShutdownWhenDone = v.offOn.Checked
+	sc.SetFinishAction(finishAction(v.finish.Selected))
+	sc.RepeatMinutes = 0
+	if v.repeatOn.Checked {
+		sc.RepeatMinutes = -1 // apply refuses it unless a number is typed
+		fmt.Sscanf(strings.TrimSpace(v.repeatMins.Text), "%d", &sc.RepeatMinutes)
+		if sc.RepeatMinutes < 1 {
+			sc.RepeatMinutes = -1
+		}
+	}
 	fmt.Sscanf(v.parallel.Text, "%d", &sc.Parallel)
 	v.sched[v.current] = sc
 }
@@ -447,6 +502,9 @@ func (v *schedulerView) syncEnabled() {
 	set(v.stopOn.Checked, v.stopAt)
 	set(v.retryOn.Checked, v.retries)
 	set(v.openOn.Checked, v.openPath)
+	set(v.repeatOn.Checked, v.repeatMins)
+	set(!v.repeatOn.Checked, v.openOn, v.finish)
+	set(!v.repeatOn.Checked && v.openOn.Checked, v.openPath)
 	set(v.limOn.Checked, v.limMB, v.limHours, v.limWarn)
 }
 
@@ -460,8 +518,11 @@ func (v *schedulerView) updateButtons() {
 			b.Disable()
 		}
 	}
+	// A repeating queue waiting for its next start is not running, but Stop
+	// is how its repeating ends.
+	repeating := isQueue && v.a.mgr.QueueRepeating(v.current)
 	set(v.startBtn, isQueue && !running)
-	set(v.stopBtn, running)
+	set(v.stopBtn, running || repeating)
 	set(v.applyBtn, v.dirty)
 	set(v.delBtn, isQueue && v.current != engine.DefaultQueue)
 }
@@ -488,6 +549,12 @@ func (v *schedulerView) apply() bool {
 					fmt.Sprintf("%s time %q in %q is not a time; use HH:MM, e.g. 23:00.", t.what, t.val, q), v.win)
 				return false
 			}
+		}
+		if sc.RepeatMinutes < 0 {
+			v.select_(q)
+			dialog.ShowInformation("Scheduler",
+				fmt.Sprintf("Enter how many minutes %q waits before it starts again (1 or more).", q), v.win)
+			return false
 		}
 	}
 	next := v.a.mgr.Settings()

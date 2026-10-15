@@ -143,6 +143,10 @@ func main() {
 		switch act.Kind {
 		case engine.ActionOpen:
 			_ = osutil.Open(act.Path)
+		case engine.ActionSleep, engine.ActionHibernate:
+			if err := osutil.Suspend(act.Kind == engine.ActionHibernate); err != nil {
+				log.Printf("%s: %v", act.Kind, err)
+			}
 		case engine.ActionShutdown:
 			if err := osutil.Shutdown(); err != nil {
 				log.Println("shutdown:", err)

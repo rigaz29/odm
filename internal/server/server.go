@@ -51,6 +51,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/downloads", s.handleAdd)
 	mux.HandleFunc("GET /api/probe", s.handleProbe)
 	mux.HandleFunc("POST /api/probe/stream", s.handleProbeStream)
+	mux.HandleFunc("POST /api/probe/site", s.handleProbeSite)
 	mux.HandleFunc("GET /api/downloads/{id}", s.handleGet)
 	mux.HandleFunc("POST /api/downloads/{id}/{action}", s.handleAction)
 	mux.HandleFunc("POST /api/downloads/{id}/limit", s.handleLimit)
@@ -165,6 +166,13 @@ type addRequest struct {
 	// Quality is the label of one of the stream's qualities, as
 	// POST /api/probe/stream lists them. Empty: the best.
 	Quality string `json:"quality"`
+	// Site makes URL a video site's page (YouTube…) that yt-dlp
+	// downloads; Format is yt-dlp's format selector, as
+	// POST /api/probe/site lists them (empty: its best), and Estimate the
+	// expected size in bytes.
+	Site     bool   `json:"site"`
+	Format   string `json:"format"`
+	Estimate int64  `json:"estimate"`
 }
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -204,6 +212,17 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.Stream = &engine.StreamJob{Kind: k, Manifest: req.URL}
 		opts.StreamQuality = req.Quality
+	}
+	if req.Site {
+		if opts.Stream != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a download is a stream or a site page, not both"})
+			return
+		}
+		if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a site page must be an http(s) address"})
+			return
+		}
+		opts.Site = &engine.SiteJob{Format: strings.TrimSpace(req.Format), Estimate: req.Estimate}
 	}
 	if req.Prompt && s.OnPrompt != nil && !s.mgr.Settings().NoStartDialog && s.OnPrompt(opts) {
 		// The person decides in the window (it also handles duplicates).
@@ -294,6 +313,39 @@ func (s *Server) handleProbeStream(w http.ResponseWriter, r *http.Request) {
 		out.Qualities = append(out.Qualities, sq)
 	}
 	writeJSON(w, http.StatusOK, out)
+}
+
+// handleProbeSite asks yt-dlp what a video site's page offers, for the
+// browser extension's menu. Without yt-dlp it answers 503 with "missing";
+// a page it can never download (a live stream) 422 with "refused".
+func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL string `json:"url"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	req.URL = strings.TrimSpace(req.URL)
+	if !strings.HasPrefix(req.URL, "http://") && !strings.HasPrefix(req.URL, "https://") {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an http(s) page address is required"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 60*time.Second)
+	defer cancel()
+	c, err := s.mgr.ProbeSite(ctx, req.URL)
+	switch {
+	case errors.Is(err, engine.ErrNoYtDlp):
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": err.Error(), "missing": true})
+		return
+	case errors.Is(err, engine.ErrStreamRefused):
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error(), "refused": true})
+		return
+	case err != nil:
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"title": c.Title, "qualities": c.Qualities})
 }
 
 // handleProbe inspects a URL so the Add dialog can show size and file name.

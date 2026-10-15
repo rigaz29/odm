@@ -13,16 +13,51 @@
     return `${n.toFixed(i ? 2 : 0)} ${u[i]}`;
   }
 
-  // Streams first, in the order the player loaded them: a player reads the
-  // playlist listing every quality before the one quality it plays, so the
-  // first is usually the complete one. Files follow, largest first.
+  // The video of a site's page first, then streams in the order the
+  // player loaded them: a player reads the playlist listing every quality
+  // before the one quality it plays, so the first is usually the complete
+  // one. Files follow, largest first.
   function orderMedia(items) {
+    const sites = items.filter((i) => i.kind === "site");
     const streams = items.filter((i) => i.kind === "stream").sort((a, b) => (a.at || 0) - (b.at || 0));
-    const files = items.filter((i) => i.kind !== "stream").sort((a, b) => b.size - a.size);
-    return [...streams, ...files];
+    const files = items.filter((i) => i.kind !== "stream" && i.kind !== "site").sort((a, b) => b.size - a.size);
+    return [...sites, ...streams, ...files];
+  }
+
+  const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
+
+  // sitePage is the page yt-dlp is given for a video site's address, or ""
+  // when the address shows no single video. YouTube only for now: its
+  // player fetches signed pieces no extension can hand over, so yt-dlp
+  // reads the page. Embedded players (youtube-nocookie too) and short
+  // links become the watch page, so one video has one address.
+  function sitePage(href) {
+    let u;
+    try {
+      u = new URL(href);
+    } catch {
+      return "";
+    }
+    const host = u.hostname.toLowerCase().replace(/^www\./, "");
+    const parts = u.pathname.split("/").filter(Boolean);
+    let id = "";
+    if (host === "youtu.be") {
+      id = parts[0] || "";
+    } else if (host === "youtube.com" || host === "m.youtube.com" || host === "music.youtube.com" || host === "youtube-nocookie.com") {
+      if (parts[0] === "watch") id = u.searchParams.get("v") || "";
+      else if (["shorts", "embed", "live", "v"].includes(parts[0])) id = parts[1] || "";
+      if (host === "music.youtube.com" && YOUTUBE_ID.test(id)) return `https://music.youtube.com/watch?v=${id}`;
+    }
+    return YOUTUBE_ID.test(id) ? `https://www.youtube.com/watch?v=${id}` : "";
+  }
+
+  // siteTitle drops the site's name a page title ends with.
+  function siteTitle(title) {
+    return String(title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*YouTube( Music)?$/, "").trim();
   }
 
   function mediaLabel(it) {
+    if (it.kind === "site") return `${it.site || "Site"} video`;
     // Only headers were seen for a stream: whether its playlist lists every
     // quality or is one of them is known once ODM reads it.
     if (it.kind === "stream") return `${it.format || "Media"} stream`;
@@ -50,6 +85,10 @@
     const anyListing = ordered.some((it) => it.kind === "stream" && listing(info(it)));
     const out = [];
     for (const it of ordered) {
+      if (it.kind === "site") {
+        out.push(...siteEntries(it, info(it)));
+        continue;
+      }
       if (it.kind !== "stream") {
         out.push({ text: mediaLabel(it), item: it, at: it.at });
         continue;
@@ -76,6 +115,25 @@
     return out;
   }
 
+  // siteEntries are a site video's rows: its qualities as yt-dlp lists them
+  // (r is ODM's reply to a "site-formats" message), each item carrying
+  // yt-dlp's format, the container and the expected size.
+  function siteEntries(it, r) {
+    const name = mediaLabel(it);
+    if (!r) return [{ text: `${name} · reading qualities…`, at: it.at }];
+    if (r.ok && r.site) {
+      const out = [{ text: name, heading: true, at: it.at }];
+      for (const q of r.site.qualities) {
+        out.push({ text: qualityLabel(q), item: { ...it, format: q.format, ext: q.ext, estimate: q.estimate || 0 }, sub: true });
+      }
+      return out;
+    }
+    if (r.missing) return [{ text: `${name} · needs yt-dlp (see ODM's Options)`, at: it.at }];
+    if (r.refused) return [{ text: `${name} · ${r.error}`, at: it.at }];
+    // ODM could not ask yt-dlp just now; it picks the quality when it runs.
+    return [{ text: `${name} · best quality`, item: it, at: it.at }];
+  }
+
   // "12s ago", "3 min ago"; "" without a time.
   function ago(at, now) {
     if (!at) return "";
@@ -85,7 +143,7 @@
     return `${Math.round(s / 3600)} h ago`;
   }
 
-  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, ago };
+  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, sitePage, siteTitle, ago };
   // Always set: in a content script, a page element with id="module"
   // makes the global "module" look defined.
   root.odmMediaList = api;

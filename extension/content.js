@@ -12,9 +12,9 @@
   let host = null;
   let ui = null;
   // medialist.js runs first in the same content-script world.
-  const { fmtSize, menuEntries } = self.odmMediaList;
-  // ODM's replies about the streams (their qualities), by playlist URL;
-  // asked once each, again when the reply was a failure that may pass.
+  const { fmtSize, menuEntries, sitePage, siteTitle } = self.odmMediaList;
+  // ODM's replies about the streams and site pages (their qualities), by
+  // URL; asked once each, again when the reply was a failure that may pass.
   const infos = new Map();
   const asked = new Set();
 
@@ -74,8 +74,9 @@
     });
     ui.dl.addEventListener("click", (e) => {
       e.stopPropagation();
-      // A stream opens the menu too, to pick its quality.
-      if (items.length === 1 && items[0].kind !== "stream") send(items[0]);
+      // A stream or a site's video opens the menu too, to pick its quality.
+      const all = allItems();
+      if (all.length === 1 && all[0].kind === "file") send(all[0]);
       else toggleMenu();
     });
     document.documentElement.appendChild(host);
@@ -93,10 +94,11 @@
   // renderMenu lists the media, each stream with its qualities once ODM
   // has read its playlist, and asks ODM about streams not asked about yet.
   function renderMenu() {
-    for (const it of items) {
-      if (it.kind !== "stream" || asked.has(it.url)) continue;
+    const all = allItems();
+    for (const it of all) {
+      if (it.kind === "file" || asked.has(it.url)) continue;
       asked.add(it.url);
-      chrome.runtime.sendMessage({ type: "odm-stream-info", item: it }, (reply) => {
+      chrome.runtime.sendMessage({ type: "odm-media-info", item: it }, (reply) => {
         const r = chrome.runtime.lastError || !reply ? { ok: false, error: "ODM is not reachable" } : reply;
         infos.set(it.url, r);
         if (!r.ok && !r.refused) asked.delete(it.url); // ask again next time
@@ -104,7 +106,7 @@
       });
     }
     ui.menu.replaceChildren();
-    for (const e of menuEntries(items, infos)) {
+    for (const e of menuEntries(all, infos)) {
       const row = document.createElement("div");
       row.textContent = e.text;
       if (e.heading) row.className = "head";
@@ -135,6 +137,21 @@
     });
   }
 
+  // siteItem is the video of a site's page that yt-dlp downloads (YouTube),
+  // null elsewhere. A player embedded in another site's page counts too.
+  function siteItem() {
+    const url = sitePage(location.href);
+    if (!url) return null;
+    return { kind: "site", site: "YouTube", url, title: siteTitle(document.title) };
+  }
+
+  // allItems is what the button offers: the page's video, then what the
+  // background script saw the page load.
+  function allItems() {
+    const s = siteItem();
+    return s ? [s, ...items] : items;
+  }
+
   function label() {
     const files = items.filter((i) => i.kind === "file");
     const best = files.sort((a, b) => b.size - a.size)[0];
@@ -147,7 +164,7 @@
   let raf = 0;
   function place() {
     raf = 0;
-    if (dismissed || items.length === 0) return;
+    if (dismissed || allItems().length === 0) return;
     const v = mainVideo();
     if (!v) {
       if (host) host.style.display = "none";

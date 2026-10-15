@@ -35,6 +35,12 @@ type Message struct {
 	// Quality is the label of the stream quality picked in the
 	// extension's menu, as a "streams" reply listed it. Empty: the best.
 	Quality string `json:"quality"`
+	// For Kind "site", a video site's page that yt-dlp downloads: the
+	// format picked in the menu (yt-dlp's selector), the container it
+	// gives and the expected size, as a "site-formats" reply listed them.
+	Format   string `json:"format"`
+	Ext      string `json:"ext"`
+	Estimate int64  `json:"estimate"`
 }
 
 // Reply is the response sent back to the extension.
@@ -48,6 +54,25 @@ type Reply struct {
 	// never be downloaded (DRM, not a playlist).
 	Refused bool        `json:"refused,omitempty"`
 	Stream  *StreamInfo `json:"stream,omitempty"`
+	// Missing marks an Error that says yt-dlp is not installed.
+	Missing bool      `json:"missing,omitempty"`
+	Site    *SiteInfo `json:"site,omitempty"`
+}
+
+// SiteInfo is what yt-dlp found at a video site's page, answered to a
+// "site-formats" message.
+type SiteInfo struct {
+	Title     string        `json:"title"`
+	Qualities []SiteQuality `json:"qualities"`
+}
+
+// SiteQuality is one way to download a page's video: its label, yt-dlp's
+// format selector, the container and the expected size (0: unknown).
+type SiteQuality struct {
+	Label    string `json:"label"`
+	Format   string `json:"format"`
+	Ext      string `json:"ext"`
+	Estimate int64  `json:"estimate,omitempty"`
 }
 
 // StreamInfo lists a playlist's qualities, answered to a "streams" message

@@ -24,13 +24,17 @@ document.getElementById("test").onclick = () => {
 // Media the tab has loaded, from every frame: also what the in-page button
 // cannot offer (audio-only pages, canvas players, a frame without a large
 // <video>, or the button closed with ✕).
-const { menuEntries, ago } = self.odmMediaList;
+const { menuEntries, sitePage, siteTitle, ago } = self.odmMediaList;
 const mediaBox = document.getElementById("media");
 
 chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   if (!tab) return;
-  chrome.runtime.sendMessage({ type: "odm-tab-media", tabId: tab.id }, (list) => {
-    if (chrome.runtime.lastError || !Array.isArray(list) || list.length === 0) return;
+  chrome.runtime.sendMessage({ type: "odm-tab-media", tabId: tab.id }, (found) => {
+    let list = chrome.runtime.lastError || !Array.isArray(found) ? [] : found;
+    // The video of a site's page (YouTube), which yt-dlp downloads.
+    const page = sitePage(tab.url || "");
+    if (page) list = [{ kind: "site", site: "YouTube", url: page, title: siteTitle(tab.title), frameId: 0 }, ...list];
+    if (list.length === 0) return;
     // ODM's replies about the streams (their qualities), by playlist URL.
     const infos = new Map();
     const render = () => {
@@ -61,8 +65,8 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       });
     };
     for (const it of list) {
-      if (it.kind !== "stream") continue;
-      chrome.runtime.sendMessage({ type: "odm-stream-info", item: it, tabId: tab.id }, (reply) => {
+      if (it.kind === "file") continue;
+      chrome.runtime.sendMessage({ type: "odm-media-info", item: it, tabId: tab.id }, (reply) => {
         infos.set(it.url, chrome.runtime.lastError || !reply ? { ok: false, error: "ODM is not reachable" } : reply);
         render();
       });

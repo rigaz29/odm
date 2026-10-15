@@ -20,6 +20,16 @@ func NewLimiter(bytesPerSecond int64) *Limiter {
 	return &Limiter{rate: float64(bytesPerSecond), last: time.Now()}
 }
 
+// Rate is the admitted rate in bytes per second, 0 when unlimited.
+func (l *Limiter) Rate() int64 {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.rate <= 0 {
+		return 0
+	}
+	return int64(l.rate)
+}
+
 // SetRate changes the admitted rate (0 disables limiting) and refills the bucket.
 func (l *Limiter) SetRate(bytesPerSecond int64) {
 	l.mu.Lock()

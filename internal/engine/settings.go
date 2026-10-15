@@ -145,6 +145,10 @@ type Settings struct {
 	// streams that come as separate video and audio. Empty: look next to
 	// ODM, then on PATH.
 	FFmpegPath string `json:"ffmpeg_path,omitempty"`
+	// YtDlpPath points at yt-dlp (the program or its folder), which reads
+	// video sites' pages such as YouTube's. Empty: look next to ODM, then
+	// on PATH.
+	YtDlpPath string `json:"ytdlp_path,omitempty"`
 }
 
 // DefaultQueue is the queue used when none is specified.

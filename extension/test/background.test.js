@@ -130,3 +130,9 @@ test("pruneBypass keeps only recent Alt-click marks", () => {
   assert.deepEqual(got, { "https://h/new.zip": now - 1000 });
   assert.deepEqual(bg.pruneBypass(undefined, now), {});
 });
+
+test("YouTube's player pieces are not listed as media", () => {
+  assert.equal(bg.mediaKind("https://rr3---sn-abc.googlevideo.com/videoplayback?itag=137&range=0-99", "video/mp4"), null);
+  assert.equal(bg.mediaKind("https://manifest.googlevideo.com/api/manifest/hls_variant/x/index.m3u8", "application/x-mpegurl"), null);
+  assert.equal(bg.mediaKind("https://notgooglevideo.com/v.mp4", "video/mp4"), "file");
+});

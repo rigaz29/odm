@@ -32,6 +32,7 @@ import (
 	"odm/internal/osutil"
 	"odm/internal/update"
 	"odm/internal/version"
+	"odm/internal/ytdlp"
 )
 
 func openPath(p string)   { _ = osutil.Open(p) }
@@ -155,6 +156,15 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		streamRows bool
 		streamCat  string // the category before it was set to Video for a stream
 	)
+	// A video site's page (YouTube…) that yt-dlp downloads, like the
+	// stream state above: what yt-dlp found at siteFor, or siteErr, why
+	// Start cannot go on (no yt-dlp, a live stream). A page yt-dlp could
+	// not read just now keeps siteFor and lets it pick when it runs.
+	var (
+		site    *engine.SiteChoices
+		siteErr error
+		siteFor string
+	)
 	qualitySelect := widget.NewSelect(nil, nil)
 	audioSelect := widget.NewSelect(nil, nil)
 	fillAudio := func(q int) {
@@ -174,7 +184,14 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			audioSelect.Disable()
 		}
 	}
-	qualitySelect.OnChanged = func(string) { fillAudio(qualitySelect.SelectedIndex()) }
+	qualitySelect.OnChanged = func(string) {
+		q := qualitySelect.SelectedIndex()
+		fillAudio(q)
+		// A page's qualities come in different containers.
+		if site != nil && q >= 0 && q < len(site.Qualities) {
+			nameEntry.SetText(withExt(nameEntry.Text, site.Qualities[q].Ext))
+		}
+	}
 
 	var form *widget.Form
 	addStreamRows := func() {
@@ -247,6 +264,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	}
 	hideStream := func() {
 		stream, streamKind, streamErr, streamFor = nil, "", nil, ""
+		site, siteErr, siteFor = nil, nil, ""
 		if streamRows {
 			qualitySelect.Options = nil
 			qualitySelect.ClearSelected()
@@ -262,6 +280,60 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			}
 			streamCat = ""
 		}
+	}
+
+	// isSite: an address yt-dlp reads, sent as one by the browser or of a
+	// site ODM knows (ytdlp.Site).
+	isSite := func(s string) bool {
+		s = strings.TrimSpace(s)
+		return (pre.Site != nil && s == strings.TrimSpace(pre.URL)) || ytdlp.Site(s) != ""
+	}
+	showSite := func(addr string, c *engine.SiteChoices, err error) {
+		addStreamRows()
+		siteFor, site, siteErr = addr, nil, nil
+		qualitySelect.Options = nil
+		qualitySelect.ClearSelected()
+		qualitySelect.PlaceHolder = "—"
+		setVideoCategory()
+		fillAudio(-1) // the audio comes with each quality
+		siteName := ytdlp.Site(addr)
+		if siteName == "" {
+			siteName = T("Video site")
+		}
+		switch {
+		case errors.Is(err, engine.ErrNoYtDlp):
+			siteErr = err
+			card.problem(T("Videos from this site need yt-dlp"),
+				T("Install yt-dlp (put yt-dlp.exe next to ODM or on PATH), or choose it in Options → Downloads."))
+		case errors.Is(err, engine.ErrStreamRefused):
+			siteErr = err
+			card.problem(T("This video cannot be downloaded"), err.Error())
+		case err != nil:
+			card.warn(T("yt-dlp could not read the page just now"),
+				T("Start lets yt-dlp pick the best quality when it runs · ")+err.Error())
+		}
+		if err != nil {
+			qualitySelect.Disable()
+			return
+		}
+		site = c
+		sel := 0
+		for i, q := range c.Qualities {
+			label := q.Label
+			if q.Estimate > 0 {
+				label += " · ~" + humanBytes(q.Estimate)
+			}
+			qualitySelect.Options = append(qualitySelect.Options, label)
+			if pre.Site != nil && addr == strings.TrimSpace(pre.URL) && q.Format == pre.Site.Format {
+				sel = i // picked in the browser's menu
+			}
+		}
+		if nameEntry.Text == "" {
+			nameEntry.SetText(engine.SanitizeName(c.Title))
+		}
+		qualitySelect.Enable()
+		qualitySelect.SetSelectedIndex(sel) // OnChanged gives the name its extension
+		card.stream(c.Title, Tf("%s video · downloaded by yt-dlp", siteName))
 	}
 
 	var probeTimer *time.Timer
@@ -281,6 +353,18 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		}
 		card.check()
 		probeTimer = time.AfterFunc(600*time.Millisecond, func() {
+			if isSite(s) {
+				// yt-dlp reads the page and the player: it takes a while.
+				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+				defer cancel()
+				c, err := a.mgr.ProbeSite(ctx, strings.TrimSpace(s))
+				fyne.Do(func() {
+					if urlEntry.Text == s {
+						showSite(strings.TrimSpace(s), c, err)
+					}
+				})
+				return
+			}
 			ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 			defer cancel()
 			// The browser already knows a playlist when it sends one; a
@@ -360,6 +444,13 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		widget.NewFormItem(T("Checksum"), sumEntry),
 	)
 	urlEntry.SetText(pre.URL) // after OnChanged and the form, so a prefilled URL is probed
+	if pre.Site != nil {
+		addStreamRows()
+		qualitySelect.PlaceHolder = T("Asking yt-dlp…")
+		qualitySelect.Disable()
+		audioSelect.Disable()
+		setVideoCategory()
+	}
 	if pre.Stream != nil {
 		// Known to be a playlist: add the rows before the window is shown,
 		// so it is sized for them, and fill them once the playlist is read.
@@ -383,8 +474,24 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			dialog.ShowError(err, parent)
 			return
 		}
+		var siteJob *engine.SiteJob
+		switch {
+		case siteFor == url && siteErr != nil:
+			dialog.ShowError(siteErr, parent)
+			return
+		case siteFor == url:
+			siteJob = &engine.SiteJob{} // yt-dlp's best when the page was not read
+			if q := qualitySelect.SelectedIndex(); site != nil && q >= 0 && q < len(site.Qualities) {
+				siteJob.Format, siteJob.Estimate = site.Qualities[q].Format, site.Qualities[q].Estimate
+			}
+		case pre.Site != nil && url == strings.TrimSpace(pre.URL):
+			// Started before yt-dlp answered: what the browser's menu picked.
+			j := *pre.Site
+			siteJob = &j
+		}
 		var job *engine.StreamJob
 		switch {
+		case siteJob != nil:
 		case streamFor == url && streamErr != nil:
 			dialog.ShowError(streamErr, parent)
 			return
@@ -411,6 +518,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		folder := strings.TrimSpace(folderEntry.Text)
 		info := a.mgr.Create(engine.AddOptions{
 			Stream:      job,
+			Site:        siteJob,
 			URL:         url,
 			Dir:         folder,
 			FileName:    engine.SanitizeName(nameEntry.Text),
@@ -724,6 +832,38 @@ func (a *application) openOptionsTab(tab int) {
 		}, w).Show()
 	})
 	checkFFmpeg(0)
+	// yt-dlp reads video sites' pages (YouTube…); checked like ffmpeg.
+	ytEntry := widget.NewEntry()
+	ytEntry.SetText(settings.YtDlpPath)
+	ytEntry.SetPlaceHolder(T("Found automatically"))
+	ytStatus := hint("")
+	var ytGen int
+	var ytTimer *time.Timer
+	checkYtDlp := func(delay time.Duration) {
+		ytGen++
+		gen, typed := ytGen, ytEntry.Text
+		if ytTimer != nil {
+			ytTimer.Stop()
+		}
+		ytTimer = time.AfterFunc(delay, func() {
+			msg := ytdlpStatus(typed)
+			fyne.Do(func() {
+				if gen == ytGen {
+					ytStatus.SetText(msg)
+				}
+			})
+		})
+	}
+	ytEntry.OnChanged = func(string) { checkYtDlp(600 * time.Millisecond) }
+	ytBrowse := widget.NewButtonWithIcon(T("Browse"), theme.FolderOpenIcon(), func() {
+		dialog.NewFileOpen(func(r fyne.URIReadCloser, err error) {
+			if err == nil && r != nil {
+				_ = r.Close()
+				ytEntry.SetText(r.URI().Path())
+			}
+		}, w).Show()
+	})
+	checkYtDlp(0)
 	downloadsTab := container.NewVBox(
 		header(T("Default download settings")),
 		startCheck,
@@ -748,6 +888,9 @@ func (a *application) openOptionsTab(tab int) {
 		widget.NewLabel(T("ffmpeg (joins the video and audio of some streams):")),
 		container.NewBorder(nil, nil, nil, ffBrowse, ffEntry),
 		ffStatus,
+		widget.NewLabel(T("yt-dlp (downloads videos from YouTube and similar sites):")),
+		container.NewBorder(nil, nil, nil, ytBrowse, ytEntry),
+		ytStatus,
 	)
 
 	// Connection
@@ -1095,6 +1238,7 @@ func (a *application) openOptionsTab(tab int) {
 		next.HostConnections = hostMap
 		next.UserAgent = strings.TrimSpace(uaEntry.Text)
 		next.FFmpegPath = strings.TrimSpace(ffEntry.Text)
+		next.YtDlpPath = strings.TrimSpace(ytEntry.Text)
 		next.DuplicateAuto = engine.DuplicateSkip
 		if dupSelect.Selected == dupAgain {
 			next.DuplicateAuto = engine.DuplicateAgain
@@ -1158,6 +1302,38 @@ func ffmpegStatus(typed string) string {
 		v = T("unknown version")
 	}
 	return Tf("Using %s (%s)", bin, v)
+}
+
+// ytdlpStatus describes the yt-dlp that the typed path (empty: the
+// automatic search) leads to, with its version.
+func ytdlpStatus(typed string) string {
+	bin, err := ytdlp.Locate(typed)
+	if err != nil {
+		if strings.TrimSpace(typed) == "" {
+			return T("Not found. YouTube and similar sites need it: put yt-dlp next to ODM, add it to PATH, or choose it here.")
+		}
+		return T("No yt-dlp at this path. Leave it empty to search next to ODM and on PATH.")
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	v, err := ytdlp.Version(ctx, bin)
+	if err != nil {
+		return Tf("Found %s, but it did not run: %s", bin, err.Error())
+	}
+	return Tf("Using %s (%s)", bin, v)
+}
+
+// withExt gives a video's name the container of the quality picked,
+// replacing one an earlier pick gave it.
+func withExt(name, ext string) string {
+	switch strings.ToLower(filepath.Ext(name)) {
+	case ".mp4", ".webm", ".mkv", ".m4a", ".mp3", ".opus", ".ogg", ".mov", ".flv", ".3gp":
+		name = strings.TrimSuffix(name, filepath.Ext(name))
+	}
+	if name == "" || ext == "" {
+		return name
+	}
+	return name + "." + ext
 }
 
 // parseFileTypes turns "torrent, .SRT nupkg" into ["torrent" "srt" "nupkg"].

@@ -8,6 +8,20 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- YouTube videos, through [yt-dlp](https://github.com/yt-dlp/yt-dlp), an
+  optional program like ffmpeg (next to ODM, on PATH, or chosen in
+  Options → Downloads, which shows the version found). On YouTube's watch
+  pages, Shorts, YouTube Music and embedded players, the extension's
+  "Download this video" menu and popup list the qualities yt-dlp reads:
+  resolution, bitrate, codecs, container and expected size, the most
+  widely playable codec per resolution, and the audio alone. ODM runs
+  yt-dlp for the one picked and shows its progress; Pause stops yt-dlp and
+  Resume continues its partial files. A YouTube address pasted into New
+  Download is read the same way. yt-dlp reads the page itself: the
+  browser's cookies are neither given to it nor kept. The pieces YouTube's
+  player fetches are no longer listed as media. `POST /api/probe/site`
+  lists a page's qualities, and `POST /api/downloads` takes `site` and
+  `format`.
 - The browser extension's "Download this video" menu and popup list each
   quality of an HLS/DASH stream: resolution, bitrate, codecs and the
   expected size, read by ODM from the playlist with the site's cookies.

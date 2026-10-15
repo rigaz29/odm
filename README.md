@@ -90,6 +90,14 @@ queues. It runs as a desktop app, or headless with a JSON API.
   until you stop the download (Pause or Stop), the broadcast ends, or
   nothing new arrives for a while; live DASH is not supported. DRM-protected video
   is not supported and never will be.
+- On YouTube (watch pages, Shorts, embedded players) the button lists the
+  video's qualities and audio-only formats as
+  [yt-dlp](https://github.com/yt-dlp/yt-dlp) reads them, and ODM downloads
+  the one you pick through yt-dlp, with its progress, pause and resume.
+  yt-dlp is optional, like ffmpeg: next to ODM, on PATH, or chosen in
+  Options > Downloads. A YouTube address pasted into *New Download* works
+  the same way. yt-dlp reads the page itself; the browser's cookies are not
+  given to it.
 - The extension's toolbar icon counts the media a page has loaded, and its
   popup lists them (from every frame) for players the button cannot find.
 - A clipboard monitor queues downloadable URLs you copy. You can turn it on
@@ -223,6 +231,7 @@ only.
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |
 | POST | `/api/probe/stream` | Qualities of an HLS/DASH playlist `{"url","headers"}`; an add with `"stream"` takes one as `"quality"` |
+| POST | `/api/probe/site` | Qualities yt-dlp finds at a video page `{"url"}` (503 `"missing"` without yt-dlp); an add with `"site": true` takes one's `"format"` |
 | POST | `/api/actions/pause-all` \| `/stop-all` \| `/resume-all` \| `/clear-completed` | Batch actions (`stop-all` also stops started queues) |
 | GET | `/api/events` | Server-Sent Events stream of the list |
 

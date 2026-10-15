@@ -154,3 +154,40 @@ func TestRelayStreamQuality(t *testing.T) {
 		t.Fatalf("a file carried a quality: %v", got)
 	}
 }
+
+func TestRelaySite(t *testing.T) {
+	answer := func(code int, body string) *http.Client {
+		return &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path != "/api/probe/site" {
+				t.Fatalf("asked %s", r.URL.Path)
+			}
+			return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})}
+	}
+	m := native.Message{Type: "site-formats", URL: "https://www.youtube.com/watch?v=abc"}
+	r := relaySite(answer(http.StatusOK, `{"title":"A talk","qualities":[{"label":"720p","format":"136+140","ext":"mp4","estimate":9}]}`), m)
+	if !r.OK || r.Site == nil || r.Site.Title != "A talk" || r.Site.Qualities[0].Format != "136+140" {
+		t.Fatalf("reply %+v", r)
+	}
+	r = relaySite(answer(http.StatusServiceUnavailable, `{"error":"yt-dlp not found","missing":true}`), m)
+	if r.OK || !r.Missing || r.Error != "yt-dlp not found" {
+		t.Fatalf("missing: %+v", r)
+	}
+}
+
+// A site's page goes to ODM as one, without the browser's cookies.
+func TestRelaySiteDownload(t *testing.T) {
+	got, reply := relayed(t, native.Message{
+		Kind: "site", URL: "https://www.youtube.com/watch?v=abc", Title: "A talk | Channel",
+		Format: "136+140", Ext: "mp4", Estimate: 1234, Cookies: "SID=secret", UserAgent: "Mozilla",
+	})
+	if !reply.OK || got["site"] != true || got["format"] != "136+140" || got["estimate"] != float64(1234) {
+		t.Fatalf("posted %v", got)
+	}
+	if got["file_name"] != "A_talk.mp4" {
+		t.Fatalf("file name %v", got["file_name"])
+	}
+	if _, ok := got["headers"]; ok {
+		t.Fatalf("headers went with a site page: %v", got["headers"])
+	}
+}

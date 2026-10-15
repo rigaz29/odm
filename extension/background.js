@@ -124,6 +124,13 @@ function mediaKind(url, mime) {
   } catch {
     return null;
   }
+  // YouTube's player fetches signed pieces of separate video and audio;
+  // none is the video. Its page goes to yt-dlp instead (sitePage).
+  try {
+    if (/(^|\.)googlevideo\.com$/i.test(new URL(url).hostname)) return null;
+  } catch {
+    return null;
+  }
   if (STREAM_TYPES.includes(mime) || path.endsWith(".m3u8") || path.endsWith(".mpd")) return "stream";
   // Segments of a stream, not whole files: MPEG-TS (HLS) and fragmented
   // MP4 (DASH, newer HLS). Listing them would also push the playlists out.
@@ -248,22 +255,27 @@ async function handOff(fields) {
 
 const tabKey = (tabId) => `media:${tabId}`;
 
-// What ODM said about each playlist, kept for STREAM_INFO_MS: a menu asks
-// whenever it opens, and the playlist need not be read each time. A
-// failure that may pass (ODM busy, a network error) is not kept.
-const streamInfos = new Map();
-function streamInfo(url, referrer) {
+// What ODM said about each playlist or site page, kept for STREAM_INFO_MS:
+// a menu asks whenever it opens, and the page need not be read each time.
+// A failure that may pass (ODM busy, yt-dlp missing, a network error) is
+// not kept.
+const mediaInfos = new Map();
+function mediaInfo(item, referrer) {
   const now = Date.now();
-  for (const [u, e] of streamInfos) {
-    if (now - e.at >= STREAM_INFO_MS) streamInfos.delete(u);
+  for (const [u, e] of mediaInfos) {
+    if (now - e.at >= STREAM_INFO_MS) mediaInfos.delete(u);
   }
-  const hit = streamInfos.get(url);
+  const url = item.url;
+  const hit = mediaInfos.get(url);
   if (hit) return hit.reply;
-  const reply = cookieHeader(url).then((cookies) =>
-    askOdm({ type: "streams", url, referrer, cookies, userAgent: navigator.userAgent }));
-  streamInfos.set(url, { at: now, reply });
+  // yt-dlp reads a site's page itself, without the browser's cookies.
+  const reply = item.kind === "site"
+    ? askOdm({ type: "site-formats", url })
+    : cookieHeader(url).then((cookies) =>
+      askOdm({ type: "streams", url, referrer, cookies, userAgent: navigator.userAgent }));
+  mediaInfos.set(url, { at: now, reply });
   reply.then((r) => {
-    if (!r.ok && !r.refused) streamInfos.delete(url);
+    if (!r.ok && !r.refused) mediaInfos.delete(url);
   });
   return reply;
 }
@@ -272,6 +284,13 @@ function streamInfo(url, referrer) {
 // frame) it was found on; streams get the page title as their name, and
 // the quality picked in a menu, if any.
 function grab(item, referrer, title) {
+  if (item.kind === "site") {
+    // yt-dlp reads the page itself: no cookies or user agent go with it.
+    return askOdm({
+      type: "download", kind: "site", url: item.url, title: item.title || title,
+      format: item.format || "", ext: item.ext || "", estimate: item.estimate || 0,
+    });
+  }
   return handOff({
     url: item.url, referrer, title,
     mime: item.mime || "", size: item.size || 0,
@@ -425,9 +444,9 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
           .then(sendResponse);
         return true;
       }
-      if (msg.type === "odm-stream-info" && msg.item) {
+      if (msg.type === "odm-media-info" && msg.item) {
         chrome.tabs.get(msg.tabId).catch(() => null)
-          .then((t) => streamInfo(msg.item.url, popupReferrer(msg.item, t)))
+          .then((t) => mediaInfo(msg.item, popupReferrer(msg.item, t)))
           .then(sendResponse);
         return true;
       }
@@ -441,8 +460,8 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
       grab(msg.item, sender.url || tab.url || "", tab.title || "").then(sendResponse);
       return true;
     }
-    if (msg.type === "odm-stream-info" && msg.item) {
-      streamInfo(msg.item.url, sender.url || tab.url || "").then(sendResponse);
+    if (msg.type === "odm-media-info" && msg.item) {
+      mediaInfo(msg.item, sender.url || tab.url || "").then(sendResponse);
       return true;
     }
     if (msg.type === "odm-bypass" && msg.url) {

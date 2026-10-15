@@ -46,6 +46,8 @@ func runNativeHost(configDir string) {
 			return relayStarting(func() native.Reply { return relayDownload(client, m) }, start)
 		case "streams":
 			return relayStarting(func() native.Reply { return relayStreams(client, m) }, start)
+		case "site-formats":
+			return relayStarting(func() native.Reply { return relaySite(client, m) }, start)
 		}
 		return native.Reply{Error: "unknown message type: " + m.Type}
 	})
@@ -115,6 +117,19 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 		"connections": m.Connections,
 		"file_name":   native.SuggestName(m.Filename, m.Title, m.Mime),
 		"prompt":      true, // a person clicked this in the browser
+	}
+	if m.Kind == "site" {
+		// yt-dlp reads the page itself: no browser headers, which would
+		// hand the site's cookies to it.
+		name := native.StreamName(m.Title)
+		if name != "" && m.Ext != "" {
+			name += "." + m.Ext
+		}
+		payload["file_name"] = name
+		payload["site"] = true
+		payload["format"] = m.Format
+		payload["estimate"] = m.Estimate
+		headers = nil
 	}
 	if len(headers) > 0 {
 		payload["headers"] = headers
@@ -206,6 +221,36 @@ func relayStreams(client *http.Client, m native.Message) native.Reply {
 		return native.Reply{Error: "unreadable reply: " + err.Error()}
 	}
 	return native.Reply{OK: true, Stream: &info}
+}
+
+// relaySite asks ODM, which asks yt-dlp, what a video site's page offers.
+func relaySite(client *http.Client, m native.Message) native.Reply {
+	if m.URL == "" {
+		return native.Reply{Error: "missing url"}
+	}
+	body, _ := json.Marshal(map[string]string{"url": m.URL})
+	resp, err := client.Post(ipc.BaseURL+"/api/probe/site", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return native.Reply{Error: errNotRunning}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error   string `json:"error"`
+			Refused bool   `json:"refused"`
+			Missing bool   `json:"missing"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&e)
+		if e.Error == "" {
+			e.Error = fmt.Sprintf("ODM returned %s", resp.Status)
+		}
+		return native.Reply{Error: e.Error, Refused: e.Refused, Missing: e.Missing}
+	}
+	var info native.SiteInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return native.Reply{Error: "unreadable reply: " + err.Error()}
+	}
+	return native.Reply{OK: true, Site: &info}
 }
 
 // relayConfig returns the settings the extension applies itself.

@@ -146,7 +146,9 @@ type Info struct {
 	Segments     int `json:"segments,omitempty"`
 	SegmentsDone int `json:"segments_done"`
 	// Live is a live stream being recorded: Pause stops and finishes it.
-	Live      bool      `json:"live,omitempty"`
+	Live bool `json:"live,omitempty"`
+	// Site is a video page that yt-dlp downloads.
+	Site      bool      `json:"site,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }

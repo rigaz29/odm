@@ -85,6 +85,16 @@ the system tray first. Then:
   qualities is left out. ODM's New Download window opens with the quality
   picked and offers the audio tracks; with that window turned off, ODM
   downloads the picked quality.
+- **YouTube** (watch pages, Shorts, YouTube Music, players embedded in other
+  pages): YouTube's player fetches signed pieces no extension can hand over,
+  so the button offers the video itself, and ODM asks
+  [yt-dlp](https://github.com/yt-dlp/yt-dlp) for its qualities (resolution,
+  bitrate, codecs, container, expected size, and audio alone). ODM
+  downloads the one picked through yt-dlp. yt-dlp must be installed: next
+  to `ODM.exe`, on PATH, or chosen in ODM's *Options → Downloads*. It reads
+  the page itself; the browser's cookies are not given to it, so videos
+  that need a sign-in are not available. The pieces the player fetches
+  (`googlevideo.com`) are no longer listed.
 - **Right-click** a link, video, audio or image → **Download with ODM**.
 - **Toolbar popup:** the icon's badge counts the media the page has loaded
   (up to 15, from every frame), and the popup lists them, streams with

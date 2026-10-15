@@ -74,6 +74,8 @@ type Download struct {
 	Chunks  []*Chunk
 	// Stream is set for a segmented (HLS/DASH) download; see stream.go.
 	Stream *StreamJob
+	// Site is set for a video page that yt-dlp downloads; see site.go.
+	Site *SiteJob
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -328,6 +330,11 @@ func (d *Download) Start(parent context.Context) {
 
 	if d.Stream != nil {
 		d.runStream(ctx)
+		d.notify(true)
+		return
+	}
+	if d.Site != nil {
+		d.runSite(ctx)
 		d.notify(true)
 		return
 	}
@@ -1922,6 +1929,7 @@ type State struct {
 	Err          string            `json:"error,omitempty"`
 	Chunks       []*Chunk          `json:"chunks"`
 	Stream       *StreamJob        `json:"stream,omitempty"`
+	Site         *SiteJob          `json:"site,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -1943,6 +1951,12 @@ func (d *Download) State() State {
 		sj.Done = d.streamDone
 		stream = &sj
 	}
+	var site *SiteJob
+	if d.Site != nil {
+		sj := *d.Site
+		sj.Done = d.streamDone
+		site = &sj
+	}
 	status := d.Status
 	if status == StatusDownloading {
 		status = StatusPaused
@@ -1954,7 +1968,7 @@ func (d *Download) State() State {
 		Queue: d.Queue, Description: d.Description, Order: d.Order, Checksum: d.Checksum,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
 		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
-		Chunks: chunks, Stream: stream, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
+		Chunks: chunks, Stream: stream, Site: site, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
 
@@ -1988,6 +2002,13 @@ func Restore(s State, client *http.Client) *Download {
 	d.Stream = s.Stream
 	if s.Stream != nil {
 		d.streamDone = s.Stream.Done
+		if s.Status == StatusComplete {
+			d.streamDone = s.Total
+		}
+	}
+	d.Site = s.Site
+	if s.Site != nil {
+		d.streamDone = s.Site.Done
 		if s.Status == StatusComplete {
 			d.streamDone = s.Total
 		}
@@ -2071,6 +2092,7 @@ func (d *Download) infoLocked() Info {
 		Checksum: d.Checksum, Verifying: d.verifying,
 		Stream: stream, Segments: d.streamSegs, SegmentsDone: d.streamHave,
 		Live:      d.Stream != nil && d.Stream.Live,
+		Site:      d.Site != nil,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}
 }

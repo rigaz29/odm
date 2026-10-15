@@ -73,3 +73,55 @@ test("menuEntries: one quality alone, refused, or not read", () => {
   assert.equal(e[0].text, "HLS stream · best quality");
   assert.equal(e[0].item.quality, undefined);
 });
+
+test("sitePage gives YouTube videos one watch address", () => {
+  const watch = "https://www.youtube.com/watch?v=jNQXAC9IVRw";
+  for (const href of [
+    "https://www.youtube.com/watch?v=jNQXAC9IVRw&list=PL1&t=4s",
+    "https://m.youtube.com/watch?v=jNQXAC9IVRw",
+    "https://youtu.be/jNQXAC9IVRw?si=x",
+    "https://www.youtube.com/shorts/jNQXAC9IVRw",
+    "https://www.youtube.com/embed/jNQXAC9IVRw?autoplay=1",
+    "https://www.youtube-nocookie.com/embed/jNQXAC9IVRw",
+    "https://www.youtube.com/live/jNQXAC9IVRw",
+  ]) {
+    assert.equal(ml.sitePage(href), watch, href);
+  }
+  assert.equal(ml.sitePage("https://music.youtube.com/watch?v=jNQXAC9IVRw"), "https://music.youtube.com/watch?v=jNQXAC9IVRw");
+  for (const href of ["https://www.youtube.com/", "https://www.youtube.com/@channel", "https://www.youtube.com/watch?v=short",
+    "https://example.com/watch?v=jNQXAC9IVRw", "not a url"]) {
+    assert.equal(ml.sitePage(href), "", href);
+  }
+});
+
+test("siteTitle drops the site's name", () => {
+  assert.equal(ml.siteTitle("(3) Me at the zoo - YouTube"), "Me at the zoo");
+  assert.equal(ml.siteTitle("A song - YouTube Music"), "A song");
+  assert.equal(ml.siteTitle("Plain"), "Plain");
+});
+
+test("menuEntries lists a site video's qualities from yt-dlp", () => {
+  const page = { kind: "site", site: "YouTube", url: "https://www.youtube.com/watch?v=jNQXAC9IVRw", title: "Me at the zoo" };
+  const file = { url: "https://cdn/a.mp4", kind: "file", mime: "video/mp4", size: 2048 };
+  assert.deepEqual(ml.menuEntries([file, page], new Map()).map((e) => [e.text, !!e.item]), [
+    ["YouTube video · reading qualities…", false],
+    ["mp4 file, 2.00 KB", true],
+  ]);
+  const infos = new Map([[page.url, { ok: true, site: { title: "Me at the zoo", qualities: [
+    { label: "240p · 313 kbps · H.264, AAC · MP4", format: "133+140", ext: "mp4", estimate: 1024 },
+    { label: "Audio only · 130 kbps · AAC · M4A", format: "140", ext: "m4a" },
+  ] } }]]);
+  const got = ml.menuEntries([page], infos);
+  assert.deepEqual(got.map((e) => e.text), [
+    "YouTube video",
+    "240p · 313 kbps · H.264, AAC · MP4 · ~1.00 KB",
+    "Audio only · 130 kbps · AAC · M4A",
+  ]);
+  assert.deepEqual([got[1].item.format, got[1].item.ext, got[1].item.estimate, got[1].item.title], ["133+140", "mp4", 1024, "Me at the zoo"]);
+
+  const say = (r) => ml.menuEntries([page], new Map([[page.url, r]])).map((e) => [e.text, !!e.item]);
+  assert.deepEqual(say({ ok: false, missing: true, error: "yt-dlp not found" }), [["YouTube video · needs yt-dlp (see ODM's Options)", false]]);
+  assert.deepEqual(say({ ok: false, refused: true, error: "live streams on video sites are not supported" }),
+    [["YouTube video · live streams on video sites are not supported", false]]);
+  assert.deepEqual(say({ ok: false, error: "ODM is not running" }), [["YouTube video · best quality", true]]);
+});

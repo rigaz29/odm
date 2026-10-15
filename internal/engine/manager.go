@@ -85,6 +85,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 	setUserAgent(settings.UserAgent)
 	setCategories(settings.CategoryDefs)
 	setFFmpegPath(settings.FFmpegPath)
+	setYtDlpPath(settings.YtDlpPath)
 	m := &Manager{
 		downloads: map[string]*Download{},
 		running:   map[string]bool{},
@@ -364,6 +365,7 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	setUserAgent(next.UserAgent)
 	setCategories(next.CategoryDefs)
 	setFFmpegPath(next.FFmpegPath)
+	setYtDlpPath(next.YtDlpPath)
 	m.saveSettings()
 	m.fire()
 	return next.clone()
@@ -555,7 +557,7 @@ func (m *Manager) startQueueAt(name string, now time.Time) {
 		}
 		d.mu.Lock()
 		match := queueMatches(d.Queue, name)
-		done, stream := d.Status == StatusComplete, d.Stream != nil
+		done, stream := d.Status == StatusComplete, d.Stream != nil || d.Site != nil
 		d.mu.Unlock()
 		q := queueOf(d)
 		switch {
@@ -878,6 +880,8 @@ type AddOptions struct {
 	// Stream makes this a segmented (HLS/DASH) download; URL is then the
 	// manifest the stream was found at.
 	Stream *StreamJob
+	// Site makes this a video page that yt-dlp downloads; URL is the page.
+	Site *SiteJob
 	// StreamQuality is the label of the quality picked before the New
 	// Download window opened (in the browser's menu), which the window
 	// then selects. "" leaves the window's own choice.
@@ -910,6 +914,13 @@ func (m *Manager) Create(o AddOptions) Info {
 	if o.Stream != nil {
 		sj := *o.Stream
 		d.Stream = &sj
+	}
+	if o.Site != nil {
+		sj := *o.Site
+		d.Site = &sj
+		// yt-dlp reads the page itself; the browser's cookies and agent
+		// are not given to it, nor kept.
+		d.Headers = nil
 	}
 	d.SetCategoryDirs(st.CategoryDirs)
 	d.SetLimiter(m.limiter)
@@ -1017,6 +1028,10 @@ func (m *Manager) Readdress(ctx context.Context, id, newURL string) error {
 		return fmt.Errorf("the download is already complete")
 	}
 	d.mu.Lock()
+	if d.Site != nil {
+		d.mu.Unlock()
+		return fmt.Errorf("a video page cannot change its address; add the new page as a new download")
+	}
 	headers, total, done, probed := d.Headers, d.Total, d.doneLocked(), len(d.Chunks) > 0
 	stream := d.Stream != nil
 	if stream && d.Stream.Video != "" && d.Stream.Variant == "" {

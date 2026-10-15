@@ -55,6 +55,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
   time, retry failed files, and open a file, exit, sleep, hibernate or shut
   down when the queue finishes (after a 30-second countdown that can be
   cancelled).
+- ZIP preview: the files inside a ZIP archive are listed before it is
+  downloaded, reading only the end of the archive.
 - Site logins (HTTP Digest or Basic, sent only to a host that asks), import
   and export of the download list, and a site
   grabber that crawls a page and queues the files it links to.
@@ -280,7 +282,7 @@ extension/          MV3 browser extension source and native-host manifests
 
 - A properties dialog for each download.
 - A credentials prompt for HTTP 401 responses from a host with no site login.
-- ZIP preview, a virus-scan hook, grabber projects, and translations.
+- A virus-scan hook, grabber projects, and translations.
 - Live DASH streams.
 - Signed self-update, and code-signed Windows builds.
 

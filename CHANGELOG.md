@@ -18,6 +18,11 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- ZIP preview: for a ZIP archive on a server that sends parts of files, the
+  New Download window has a Preview… button that lists the files inside
+  (name, size, date, and whether they are encrypted) before anything is
+  downloaded. Only the end of the archive, where ZIP keeps its list of
+  contents, is read.
 - Categories can be added, deleted and given other file types in Options →
   Save to (New…, Delete, Defaults). The file types decide which category,
   and so which subfolder, a download gets; Other, always last, takes the

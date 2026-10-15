@@ -111,6 +111,13 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	// One "File info" row filled by the probe: size and type, or the error.
 	infoLabel := widget.NewLabel("—")
 	infoLabel.Truncation = fyne.TextTruncateEllipsis
+	// Preview lists a ZIP archive's contents before it is downloaded; shown
+	// once the probe finds a ZIP on a server that sends parts of files.
+	var previewURL, previewName string
+	previewBtn := widget.NewButton("Preview…", func() {
+		a.showZipPreview(parent, previewURL, previewName, pre.Headers)
+	})
+	previewBtn.Hide()
 
 	// Quality and Audio rows, added to the form the first time the address
 	// turns out to be an HLS/DASH playlist. All of the stream state below
@@ -233,6 +240,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		}
 		hideStream()
 		infoLabel.SetText("—")
+		previewBtn.Hide()
 		if !strings.HasPrefix(s, "http") {
 			return
 		}
@@ -294,6 +302,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 					nameEntry.SetText(p.FileName)
 					catSelect.SetSelected(engine.Category(p.FileName))
 				}
+				if p.RangeOK && p.Total > 0 && engine.IsZipName(p.FileName, p.ContentType) {
+					previewURL, previewName = strings.TrimSpace(s), p.FileName
+					previewBtn.Show()
+				}
 			})
 		})
 	}
@@ -316,7 +328,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		widget.NewFormItem("Description", descEntry),
 		widget.NewFormItem("Connections", connEntry),
 		widget.NewFormItem("Queue", queueSelect),
-		widget.NewFormItem("File info", infoLabel),
+		widget.NewFormItem("File info", container.NewBorder(nil, nil, nil, previewBtn, infoLabel)),
 	)
 	urlEntry.SetText(pre.URL) // after OnChanged and the form, so a prefilled URL is probed
 	if pre.Stream != nil {

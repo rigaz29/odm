@@ -28,13 +28,7 @@ func TestNumberedName(t *testing.T) {
 	}
 }
 
-func payload(n int) []byte {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = byte(i * 7)
-	}
-	return b
-}
+func payload(n int) []byte { return randomData(n) }
 
 // An existing file with the same name must survive; finishing used to
 // delete it.

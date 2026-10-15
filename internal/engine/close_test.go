@@ -18,10 +18,7 @@ import (
 // no handle on the .odmpart, and resumes it on the same download. On
 // Windows a handle left open makes the final rename fail.
 func TestPauseClosesPartialFile(t *testing.T) {
-	data := make([]byte, 1<<20)
-	for i := range data {
-		data[i] = byte(i * 7)
-	}
+	data := randomData(1 << 20)
 	var hold atomic.Bool
 	hold.Store(true)
 	served := make(chan struct{}, 1)

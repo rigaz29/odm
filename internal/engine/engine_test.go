@@ -160,10 +160,7 @@ func rangeServer(t *testing.T, data []byte, hits *int64) *httptest.Server {
 }
 
 func TestSegmentedDownloadMultiConnection(t *testing.T) {
-	data := make([]byte, 512*1024)
-	for i := range data {
-		data[i] = byte(i * 31)
-	}
+	data := randomData(512 * 1024)
 	var hits int64
 	srv := rangeServer(t, data, &hits)
 	defer srv.Close()
@@ -197,10 +194,7 @@ func TestSegmentedDownloadMultiConnection(t *testing.T) {
 }
 
 func TestStalledConnectionRetriesFromLastByte(t *testing.T) {
-	data := make([]byte, 200*1024)
-	for i := range data {
-		data[i] = byte(i * 17)
-	}
+	data := randomData(200 * 1024)
 	var transfers atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Accept-Ranges", "bytes")
@@ -417,10 +411,7 @@ func TestDownloadWithoutRangeSupport(t *testing.T) {
 }
 
 func TestResumeFromPersistedState(t *testing.T) {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i)
-	}
+	data := randomData(256 * 1024)
 	var hits int64
 	srv := rangeServer(t, data, &hits)
 	defer srv.Close()

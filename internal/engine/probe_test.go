@@ -18,10 +18,7 @@ import (
 // requested range is the whole file, and 206 for a narrower range. The probe
 // must ask for the first byte so the download stays segmented.
 func TestProbeFirstByteStillSegments(t *testing.T) {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i * 3)
-	}
+	data := randomData(256 * 1024)
 	var oneByte int64
 	var segments int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

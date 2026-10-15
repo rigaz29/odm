@@ -142,13 +142,7 @@ func serveFile(t *testing.T, data []byte, stats *rangeStats, corrupt func(start 
 	}))
 }
 
-func conflictData() []byte {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i * 31)
-	}
-	return data
-}
+func conflictData() []byte { return randomData(256 * 1024) }
 
 func TestConflictFallsBackToOneConnection(t *testing.T) {
 	data := conflictData()

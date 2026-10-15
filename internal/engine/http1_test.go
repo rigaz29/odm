@@ -49,10 +49,7 @@ func TestSegmentTransportDisablesHTTP2(t *testing.T) {
 }
 
 func TestSegmentedDownloadUsesHTTP1(t *testing.T) {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i)
-	}
+	data := randomData(256 * 1024)
 	var hits int64
 	srv := rangeServer(t, data, &hits)
 	defer srv.Close()

@@ -115,8 +115,9 @@ dikerjakan.
 
 ## Fase 4: perapian teknis
 
-- [ ] Test engine memakai data acak, bukan pola `byte(i)` yang berulang
-      tiap 256 byte. **K**
+- [x] Test engine memakai data acak, bukan pola `byte(i)` yang berulang
+      tiap 256 byte. **K** 12 tempat di 9 file test kini memakai
+      `randomData(n)`.
 - [ ] Batas stall untuk body manifest dan kunci AES. **K**
 - [ ] Map `bypass` di extension dibersihkan dari entri lama. **K**
 - [x] `/api/settings` bisa diubah sebagian (PATCH). **K** PUT dan PATCH

@@ -90,10 +90,7 @@ func TestAloneSurvivesRestore(t *testing.T) {
 // smaller range is answered with the whole file. The prefix stays, and the
 // finished file matches.
 func TestIgnoredSubrangeKeepsFinishedBytes(t *testing.T) {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i*3 + 1)
-	}
+	data := randomData(256 * 1024)
 	const gap = 128 * 1024
 	var mu sync.Mutex
 	var ranges []string
@@ -201,10 +198,7 @@ func TestIgnoredSubrangeKeepsFinishedBytes(t *testing.T) {
 // probe advertises ranges, and every explicit range is answered with the
 // whole file. The file is fetched on one connection and matches.
 func TestSubrangeOKFallsBackToOneConnection(t *testing.T) {
-	data := make([]byte, 256*1024)
-	for i := range data {
-		data[i] = byte(i*5 + 7)
-	}
+	data := randomData(256 * 1024)
 	var mu sync.Mutex
 	var ranges []string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

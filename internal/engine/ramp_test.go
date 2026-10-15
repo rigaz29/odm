@@ -35,10 +35,7 @@ func writeProbe(w http.ResponseWriter, total int) {
 
 func TestConnectionsRampAfterFileBytes(t *testing.T) {
 	const conns = 4
-	data := make([]byte, conns*MinChunkSize)
-	for i := range data {
-		data[i] = byte(i*13 + 1)
-	}
+	data := randomData(conns * MinChunkSize)
 	var explicit atomic.Int32
 	arrivals := make(chan struct{}, conns)
 	allowPrefix := make(chan struct{})

@@ -72,9 +72,6 @@ func TestProxyChangeRebuildsTheRangedClient(t *testing.T) {
 }
 
 func randomBytes(n int) []byte {
-	b := make([]byte, n)
-	for i := range b {
-		b[i] = byte((i*7 + i/251) % 256)
-	}
+	b := randomData(n)
 	return b
 }

@@ -80,6 +80,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 	settings = settings.clone()
 	settings.normalize(settings.Dir)
 	setUserAgent(settings.UserAgent)
+	setCategories(settings.CategoryDefs)
 	setFFmpegPath(settings.FFmpegPath)
 	m := &Manager{
 		downloads: map[string]*Download{},
@@ -344,6 +345,7 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 
 	m.limiter.SetRate(next.EffectiveSpeedLimit())
 	setUserAgent(next.UserAgent)
+	setCategories(next.CategoryDefs)
 	setFFmpegPath(next.FFmpegPath)
 	m.saveSettings()
 	m.fire()

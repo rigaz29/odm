@@ -573,22 +573,10 @@ func (a *application) openOptionsTab(tab int) {
 		catDirs[k] = v
 	}
 	catFolder := widget.NewEntry()
-	catTypes := hint("")
-	var curCat string
-	catSelect := widget.NewSelect(engine.Categories(), func(c string) {
-		if curCat != "" {
-			catDirs[curCat] = strings.TrimSpace(catFolder.Text)
-		}
-		curCat = c
-		catFolder.SetText(catDirs[c])
-		catFolder.SetPlaceHolder(filepath.Join(dirEntry.Text, c))
-		if exts := engine.CategoryExtensions(c); len(exts) > 0 {
-			catTypes.SetText("File types: " + strings.ToUpper(strings.Join(exts, " ")))
-		} else {
-			catTypes.SetText("File types: everything not listed in another category")
-		}
-	})
-	catSelect.SetSelected(engine.Categories()[0])
+	// The categories are edited in catDefs and saved with OK: names, order,
+	// and the extensions that decide which category (and folder) a file
+	// gets. Other is always last and takes everything else.
+	cats := newCategoryEditor(w, engine.CategoriesInUse(), catDirs, catFolder, dirEntry)
 	saveTab := container.NewVBox(
 		header("Categories and folders"),
 		widget.NewForm(widget.NewFormItem("Default download folder",
@@ -597,8 +585,10 @@ func (a *application) openOptionsTab(tab int) {
 		rememberCheck,
 		hint("Downloads added from the clipboard, the site grabber or the API use the default folder."),
 		widget.NewSeparator(),
-		widget.NewForm(widget.NewFormItem("Category", catSelect)),
-		catTypes,
+		widget.NewForm(widget.NewFormItem("Category", container.NewBorder(nil, nil, nil,
+			container.NewHBox(cats.newBtn, cats.delBtn, cats.resetBtn), cats.sel))),
+		widget.NewForm(widget.NewFormItem("File types", cats.exts)),
+		cats.note,
 		widget.NewForm(widget.NewFormItem("Folder for this category",
 			container.NewBorder(nil, nil, nil, browseDir(catFolder), catFolder))),
 		hint("Empty keeps <default folder>/<category>. Category folders apply when subfolders are on."),
@@ -981,10 +971,10 @@ func (a *application) openOptionsTab(tab int) {
 		fmt.Sscanf(connSelect.Selected, "%d", &conns)
 		fmt.Sscanf(concEntry.Text, "%d", &conc)
 		fmt.Sscanf(limitEntry.Text, "%d", &limit)
-		catDirs[curCat] = strings.TrimSpace(catFolder.Text)
+		cats.store()
 		cleanDirs := map[string]string{}
 		for k, v := range catDirs {
-			if v != "" {
+			if v != "" && cats.has(k) { // a deleted category keeps no folder
 				cleanDirs[k] = v
 			}
 		}
@@ -1040,6 +1030,7 @@ func (a *application) openOptionsTab(tab int) {
 		next.Sounds = soundCheck.Checked
 		next.FileTypes = parseFileTypes(typesEntry.Text)
 		next.CategoryDirs = cleanDirs
+		next.CategoryDefs = cats.defs // the built-in set comes back as nil
 		next.HostConnections = hostMap
 		next.UserAgent = strings.TrimSpace(uaEntry.Text)
 		next.FFmpegPath = strings.TrimSpace(ffEntry.Text)

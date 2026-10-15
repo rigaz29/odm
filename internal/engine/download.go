@@ -606,10 +606,7 @@ func (d *Download) openTarget(fresh bool) error {
 		dir = d.Dir
 	}
 	if d.Categories {
-		cat := d.CategoryName
-		if cat == "" {
-			cat = Category(d.FileName)
-		}
+		cat := d.category()
 		if custom := d.catDirs[cat]; strings.TrimSpace(custom) != "" {
 			dir = custom
 		} else {
@@ -1850,8 +1847,11 @@ func (d *Download) Info() Info {
 	return d.infoLocked()
 }
 
+// category is the download's category: the one chosen for it while that
+// still exists, else the one its file name falls under. The caller holds
+// d.mu.
 func (d *Download) category() string {
-	if d.CategoryName != "" {
+	if d.CategoryName != "" && knownCategory(d.CategoryName) {
 		return d.CategoryName
 	}
 	return Category(d.FileName)

@@ -86,14 +86,17 @@ type Settings struct {
 	SpeedLimit  int64  `json:"speed_limit"`
 	// LimiterOff keeps SpeedLimit but does not apply it, so the speed
 	// limiter can be switched off and on again without retyping the value.
-	LimiterOff   bool                     `json:"limiter_off,omitempty"`
-	Categories   bool                     `json:"categories"`
-	Clipboard    bool                     `json:"clipboard"`
-	Proxy        ProxyConfig              `json:"proxy"`
-	Logins       []Login                  `json:"logins"`
-	Queues       []string                 `json:"queues"`
-	FileTypes    []string                 `json:"file_types,omitempty"`
-	CategoryDirs map[string]string        `json:"category_dirs"`
+	LimiterOff   bool              `json:"limiter_off,omitempty"`
+	Categories   bool              `json:"categories"`
+	Clipboard    bool              `json:"clipboard"`
+	Proxy        ProxyConfig       `json:"proxy"`
+	Logins       []Login           `json:"logins"`
+	Queues       []string          `json:"queues"`
+	FileTypes    []string          `json:"file_types,omitempty"`
+	CategoryDirs map[string]string `json:"category_dirs"`
+	// CategoryDefs replaces the built-in categories when set: their names,
+	// order and extensions. nil means the built-in set.
+	CategoryDefs []CategoryDef            `json:"category_defs,omitempty"`
 	Schedules    map[string]QueueSchedule `json:"schedules"`
 	Limits       DownloadLimits           `json:"limits"`
 	// HostConnections overrides Connections per server (lower-case host).
@@ -182,6 +185,12 @@ func (s Settings) clone() Settings {
 	c.ExcludeSites = slices.Clone(s.ExcludeSites)
 	c.CategoryDirs = maps.Clone(s.CategoryDirs)
 	c.HostConnections = maps.Clone(s.HostConnections)
+	if s.CategoryDefs != nil {
+		c.CategoryDefs = make([]CategoryDef, len(s.CategoryDefs))
+		for i, d := range s.CategoryDefs {
+			c.CategoryDefs[i] = CategoryDef{Name: d.Name, Exts: slices.Clone(d.Exts)}
+		}
+	}
 	if s.Schedules != nil {
 		c.Schedules = make(map[string]QueueSchedule, len(s.Schedules))
 		for q, sc := range s.Schedules {
@@ -292,6 +301,7 @@ func (s *Settings) normalize(fallbackDir string) {
 	if s.CategoryDirs == nil {
 		s.CategoryDirs = map[string]string{}
 	}
+	s.CategoryDefs = normalizeCategories(s.CategoryDefs)
 }
 
 // NewQueueSchedule returns the defaults a new queue starts with.
@@ -440,31 +450,11 @@ var categoryExt = map[string]string{
 	".iso": "Disk Images", ".img": "Disk Images", ".vhd": "Disk Images",
 }
 
-// Category maps a file name to its download subfolder.
-func Category(name string) string {
-	if c, ok := categoryExt[strings.ToLower(filepath.Ext(name))]; ok {
-		return c
-	}
-	return "Other"
-}
-
-// categoryOrder is the presentation order of the category folders.
-var categoryOrder = []string{
-	"Video", "Audio", "Documents", "Programs", "Compressed", "Images", "Disk Images", "Other",
-}
-
-// Categories returns the known category folder names, in display order.
-func Categories() []string {
-	out := make([]string, len(categoryOrder))
-	copy(out, categoryOrder)
-	return out
-}
-
 // KnownFileType reports whether name has a downloadable extension. With
 // types (the Options "File types" list, with or without dots) only those
 // count; without, the built-in list does. types is only compared, never
-// merged into categoryExt: that map is shared read-only state and decides
-// category folders, which the takeover list must not change.
+// merged into categoryExt, the built-in table the default categories are
+// made from: the takeover list must not change category folders.
 func KnownFileType(name string, types ...string) bool {
 	ext := strings.ToLower(filepath.Ext(name))
 	if ext == "" {
@@ -488,18 +478,6 @@ func DefaultFileTypes() []string {
 	out := make([]string, 0, len(categoryExt))
 	for ext := range categoryExt {
 		out = append(out, strings.TrimPrefix(ext, "."))
-	}
-	sort.Strings(out)
-	return out
-}
-
-// CategoryExtensions lists the extensions filed under cat, without dots.
-func CategoryExtensions(cat string) []string {
-	var out []string
-	for ext, c := range categoryExt {
-		if c == cat {
-			out = append(out, strings.TrimPrefix(ext, "."))
-		}
 	}
 	sort.Strings(out)
 	return out

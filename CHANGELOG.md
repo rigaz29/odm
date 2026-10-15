@@ -18,6 +18,10 @@ All notable changes to ODM are documented here. The format is based on
   keeps the value; with none saved yet, ODM asks for one. The status bar
   names the limit while it applies, and Options → Connection has an On box
   next to the global limit.
+- Categories can be added, deleted and given other file types in Options →
+  Save to (New…, Delete, Defaults). The file types decide which category,
+  and so which subfolder, a download gets; Other, always last, takes the
+  rest. A download whose category was deleted is filed by its file name.
 - A queue can start again every so many minutes until it is stopped (by
   hand, at its stop time or by Stop all), which picks up files added or
   failed since. A repeating queue never counts as finished, so it runs no

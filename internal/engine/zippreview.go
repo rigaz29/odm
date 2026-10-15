@@ -72,7 +72,7 @@ func (m *Manager) PreviewZip(ctx context.Context, rawURL string, headers map[str
 			Name:       f.Name,
 			Size:       int64(f.UncompressedSize64),
 			Compressed: int64(f.CompressedSize64),
-			Modified:   f.Modified,
+			Modified:   zipModTime(f.Modified),
 			Dir:        strings.HasSuffix(f.Name, "/"),
 			Encrypted:  f.Flags&0x1 != 0,
 		}
@@ -87,6 +87,18 @@ func (m *Manager) PreviewZip(ctx context.Context, rawURL string, headers map[str
 	})
 	out.Fetched = r.fetched
 	return out, nil
+}
+
+// zipModTime gives an entry's time as the moment it names. Many tools
+// (Explorer, Python) store only the MS-DOS time, a wall clock with no zone,
+// which archive/zip labels UTC; shown as local time it would be off by the
+// zone's offset. Such a time is read as a local wall clock instead. An
+// entry with an extended timestamp has its own zone and is kept.
+func zipModTime(t time.Time) time.Time {
+	if t.IsZero() || t.Location() != time.UTC {
+		return t
+	}
+	return time.Date(t.Year(), t.Month(), t.Day(), t.Hour(), t.Minute(), t.Second(), 0, time.Local)
 }
 
 // rangeReaderAt reads a remote file with range requests, in 64 KiB blocks

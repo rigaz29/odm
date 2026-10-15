@@ -107,6 +107,18 @@ func TestPreviewZipRefusals(t *testing.T) {
 	}
 }
 
+func TestZipModTime(t *testing.T) {
+	dos := time.Date(2026, 10, 15, 13, 17, 0, 0, time.UTC) // MS-DOS time: no zone
+	got := zipModTime(dos)
+	if got.Location() != time.Local || got.Hour() != 13 || got.Minute() != 17 {
+		t.Fatalf("MS-DOS time read as %v, want 13:17 local", got)
+	}
+	ext := time.Date(2026, 10, 15, 6, 17, 0, 0, time.FixedZone("", 0)) // extended timestamp
+	if !zipModTime(ext).Equal(ext) {
+		t.Fatal("an extended timestamp was changed")
+	}
+}
+
 func TestIsZipName(t *testing.T) {
 	if !IsZipName("a.ZIP", "") || !IsZipName("download", "application/zip; charset=binary") || IsZipName("a.rar", "application/octet-stream") {
 		t.Fatal("IsZipName")

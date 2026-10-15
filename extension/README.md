@@ -78,14 +78,17 @@ the system tray first. Then:
   browser keeps the download.
 - **Click "Download this video"** over a player. The button appears when the
   page loads a video or audio file of at least 512 KB; with several, it
-  lists them. HLS/DASH streams are listed too, first the one the player
-  loaded first (usually the playlist with every quality); ODM's New Download
-  window then lists its qualities and audio tracks (with that window turned
-  off, ODM picks the best quality itself).
+  lists them. An HLS/DASH stream is listed with each quality its playlist
+  offers: resolution, bitrate, codecs and the expected size. ODM reads the
+  playlist when the menu opens (starting first if it is not running), with
+  the site's cookies. A playlist the player loaded that is only one of those
+  qualities is left out. ODM's New Download window opens with the quality
+  picked and offers the audio tracks; with that window turned off, ODM
+  downloads the picked quality.
 - **Right-click** a link, video, audio or image → **Download with ODM**.
 - **Toolbar popup:** the icon's badge counts the media the page has loaded
-  (up to 15, from every frame), and the popup lists them with how long ago
-  each was seen. Use it when there is no button: audio-only pages, players
+  (up to 15, from every frame), and the popup lists them, streams with
+  their qualities, with how long ago each was seen. Use it when there is no button: audio-only pages, players
   drawn on a canvas, a player in another frame, or after closing the
   button with ✕.
 

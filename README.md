@@ -222,6 +222,7 @@ only.
 | POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` | Control a download |
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |
+| POST | `/api/probe/stream` | Qualities of an HLS/DASH playlist `{"url","headers"}`; an add with `"stream"` takes one as `"quality"` |
 | POST | `/api/actions/pause-all` \| `/stop-all` \| `/resume-all` \| `/clear-completed` | Batch actions (`stop-all` also stops started queues) |
 | GET | `/api/events` | Server-Sent Events stream of the list |
 

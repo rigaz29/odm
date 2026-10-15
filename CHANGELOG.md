@@ -8,6 +8,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- The browser extension's "Download this video" menu and popup list each
+  quality of an HLS/DASH stream: resolution, bitrate, codecs and the
+  expected size, read by ODM from the playlist with the site's cookies.
+  A playlist the player loaded that is only one of those qualities is left
+  out. The New Download window opens with the quality picked, and with
+  that window turned off ODM downloads it. `POST /api/probe/stream` lists
+  a playlist's qualities, and `POST /api/downloads` takes `quality`.
 - A download the browser hands over starts ODM, in the system tray, when it
   is not running. The browser used to keep such downloads, so taking them
   over needed ODM to be open first. The extension popup's connection test

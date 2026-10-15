@@ -44,6 +44,8 @@ func runNativeHost(configDir string) {
 			return relayConfig(client)
 		case "", "download":
 			return relayStarting(func() native.Reply { return relayDownload(client, m) }, start)
+		case "streams":
+			return relayStarting(func() native.Reply { return relayStreams(client, m) }, start)
 		}
 		return native.Reply{Error: "unknown message type: " + m.Type}
 	})
@@ -106,20 +108,7 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	if m.URL == "" {
 		return native.Reply{Error: "missing url"}
 	}
-	headers := map[string]string{}
-	for k, v := range m.Headers {
-		headers[k] = v
-	}
-	if m.Referrer != "" {
-		headers["Referer"] = m.Referrer
-	}
-	if m.Cookies != "" {
-		headers["Cookie"] = m.Cookies
-	}
-	// Some servers only answer the browser that started the session.
-	if m.UserAgent != "" {
-		headers["User-Agent"] = m.UserAgent
-	}
+	headers := browserHeaders(m)
 	payload := map[string]any{
 		"url":         m.URL,
 		"dir":         m.Dir,
@@ -144,6 +133,9 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 		}
 		payload["stream"] = string(k)
 		payload["file_name"] = native.StreamName(m.Title)
+		if m.Quality != "" {
+			payload["quality"] = m.Quality
+		}
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(ipc.BaseURL+"/api/downloads", "application/json", bytes.NewReader(body))
@@ -164,6 +156,56 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 		return native.Reply{OK: true, ID: info.ID, Message: "already in the list"}
 	}
 	return native.Reply{Error: fmt.Sprintf("ODM returned %s", resp.Status)}
+}
+
+// browserHeaders are the request headers the browser would send for m:
+// its own, the page as referrer, the site's cookies and its user agent.
+func browserHeaders(m native.Message) map[string]string {
+	headers := map[string]string{}
+	for k, v := range m.Headers {
+		headers[k] = v
+	}
+	if m.Referrer != "" {
+		headers["Referer"] = m.Referrer
+	}
+	if m.Cookies != "" {
+		headers["Cookie"] = m.Cookies
+	}
+	// Some servers only answer the browser that started the session.
+	if m.UserAgent != "" {
+		headers["User-Agent"] = m.UserAgent
+	}
+	return headers
+}
+
+// relayStreams asks ODM what qualities the playlist at m.URL offers,
+// reading it with the browser's headers as the download would.
+func relayStreams(client *http.Client, m native.Message) native.Reply {
+	if m.URL == "" {
+		return native.Reply{Error: "missing url"}
+	}
+	body, _ := json.Marshal(map[string]any{"url": m.URL, "headers": browserHeaders(m)})
+	resp, err := client.Post(ipc.BaseURL+"/api/probe/stream", "application/json", bytes.NewReader(body))
+	if err != nil {
+		return native.Reply{Error: errNotRunning}
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		var e struct {
+			Error   string `json:"error"`
+			Refused bool   `json:"refused"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&e)
+		if e.Error == "" {
+			e.Error = fmt.Sprintf("ODM returned %s", resp.Status)
+		}
+		return native.Reply{Error: e.Error, Refused: e.Refused}
+	}
+	var info native.StreamInfo
+	if err := json.NewDecoder(resp.Body).Decode(&info); err != nil {
+		return native.Reply{Error: "unreadable reply: " + err.Error()}
+	}
+	return native.Reply{OK: true, Stream: &info}
 }
 
 // relayConfig returns the settings the extension applies itself.

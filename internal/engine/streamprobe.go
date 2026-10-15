@@ -34,6 +34,9 @@ type StreamChoices struct {
 	Qualities []StreamQuality
 	// Note explains a limitation of this playlist, "" when there is none.
 	Note string
+	// Single is set for an address that is one quality of a stream (a
+	// media playlist) rather than the playlist that lists them.
+	Single bool
 	// length is the stream's duration, 0 when unknown.
 	length time.Duration
 }
@@ -59,6 +62,17 @@ type StreamAudio struct {
 	Label string
 	key   string // HLS rendition key or DASH Representation ID; "" = in the video
 	bps   int64  // DASH only: added to the video's bitrate
+}
+
+// Quality returns the index of the quality labelled label, or -1 when
+// there is none (the playlist changed since the label was read).
+func (c *StreamChoices) Quality(label string) int {
+	for i, q := range c.Qualities {
+		if q.Label == label {
+			return i
+		}
+	}
+	return -1
 }
 
 // Job returns the StreamJob for quality q and audio a (an index into
@@ -135,6 +149,7 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 			return nil, err
 		}
 		c.Qualities = []StreamQuality{{Label: "As found (one quality)"}}
+		c.Single = true
 		c.Note = "This address is one quality of a stream, and its audio may be separate. " +
 			"Download from the page's main playlist to choose the quality."
 		if p.Media.Live() {

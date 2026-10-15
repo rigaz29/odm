@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"encoding/json"
+	"errors"
 	"io/fs"
 	"net/http"
 	"strings"
@@ -49,6 +50,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("GET /api/downloads", s.handleList)
 	mux.HandleFunc("POST /api/downloads", s.handleAdd)
 	mux.HandleFunc("GET /api/probe", s.handleProbe)
+	mux.HandleFunc("POST /api/probe/stream", s.handleProbeStream)
 	mux.HandleFunc("GET /api/downloads/{id}", s.handleGet)
 	mux.HandleFunc("POST /api/downloads/{id}/{action}", s.handleAction)
 	mux.HandleFunc("POST /api/downloads/{id}/limit", s.handleLimit)
@@ -160,6 +162,9 @@ type addRequest struct {
 	// Stream ("hls" or "dash") makes URL a playlist to download segment
 	// by segment instead of a file.
 	Stream string `json:"stream"`
+	// Quality is the label of one of the stream's qualities, as
+	// POST /api/probe/stream lists them. Empty: the best.
+	Quality string `json:"quality"`
 }
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -198,11 +203,15 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.Stream = &engine.StreamJob{Kind: k, Manifest: req.URL}
+		opts.StreamQuality = req.Quality
 	}
 	if req.Prompt && s.OnPrompt != nil && !s.mgr.Settings().NoStartDialog && s.OnPrompt(opts) {
 		// The person decides in the window (it also handles duplicates).
 		writeJSON(w, http.StatusAccepted, map[string]bool{"prompted": true})
 		return
+	}
+	if opts.Stream != nil && req.Quality != "" {
+		s.pinQuality(r.Context(), &opts, req.Quality)
 	}
 	// Requests here come from the browser relay or scripts, so the
 	// duplicate policy for automatic adds applies.
@@ -213,6 +222,78 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK // already in the list; info is the existing entry
 	}
 	writeJSON(w, status, info)
+}
+
+// pinQuality makes a stream download the quality labelled label. When the
+// playlist cannot be read now or no longer has it, the download keeps
+// picking the best quality itself when it runs.
+func (s *Server) pinQuality(ctx context.Context, opts *engine.AddOptions, label string) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	c, err := s.mgr.ProbeStream(ctx, opts.URL, opts.Headers)
+	if err != nil {
+		return
+	}
+	if q := c.Quality(label); q >= 0 {
+		if job, err := c.Job(opts.URL, q, 0); err == nil {
+			opts.Stream = &job
+		}
+	}
+}
+
+// streamInfo is a playlist's qualities as POST /api/probe/stream lists
+// them; labels are what a download's "quality" names.
+type streamInfo struct {
+	Kind      string          `json:"kind"`
+	Single    bool            `json:"single,omitempty"`
+	Note      string          `json:"note,omitempty"`
+	Qualities []streamQuality `json:"qualities"`
+}
+
+type streamQuality struct {
+	Label    string   `json:"label"`
+	Estimate int64    `json:"estimate,omitempty"`
+	Audios   []string `json:"audios,omitempty"`
+}
+
+// handleProbeStream reads an HLS or DASH playlist with the headers given
+// (the browser's cookies, for one) and lists its qualities, so the browser
+// extension can offer them before anything is added. A playlist that can
+// never be downloaded (DRM, not a playlist) answers 422 with "refused".
+func (s *Server) handleProbeStream(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		URL     string            `json:"url"`
+		Headers map[string]string `json:"headers"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	req.URL = strings.TrimSpace(req.URL)
+	if req.URL == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "url is required"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 20*time.Second)
+	defer cancel()
+	c, err := s.mgr.ProbeStream(ctx, req.URL, req.Headers)
+	if errors.Is(err, engine.ErrStreamRefused) {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"error": err.Error(), "refused": true})
+		return
+	}
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	out := streamInfo{Kind: string(c.Kind), Single: c.Single, Note: c.Note, Qualities: []streamQuality{}}
+	for _, q := range c.Qualities {
+		sq := streamQuality{Label: q.Label, Estimate: q.Estimate}
+		for _, a := range q.Audios {
+			sq.Audios = append(sq.Audios, a.Label)
+		}
+		out.Qualities = append(out.Qualities, sq)
+	}
+	writeJSON(w, http.StatusOK, out)
 }
 
 // handleProbe inspects a URL so the Add dialog can show size and file name.

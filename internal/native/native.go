@@ -32,6 +32,9 @@ type Message struct {
 	// Kind is "stream" for an HLS/DASH playlist the extension saw the
 	// page's player load; anything else is a plain file.
 	Kind string `json:"kind"`
+	// Quality is the label of the stream quality picked in the
+	// extension's menu, as a "streams" reply listed it. Empty: the best.
+	Quality string `json:"quality"`
 }
 
 // Reply is the response sent back to the extension.
@@ -41,6 +44,28 @@ type Reply struct {
 	ID      string  `json:"id,omitempty"`
 	Message string  `json:"message,omitempty"`
 	Config  *Config `json:"config,omitempty"`
+	// Refused marks an Error that will not go away: a stream that can
+	// never be downloaded (DRM, not a playlist).
+	Refused bool        `json:"refused,omitempty"`
+	Stream  *StreamInfo `json:"stream,omitempty"`
+}
+
+// StreamInfo lists a playlist's qualities, answered to a "streams" message
+// so the extension's menu can offer them. Single is set for a playlist
+// that is one quality of a stream rather than the list of them.
+type StreamInfo struct {
+	Kind      string          `json:"kind"`
+	Single    bool            `json:"single,omitempty"`
+	Note      string          `json:"note,omitempty"`
+	Qualities []StreamQuality `json:"qualities"`
+}
+
+// StreamQuality is one quality: its label (resolution, bitrate, codecs),
+// the expected size in bytes (0: unknown) and its audio tracks.
+type StreamQuality struct {
+	Label    string   `json:"label"`
+	Estimate int64    `json:"estimate,omitempty"`
+	Audios   []string `json:"audios,omitempty"`
 }
 
 // Config is what the extension needs from ODM's settings, answered to a

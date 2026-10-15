@@ -111,3 +111,46 @@ func TestRelayPingAsksODM(t *testing.T) {
 		t.Fatalf("ping with ODM running: %+v", r)
 	}
 }
+
+func TestRelayStreams(t *testing.T) {
+	var sent map[string]any
+	reply := func(code int, body string) *http.Client {
+		return &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+			if r.URL.Path != "/api/probe/stream" {
+				t.Fatalf("asked %s", r.URL.Path)
+			}
+			sent = nil
+			_ = json.NewDecoder(r.Body).Decode(&sent)
+			return &http.Response{StatusCode: code, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})}
+	}
+	m := native.Message{Type: "streams", URL: "https://cdn.example/master.m3u8", Cookies: "s=1", Referrer: "https://site.example/watch"}
+
+	r := relayStreams(reply(http.StatusOK, `{"kind":"hls","qualities":[{"label":"720p","estimate":5}]}`), m)
+	if !r.OK || r.Stream == nil || r.Stream.Kind != "hls" || len(r.Stream.Qualities) != 1 || r.Stream.Qualities[0].Estimate != 5 {
+		t.Fatalf("reply %+v", r)
+	}
+	if h, _ := sent["headers"].(map[string]any); h["Cookie"] != "s=1" || h["Referer"] != "https://site.example/watch" {
+		t.Fatalf("headers sent %v", sent["headers"])
+	}
+
+	r = relayStreams(reply(http.StatusUnprocessableEntity, `{"error":"this stream is DRM-protected","refused":true}`), m)
+	if r.OK || !r.Refused || r.Error != "this stream is DRM-protected" {
+		t.Fatalf("refused: %+v", r)
+	}
+	r = relayStreams(reply(http.StatusBadGateway, `{"error":"timeout"}`), m)
+	if r.OK || r.Refused || r.Error != "timeout" {
+		t.Fatalf("failed: %+v", r)
+	}
+}
+
+func TestRelayStreamQuality(t *testing.T) {
+	got, _ := relayed(t, native.Message{Kind: "stream", URL: "https://cdn.example/p.m3u8", Quality: "720p · 2.0 Mbps"})
+	if got["quality"] != "720p · 2.0 Mbps" {
+		t.Fatalf("posted %v", got)
+	}
+	got, _ = relayed(t, native.Message{URL: "https://cdn.example/a.zip", Quality: "720p"})
+	if _, ok := got["quality"]; ok {
+		t.Fatalf("a file carried a quality: %v", got)
+	}
+}

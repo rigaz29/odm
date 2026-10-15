@@ -19,6 +19,7 @@ const MIN_MEDIA_BYTES = 512 * 1024;
 const CONFIG_TTL_MS = 5 * 60 * 1000;
 const MAX_MEDIA_PER_TAB = 15;
 const BYPASS_MS = 10 * 1000;
+const STREAM_INFO_MS = 2 * 60 * 1000;
 // Chromium names a download within milliseconds, unless it asks where to
 // save it: then the name waits for the Save As dialog.
 const NAME_WAIT_MS = 2 * 60 * 1000;
@@ -247,13 +248,35 @@ async function handOff(fields) {
 
 const tabKey = (tabId) => `media:${tabId}`;
 
+// What ODM said about each playlist, kept for STREAM_INFO_MS: a menu asks
+// whenever it opens, and the playlist need not be read each time. A
+// failure that may pass (ODM busy, a network error) is not kept.
+const streamInfos = new Map();
+function streamInfo(url, referrer) {
+  const now = Date.now();
+  for (const [u, e] of streamInfos) {
+    if (now - e.at >= STREAM_INFO_MS) streamInfos.delete(u);
+  }
+  const hit = streamInfos.get(url);
+  if (hit) return hit.reply;
+  const reply = cookieHeader(url).then((cookies) =>
+    askOdm({ type: "streams", url, referrer, cookies, userAgent: navigator.userAgent }));
+  streamInfos.set(url, { at: now, reply });
+  reply.then((r) => {
+    if (!r.ok && !r.refused) streamInfos.delete(url);
+  });
+  return reply;
+}
+
 // grab sends one detected media item to ODM. The referrer is the page (or
-// frame) it was found on; streams get the page title as their name.
+// frame) it was found on; streams get the page title as their name, and
+// the quality picked in a menu, if any.
 function grab(item, referrer, title) {
   return handOff({
     url: item.url, referrer, title,
     mime: item.mime || "", size: item.size || 0,
     kind: item.kind === "stream" ? "stream" : "file",
+    quality: item.quality || "",
   });
 }
 
@@ -402,6 +425,12 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
           .then(sendResponse);
         return true;
       }
+      if (msg.type === "odm-stream-info" && msg.item) {
+        chrome.tabs.get(msg.tabId).catch(() => null)
+          .then((t) => streamInfo(msg.item.url, popupReferrer(msg.item, t)))
+          .then(sendResponse);
+        return true;
+      }
       return false;
     }
     if (msg.type === "odm-media-request") {
@@ -410,6 +439,10 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     }
     if (msg.type === "odm-grab" && msg.item) {
       grab(msg.item, sender.url || tab.url || "", tab.title || "").then(sendResponse);
+      return true;
+    }
+    if (msg.type === "odm-stream-info" && msg.item) {
+      streamInfo(msg.item.url, sender.url || tab.url || "").then(sendResponse);
       return true;
     }
     if (msg.type === "odm-bypass" && msg.url) {

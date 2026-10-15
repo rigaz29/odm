@@ -13,6 +13,9 @@
   #media { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
   #media button { text-align: left; display: flex; justify-content: space-between; gap: 8px; }
   #media .when { color: #8b93a7; white-space: nowrap; }
+  #media button:disabled { cursor: default; color: #8b93a7; }
+  #media button.head { background: none; border: none; font-size: 11px; padding: 6px 2px 0; }
+  #media button.sub { margin-left: 14px; width: calc(100% - 14px); }
   .empty { color: #8b93a7; font-size: 12px; }
 </style>
 </head>

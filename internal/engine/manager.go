@@ -878,6 +878,10 @@ type AddOptions struct {
 	// Stream makes this a segmented (HLS/DASH) download; URL is then the
 	// manifest the stream was found at.
 	Stream *StreamJob
+	// StreamQuality is the label of the quality picked before the New
+	// Download window opened (in the browser's menu), which the window
+	// then selects. "" leaves the window's own choice.
+	StreamQuality string
 }
 
 // Create queues a download from opts and returns its projection.

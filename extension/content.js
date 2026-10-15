@@ -12,7 +12,11 @@
   let host = null;
   let ui = null;
   // medialist.js runs first in the same content-script world.
-  const { fmtSize, orderMedia, mediaLabel } = self.odmMediaList;
+  const { fmtSize, menuEntries } = self.odmMediaList;
+  // ODM's replies about the streams (their qualities), by playlist URL;
+  // asked once each, again when the reply was a failure that may pass.
+  const infos = new Map();
+  const asked = new Set();
 
   // The largest visible video is the player; small ones are previews.
   function mainVideo() {
@@ -43,12 +47,15 @@
                  border-radius:4px; box-shadow:0 1px 4px rgba(0,0,0,.4); white-space:nowrap; }
         button:hover { background:#388bfd; }
         .x { background:#30363d; padding:4px 7px; }
+        .menu, .status { font:13px/1.4 system-ui,sans-serif; }
         .menu { margin-top:4px; background:#161b22; color:#e6edf3; border-radius:4px;
-                box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:220px; }
-        .menu div { padding:6px 10px; cursor:pointer; }
+                box-shadow:0 2px 8px rgba(0,0,0,.5); min-width:220px; max-height:60vh; overflow-y:auto; }
+        .menu div { padding:6px 10px; cursor:pointer; white-space:nowrap; }
         .menu div:hover { background:#1f6feb; }
         .menu .off { color:#8b949e; cursor:default; }
         .menu .off:hover { background:none; }
+        .menu .head { color:#8b949e; font-size:11px; padding-bottom:2px; }
+        .menu .sub { padding-left:20px; }
         .status { margin-top:4px; background:#161b22; color:#e6edf3; padding:4px 10px; border-radius:4px; }
       </style>
       <div class="bar"><button class="dl"></button><button class="x" title="Hide">✕</button></div>
@@ -67,7 +74,8 @@
     });
     ui.dl.addEventListener("click", (e) => {
       e.stopPropagation();
-      if (items.length === 1) send(items[0]);
+      // A stream opens the menu too, to pick its quality.
+      if (items.length === 1 && items[0].kind !== "stream") send(items[0]);
       else toggleMenu();
     });
     document.documentElement.appendChild(host);
@@ -78,18 +86,39 @@
       ui.menu.hidden = true;
       return;
     }
-    ui.menu.replaceChildren();
-    for (const it of orderMedia(items)) {
-      const row = document.createElement("div");
-      row.textContent = mediaLabel(it);
-      row.addEventListener("click", (e) => {
-        e.stopPropagation();
-        ui.menu.hidden = true;
-        send(it);
+    renderMenu();
+    ui.menu.hidden = false;
+  }
+
+  // renderMenu lists the media, each stream with its qualities once ODM
+  // has read its playlist, and asks ODM about streams not asked about yet.
+  function renderMenu() {
+    for (const it of items) {
+      if (it.kind !== "stream" || asked.has(it.url)) continue;
+      asked.add(it.url);
+      chrome.runtime.sendMessage({ type: "odm-stream-info", item: it }, (reply) => {
+        const r = chrome.runtime.lastError || !reply ? { ok: false, error: "ODM is not reachable" } : reply;
+        infos.set(it.url, r);
+        if (!r.ok && !r.refused) asked.delete(it.url); // ask again next time
+        if (!ui.menu.hidden) renderMenu();
       });
+    }
+    ui.menu.replaceChildren();
+    for (const e of menuEntries(items, infos)) {
+      const row = document.createElement("div");
+      row.textContent = e.text;
+      if (e.heading) row.className = "head";
+      else if (!e.item) row.className = "off";
+      if (e.sub) row.classList.add("sub");
+      if (e.item) {
+        row.addEventListener("click", (ev) => {
+          ev.stopPropagation();
+          ui.menu.hidden = true;
+          send(e.item);
+        });
+      }
       ui.menu.appendChild(row);
     }
-    ui.menu.hidden = false;
   }
 
   function flash(text) {
@@ -138,6 +167,7 @@
 
   function setItems(list) {
     items = Array.isArray(list) ? list : [];
+    if (ui && !ui.menu.hidden) renderMenu();
     schedule();
   }
 

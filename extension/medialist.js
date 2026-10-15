@@ -30,6 +30,52 @@
     return `${type} file${it.size ? ", " + fmtSize(it.size) : ""}`;
   }
 
+  // qualityLabel is a stream quality as menus list it: ODM's label
+  // (resolution, bitrate, codecs) and the expected size.
+  function qualityLabel(q) {
+    return q.estimate ? `${q.label} · ~${fmtSize(q.estimate)}` : q.label;
+  }
+
+  // menuEntries lists what a media menu shows. infos maps a playlist's URL
+  // to ODM's reply to a "streams" message; a stream without one is still
+  // being asked about. A stream's qualities come under a heading, each an
+  // entry whose item carries the quality's label. Players load the
+  // playlist listing every quality and then the one they play, so a
+  // playlist that is one quality is left out once a list is known.
+  // Entries without an item cannot be clicked.
+  function menuEntries(items, infos) {
+    const ordered = orderMedia(items);
+    const info = (it) => (infos ? infos.get(it.url) : undefined);
+    const listing = (r) => r && r.ok && r.stream && !r.stream.single;
+    const anyListing = ordered.some((it) => it.kind === "stream" && listing(info(it)));
+    const out = [];
+    for (const it of ordered) {
+      if (it.kind !== "stream") {
+        out.push({ text: mediaLabel(it), item: it, at: it.at });
+        continue;
+      }
+      const r = info(it);
+      const name = r && r.ok && r.stream && r.stream.kind ? `${r.stream.kind.toUpperCase()} stream` : mediaLabel(it);
+      if (!r) {
+        out.push({ text: `${name} · reading qualities…`, at: it.at });
+      } else if (listing(r)) {
+        out.push({ text: name, heading: true, at: it.at });
+        for (const q of r.stream.qualities) out.push({ text: qualityLabel(q), item: { ...it, quality: q.label }, sub: true });
+        if (r.stream.note) out.push({ text: r.stream.note, sub: true });
+      } else if (r.ok && r.stream) {
+        if (anyListing) continue;
+        const q = r.stream.qualities[0];
+        out.push({ text: `${name} · one quality${q && q.estimate ? " · ~" + fmtSize(q.estimate) : ""}`, item: it, at: it.at });
+      } else if (r.refused) {
+        out.push({ text: `${name} · ${r.error}`, at: it.at });
+      } else {
+        // ODM could not read it just now; it picks the quality when it runs.
+        out.push({ text: `${name} · best quality`, item: it, at: it.at });
+      }
+    }
+    return out;
+  }
+
   // "12s ago", "3 min ago"; "" without a time.
   function ago(at, now) {
     if (!at) return "";
@@ -39,7 +85,7 @@
     return `${Math.round(s / 3600)} h ago`;
   }
 
-  const api = { fmtSize, orderMedia, mediaLabel, ago };
+  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, ago };
   // Always set: in a content script, a page element with id="module"
   // makes the global "module" look defined.
   root.odmMediaList = api;

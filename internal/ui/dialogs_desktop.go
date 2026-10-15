@@ -226,7 +226,15 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			qualitySelect.Options = append(qualitySelect.Options, label)
 		}
 		qualitySelect.Enable()
-		qualitySelect.SetSelectedIndex(0) // OnChanged fills the audio list
+		sel := 0
+		// The quality picked in the browser's menu, for the address it
+		// was picked for.
+		if pre.StreamQuality != "" && addr == strings.TrimSpace(pre.URL) {
+			if q := c.Quality(pre.StreamQuality); q >= 0 {
+				sel = q
+			}
+		}
+		qualitySelect.SetSelectedIndex(sel) // OnChanged fills the audio list
 		info := Tf("%s stream", strings.ToUpper(string(c.Kind)))
 		if c.Note != "" {
 			info += " · " + c.Note

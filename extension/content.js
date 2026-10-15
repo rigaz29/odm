@@ -11,17 +11,8 @@
   let dismissed = false;
   let host = null;
   let ui = null;
-
-  const fmtSize = (n) => {
-    if (!n) return "";
-    const u = ["B", "KB", "MB", "GB"];
-    let i = 0;
-    while (n >= 1000 && i < u.length - 1) {
-      n /= 1024;
-      i++;
-    }
-    return `${n.toFixed(i ? 2 : 0)} ${u[i]}`;
-  };
+  // medialist.js runs first in the same content-script world.
+  const { fmtSize, orderMedia, mediaLabel } = self.odmMediaList;
 
   // The largest visible video is the player; small ones are previews.
   function mainVideo() {
@@ -88,16 +79,9 @@
       return;
     }
     ui.menu.replaceChildren();
-    for (const it of ordered()) {
+    for (const it of orderMedia(items)) {
       const row = document.createElement("div");
-      if (it.kind === "stream") {
-        // Only headers were seen: whether this playlist lists every quality
-        // or is one of them is known once ODM reads it.
-        row.textContent = `${it.format || "Media"} stream`;
-      } else {
-        const type = it.mime ? it.mime.split("/")[1] : "video";
-        row.textContent = `${type} file${it.size ? ", " + fmtSize(it.size) : ""}`;
-      }
+      row.textContent = mediaLabel(it);
       row.addEventListener("click", (e) => {
         e.stopPropagation();
         ui.menu.hidden = true;
@@ -106,15 +90,6 @@
       ui.menu.appendChild(row);
     }
     ui.menu.hidden = false;
-  }
-
-  // Streams first, in the order the player loaded them: a player reads the
-  // playlist listing every quality before the one quality it plays, so the
-  // first is usually the complete one. Files follow, largest first.
-  function ordered() {
-    const streams = items.filter((i) => i.kind === "stream").sort((a, b) => (a.at || 0) - (b.at || 0));
-    const files = items.filter((i) => i.kind !== "stream").sort((a, b) => b.size - a.size);
-    return [...streams, ...files];
   }
 
   function flash(text) {

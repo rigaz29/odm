@@ -988,7 +988,7 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 	if d == nil {
 		return false
 	}
-	d.Pause()
+	d.abandon()
 	// Let workers (and a stream's assembly) close their files first; on
 	// Windows an open file cannot be deleted and the error is ignored.
 	d.waitIdle(10 * time.Second)

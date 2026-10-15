@@ -74,8 +74,13 @@ Keep ODM running, then:
   window then lists its qualities and audio tracks (with that window turned
   off, ODM picks the best quality itself).
 - **Right-click** a link, video, audio or image → **Download with ODM**.
+- **Toolbar popup:** the icon's badge counts the media the page has loaded
+  (up to 15, from every frame), and the popup lists them with how long ago
+  each was seen. Use it when there is no button: audio-only pages, players
+  drawn on a canvas, a player in another frame, or after closing the
+  button with ✕.
 
-The popup toggles takeover and tests the connection.
+The popup also toggles takeover and tests the connection.
 
 With each hand-off the extension sends ODM the URL, the page it came from,
 the page title, the browser's user agent and the site's cookies for that URL,

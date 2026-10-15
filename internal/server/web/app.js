@@ -32,8 +32,11 @@ function fmtBytes(n) {
   return `${v.toFixed(v < 10 && i > 0 ? 1 : 0)} ${u[i]}`;
 }
 const fmtRate = (n) => (n > 0 ? fmtBytes(n) + "/s" : "-");
+// A live recording's total follows what is done: no percentage, no ETA.
+const sized = (d) => d.total > 0 && !d.live;
+const recording = (d) => d.live && d.status === "downloading";
 function etaSeconds(d) {
-  if (d.status !== "downloading" || d.speed <= 0 || d.total <= 0) return -1;
+  if (d.status !== "downloading" || d.speed <= 0 || !sized(d)) return -1;
   return Math.max(0, (d.total - d.done) / d.speed);
 }
 function fmtEta(d) {
@@ -210,18 +213,18 @@ function renderRow(d) {
   const bar = document.createElement("div");
   bar.className = "pbar";
   const fill = document.createElement("i");
-  fill.style.width = `${d.total > 0 ? Math.min(100, d.progress) : 0}%`;
+  fill.style.width = `${sized(d) ? Math.min(100, d.progress) : 0}%`;
   bar.appendChild(fill);
   const pct = document.createElement("span");
   pct.className = "pct";
-  pct.textContent = d.total > 0 ? `${d.progress.toFixed(1)}%` : "";
+  pct.textContent = sized(d) ? `${d.progress.toFixed(1)}%` : "";
   pcell.append(bar, pct);
   prog.appendChild(pcell);
 
   const status = document.createElement("td");
   const badge = document.createElement("span");
   badge.className = "status";
-  badge.textContent = d.status;
+  badge.textContent = recording(d) ? "recording" : d.status;
   status.appendChild(badge);
 
   const eta = document.createElement("td");
@@ -382,15 +385,16 @@ function openProgress(id) {
 function renderProgress() {
   const d = progressDownload();
   if (!d) return;
-  $("pgTitle").textContent = `${d.total > 0 ? d.progress.toFixed(0) + "% " : ""}${d.file_name || d.url}`;
+  $("pgTitle").textContent = `${recording(d) ? "Recording " : sized(d) ? d.progress.toFixed(0) + "% " : ""}${d.file_name || d.url}`;
   $("pgUrl").textContent = d.url;
-  $("pgStatus").textContent = d.error ? `${d.status} — ${d.error}` : (d.status === "downloading" ? "Receiving data…" : d.status);
+  $("pgStatus").textContent = d.error ? `${d.status} — ${d.error}` :
+    recording(d) ? "Recording live stream…" : (d.status === "downloading" ? "Receiving data…" : d.status);
   $("pgSize").textContent = d.total > 0 ? fmtBytes(d.total) : "unknown";
-  $("pgDone").textContent = `${fmtBytes(d.done)}${d.total > 0 ? ` (${d.progress.toFixed(2)} %)` : ""}`;
+  $("pgDone").textContent = `${fmtBytes(d.done)}${sized(d) ? ` (${d.progress.toFixed(2)} %)` : ""}`;
   $("pgRate").textContent = d.status === "downloading" ? fmtRate(d.speed) : "-";
   $("pgEta").textContent = d.status === "downloading" ? fmtEta(d) : "-";
   $("pgResume").textContent = d.range_ok ? "Yes" : "No";
-  $("pgBar").style.width = `${d.total > 0 ? Math.min(100, d.progress) : 0}%`;
+  $("pgBar").style.width = `${sized(d) ? Math.min(100, d.progress) : 0}%`;
 
   // connection strip
   const total = d.total > 0 ? d.total : 1;
@@ -413,7 +417,8 @@ function renderProgress() {
     return tr;
   }));
 
-  $("pgPause").textContent = (d.status === "downloading" || d.status === "queued") ? "Pause" : "Resume";
+  // Pausing a recording ends it and saves the file.
+  $("pgPause").textContent = recording(d) ? "Stop" : (d.status === "downloading" || d.status === "queued") ? "Pause" : "Resume";
   $("pgLimit").value = d.speed_limit ? Math.round(d.speed_limit / 1024) : 0;
   $("pgOpenWhenDone").checked = !!d.open_when_done;
 }

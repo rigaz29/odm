@@ -820,7 +820,11 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 	case colStatus:
 		c.setText(statusText(d))
 	case colETA:
-		c.setText(etaText(d))
+		if d.Live {
+			c.setText("") // a recording has no end to count down to
+		} else {
+			c.setText(etaText(d))
+		}
 	case colRate:
 		c.setText(rateText(d))
 	case colLastTry:
@@ -835,11 +839,16 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 // progress now that the list has no progress bar.
 func statusText(d engine.Info) string {
 	pct := ""
-	if d.Total > 0 && d.Progress > 0 {
+	if d.Total > 0 && d.Progress > 0 && !d.Live {
 		pct = fmt.Sprintf(" · %.0f%%", d.Progress)
 	}
 	switch d.Status {
 	case engine.StatusDownloading:
+		if d.Live {
+			// Total follows Done while recording: a percentage would
+			// read 100% throughout.
+			return "Recording"
+		}
 		if d.Total > 0 {
 			return fmt.Sprintf("%.2f%%", d.Progress)
 		}

@@ -4,7 +4,7 @@ const assert = require("node:assert/strict");
 const bg = require("../background.js");
 
 test("mediaKind", () => {
-  assert.equal(bg.mediaKind("https://rr2---sn.googlevideo.com/videoplayback?expire=1", "video/mp4"), "file");
+  assert.equal(bg.mediaKind("https://cdn/media/play?expire=1", "video/mp4"), "file");
   assert.equal(bg.mediaKind("https://cdn/x/master.m3u8", ""), "stream");
   assert.equal(bg.mediaKind("https://cdn/x/manifest", "application/dash+xml"), "stream");
   assert.equal(bg.mediaKind("https://cdn/x/seg-001.ts", "video/mp2t"), null); // HLS segment
@@ -15,14 +15,9 @@ test("mediaKind", () => {
   assert.equal(bg.mediaKind("https://cdn/song", "audio/mpeg; charset=x"), "file");
 });
 
-test("normalizeMediaURL drops Google's byte-range parameters only", () => {
-  const g = bg.normalizeMediaURL("https://rr2---sn-a.googlevideo.com/videoplayback?expire=9&itag=18&range=0-1048575&rn=3&rbuf=0#t=1");
-  const u = new URL(g);
-  assert.equal(u.searchParams.get("range"), null);
-  assert.equal(u.searchParams.get("rn"), null);
-  assert.equal(u.searchParams.get("itag"), "18");
-  assert.equal(u.hash, "");
-  assert.equal(bg.normalizeMediaURL("https://other.example/v.mp4?range=5"), "https://other.example/v.mp4?range=5");
+test("normalizeMediaURL drops the fragment and keeps the query", () => {
+  assert.equal(bg.normalizeMediaURL("https://cdn.example/v.mp4?range=5&rn=3#t=1"), "https://cdn.example/v.mp4?range=5&rn=3");
+  assert.equal(bg.normalizeMediaURL("not a url"), "not a url");
 });
 
 test("totalSize", () => {
@@ -77,4 +72,13 @@ test("streamFormat", () => {
   assert.equal(bg.streamFormat("https://cdn/x/manifest", "application/dash+xml"), "DASH");
   assert.equal(bg.streamFormat("https://cdn/x/m.mpd?t=1", "text/plain"), "DASH");
   assert.equal(bg.streamFormat("https://cdn/x/video", "video/mp4"), "");
+});
+
+test("popupReferrer", () => {
+  const tab = { url: "https://site.example/watch?v=1" };
+  assert.equal(bg.popupReferrer({ frameId: 0, origin: "https://site.example" }, tab), tab.url);
+  assert.equal(bg.popupReferrer({ frameId: 5, page: "https://player.example/embed/9" }, tab), "https://player.example/embed/9");
+  assert.equal(bg.popupReferrer({ frameId: 5, origin: "https://player.example" }, tab), "https://player.example/");
+  assert.equal(bg.popupReferrer({ frameId: 5 }, tab), tab.url);
+  assert.equal(bg.popupReferrer({ frameId: 5 }, null), "");
 });

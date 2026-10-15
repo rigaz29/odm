@@ -103,16 +103,13 @@ function streamFormat(url, mime) {
   return "";
 }
 
-// normalizeMediaURL turns a player's partial request into the whole file.
-// Google's video hosts take the byte range as query parameters; without
-// them the same URL serves the complete file.
+// normalizeMediaURL drops the fragment, which the server never sees, so
+// the same file reached as v.mp4 and v.mp4#t=10 is listed once. The query
+// is kept as is: no site's parameters are special.
 function normalizeMediaURL(url) {
   try {
     const u = new URL(url);
     u.hash = "";
-    if (u.hostname.endsWith(".googlevideo.com")) {
-      for (const p of ["range", "rn", "rbuf"]) u.searchParams.delete(p);
-    }
     return u.toString();
   } catch {
     return url;
@@ -205,6 +202,34 @@ async function handOff(fields) {
 
 const tabKey = (tabId) => `media:${tabId}`;
 
+// grab sends one detected media item to ODM. The referrer is the page (or
+// frame) it was found on; streams get the page title as their name.
+function grab(item, referrer, title) {
+  return handOff({
+    url: item.url, referrer, title,
+    mime: item.mime || "", size: item.size || 0,
+    kind: item.kind === "stream" ? "stream" : "file",
+  });
+}
+
+// popupReferrer picks the referrer for an item sent from the popup, as
+// close as possible to the frame URL the in-page button would send: the
+// tab's URL for the top frame, else the frame's URL (Firefox) or origin
+// (Chromium).
+function popupReferrer(item, tab) {
+  const tabURL = (tab && tab.url) || "";
+  if (item.frameId === 0) return tabURL;
+  return item.page || (item.origin ? item.origin + "/" : "") || tabURL;
+}
+
+// setBadge shows how many media items the tab has on the toolbar icon.
+function setBadge(tabId, n) {
+  try {
+    const p = chrome.action.setBadgeText({ tabId, text: n ? String(n) : "" });
+    if (p && p.catch) p.catch(() => { /* tab gone */ });
+  } catch { /* tab gone */ }
+}
+
 async function tabMedia(tabId) {
   const key = tabKey(tabId);
   return (await chrome.storage.session.get(key))[key] || [];
@@ -275,10 +300,15 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
       const size = totalSize(d.responseHeaders);
       if (kind === "file" && size > 0 && size < MIN_MEDIA_BYTES) return;
       const item = { url: normalizeMediaURL(d.url), mime, size, kind, frameId: d.frameId, at: Date.now() };
+      // The document that asked for it, for the referrer when the popup
+      // sends it: Firefox gives the frame's URL, Chromium only its origin.
+      if (d.documentUrl) item.page = d.documentUrl;
+      else if (d.initiator && d.initiator !== "null") item.origin = d.initiator;
       if (kind === "stream") item.format = streamFormat(d.url, mime);
       updateTab(d.tabId, async () => {
         const next = mergeMedia(await tabMedia(d.tabId), item);
         await chrome.storage.session.set({ [tabKey(d.tabId)]: next });
+        setBadge(d.tabId, next.length);
         const forFrame = next.filter((x) => x.frameId === d.frameId);
         chrome.tabs.sendMessage(d.tabId, { type: "odm-media", items: forFrame }, { frameId: d.frameId })
           .catch(() => { /* no content script in that frame (yet) */ });
@@ -290,23 +320,44 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 
   // A new page in the tab starts a fresh media list.
   chrome.tabs.onUpdated.addListener((tabId, change) => {
-    if (change.url) chrome.storage.session.remove(tabKey(tabId));
+    // Queued like the updates, or one still running for the old page
+    // could write its list (and count) back after the reset.
+    if (change.url) {
+      updateTab(tabId, async () => {
+        await chrome.storage.session.remove(tabKey(tabId));
+        setBadge(tabId, 0);
+      });
+    }
   });
   chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(tabKey(tabId)));
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const tab = sender.tab;
-    if (!tab) return false;
+    if (!tab) {
+      // The toolbar popup: not in a tab, so it names the tab it shows.
+      // Content scripts in frames of tab-less extension pages also come
+      // without a tab, so the sender must be our popup page itself.
+      const popup = chrome.runtime.getURL("popup.html");
+      if (sender.id !== chrome.runtime.id || !sender.url || !sender.url.startsWith(popup) ||
+          typeof msg.tabId !== "number") return false;
+      if (msg.type === "odm-tab-media") {
+        tabMedia(msg.tabId).then(sendResponse);
+        return true;
+      }
+      if (msg.type === "odm-grab" && msg.item) {
+        chrome.tabs.get(msg.tabId).catch(() => null)
+          .then((t) => grab(msg.item, popupReferrer(msg.item, t), (t && t.title) || ""))
+          .then(sendResponse);
+        return true;
+      }
+      return false;
+    }
     if (msg.type === "odm-media-request") {
       tabMedia(tab.id).then((list) => sendResponse(list.filter((x) => x.frameId === sender.frameId)));
       return true; // async response
     }
     if (msg.type === "odm-grab" && msg.item) {
-      handOff({
-        url: msg.item.url, referrer: sender.url || tab.url || "", title: tab.title || "",
-        mime: msg.item.mime || "", size: msg.item.size || 0,
-        kind: msg.item.kind === "stream" ? "stream" : "file",
-      }).then(sendResponse);
+      grab(msg.item, sender.url || tab.url || "", tab.title || "").then(sendResponse);
       return true;
     }
     if (msg.type === "odm-bypass" && msg.url) {
@@ -320,5 +371,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, DEFAULT_TYPES };
+  module.exports = { hasType, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, DEFAULT_TYPES };
 }

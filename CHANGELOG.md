@@ -8,6 +8,17 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- The extension's toolbar icon shows how many videos, audio files and
+  streams the page has loaded, and its popup lists them (from every frame,
+  with how long ago each was seen) to send one to ODM. This covers pages
+  where the in-page button does not appear.
+- Live HLS streams are recorded: ODM keeps reloading the playlist and
+  saving new segments until the download is stopped (Pause or Stop
+  finishes the file), the broadcast ends, or nothing new arrives for a
+  while. A segment that cannot be fetched before it leaves the playlist is
+  skipped. If ODM closes mid-way, Resume continues the recording after a
+  gap. The New Download window marks such a stream as live. Live DASH is
+  still refused.
 - A connection that receives no bytes for 30 seconds is closed and its chunk
   is retried from the last written offset. The same limit covers the wait
   for response headers. Other connections of the same file keep going.
@@ -19,39 +30,22 @@ All notable changes to ODM are documented here. The format is based on
   download continues on one connection from the last matching byte. If that
   copy still differs, the partial file is discarded and the download starts
   again from the first byte.
-- HLS and DASH streams: ODM reads the playlist, picks the best quality,
-  downloads the segments over several connections (each segment is kept,
-  so a resume skips the finished ones) and joins them into one file.
-  AES-128 encrypted HLS is decrypted. Separate video and audio tracks are
-  joined with ffmpeg when it is found next to ODM, on PATH, or at the path
-  chosen in Options > Downloads, which shows the version ODM found. Expired links are refreshed once from
-  the playlist. Live and DRM-protected streams are refused.
-- The extension's "Download this video" button now sends HLS/DASH streams
-  to ODM.
-- The New Download window reads a stream's playlist and offers its
-  qualities (resolution, bitrate, codecs, estimated size) and audio tracks,
-  best first. This also works for a playlist address typed or pasted by
-  hand. A single-quality playlist says so, and live or DRM-protected
-  streams are refused before anything is queued; if the playlist cannot be
-  read just then, the stream can still be queued and ODM picks the best
-  quality when it runs.
-- The progress window of a stream counts its segments ("12 of 340")
-  instead of showing an empty connection map.
 
-### Changed
+### Security
 
-- A download that uses several connections fetches each part over HTTP/1.1,
-  so each connection has its own socket. A single stream can still use HTTP/2.
-- An idle connection takes the tail of the chunk that will take the longest
-  to finish, once that chunk is at least twice as slow as the fastest one.
-  Until a pace is known, the largest remainder is used.
-- Connections open one at a time. The next connection starts after every
-  connection already open has stored file bytes, up to the configured limit.
-- Removing a download together with its file waits for the transfer to
-  stop first, so the file is not still open (Windows refused to delete it).
+- A stream whose playlist is on a public server can no longer make ODM
+  request addresses on the user's own machine or network (localhost,
+  private and link-local ranges, including after a redirect). Browsers
+  block such requests from web pages; ODM fetched them on the page's
+  behalf. Playlists that are themselves on the local network still work.
+  A public name that resolves to a private address (some company networks
+  do this for caches) is refused as well.
 
 ### Fixed
 
+- File names that Windows reserves for devices (`CON`, `NUL`, `COM1`, …,
+  with any extension) get a leading `_`. Before, a page titled "nul" or
+  "con" could make the download fail or write into a device on Windows.
 - The size probe requests the first byte (`Range: bytes=0-0`). A server that
   answers 200 for a range covering the whole file is still segmented when
   that one-byte request returns 206.
@@ -66,10 +60,6 @@ All notable changes to ODM are documented here. The format is based on
 - A server that answers a smaller range with the whole file no longer fails
   that chunk. Bytes already stored are kept, and the rest of the file is
   fetched on one connection.
-- A paused or failed download closes its partial file. Resuming it in the
-  same session no longer leaves an earlier handle open, which on Windows
-  made the final rename fail ("being used by another process"). This also
-  affected HLS and DASH streams.
 - A speed limit below 64 KB/s no longer stops a download for good. One
   read can be larger than a second's worth of the limit; it is now let
   through and the next read waits until the limit is met again.
@@ -92,10 +82,9 @@ All notable changes to ODM are documented here. The format is based on
   load, and ODM then started with default settings, without its logins,
   queues and schedules.
 - File names are made safe for Windows in more cases: control characters
-  (for example from a `%0A` in the address) become `_`, a name such as
-  `CON`, `nul.txt` or `COM1.mp4`, which Windows reserves for devices, gets a
-  leading `_`, and a name longer than 200 bytes is shortened without
-  cutting a character in half and keeps its extension.
+  (for example from a `%0A` in the address) become `_`, and a name longer
+  than 200 bytes is shortened without cutting a character in half and keeps
+  its extension.
 - A server that accepts the connection and then never answers no longer
   keeps a download waiting forever. Connecting is limited to 30 seconds,
   the TLS handshake to 15 seconds and the wait for the response headers to
@@ -103,6 +92,56 @@ All notable changes to ODM are documented here. The format is based on
   as well as for transfers.
 - A proxy changed in Options now applies to downloads that are already
   in the list. They used to keep the old proxy until ODM was restarted.
+
+### Changed
+
+- The extension sends a media address as the page requested it, without
+  removing any site's byte-range parameters; only the `#fragment` is
+  dropped.
+- A download that uses several connections fetches each part over HTTP/1.1,
+  so each connection has its own socket. A single stream can still use HTTP/2.
+- An idle connection takes the tail of the chunk that will take the longest
+  to finish, once that chunk is at least twice as slow as the fastest one.
+  Until a pace is known, the largest remainder is used.
+- Connections open one at a time. The next connection starts after every
+  connection already open has stored file bytes, up to the configured limit.
+
+## [0.3.1] - 2026-10-15
+
+### Fixed
+
+- A paused or failed download closes its partial file. Resuming it in the
+  same session no longer leaves an earlier handle open, which on Windows
+  made the final rename fail ("being used by another process"). This also
+  affected HLS and DASH streams. (#12, by @rigaz29)
+
+## [0.3.0] - 2026-10-15
+
+### Added
+
+- HLS and DASH streams: ODM reads the playlist, picks the best quality,
+  downloads the segments over several connections (each segment is kept,
+  so a resume skips the finished ones) and joins them into one file.
+  AES-128 encrypted HLS is decrypted. Separate video and audio tracks are
+  joined with ffmpeg when it is found next to ODM, on PATH, or at the path
+  chosen in Options > Downloads, which shows the version ODM found. Expired links are refreshed once from
+  the playlist. Live and DRM-protected streams are refused.
+- The extension's "Download this video" button now sends HLS/DASH streams
+  to ODM.
+- The New Download window reads a stream's playlist and offers its
+  qualities (resolution, bitrate, codecs, estimated size) and audio tracks,
+  best first. This also works for a playlist address typed or pasted by
+  hand. A single-quality playlist says so, and live or DRM-protected
+  streams are refused before anything is queued; if the playlist cannot be
+  read just then, the stream can still be queued and ODM picks the best
+  quality when it runs.
+- The progress window of a stream counts its segments ("12 of 340")
+  instead of showing an empty connection map.
+
+### Changed
+
+- Removing a download together with its file waits for the transfer to
+  stop first, so the file is not still open (Windows refused to delete it).
 
 ## [0.2.0] - 2026-10-13
 
@@ -220,7 +259,9 @@ All notable changes to ODM are documented here. The format is based on
   instance); no TCP port is opened unless `-serve` is given, and that
   listener requires a per-run token and rejects foreign origins.
 
-[Unreleased]: https://github.com/troke12/odm/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/troke12/odm/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/troke12/odm/compare/v0.3.0...v0.3.1
+[0.3.0]: https://github.com/troke12/odm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/troke12/odm/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/troke12/odm/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/troke12/odm/releases/tag/v0.1.0

@@ -67,6 +67,12 @@ type StreamJob struct {
 	// one whose URLs differ only by their signature.
 	Variant  string `json:"variant,omitempty"`
 	AudioKey string `json:"audio_key,omitempty"`
+	// Live marks a live HLS playlist, recorded until stopped (live.go).
+	// It is set when the playlist is first read as live. Recording is set
+	// once the recording has claimed its file name, so a later run
+	// continues it.
+	Live      bool `json:"live,omitempty"`
+	Recording bool `json:"recording,omitempty"`
 	// DASH: the Representation IDs. Empty means "pick the best"; the pick
 	// is written back here on the first run.
 	VideoRep string `json:"video_rep,omitempty"`
@@ -109,6 +115,7 @@ type streamTrack struct {
 	inits   []piece
 	segs    []piece
 	segInit []int // index into inits per segment, -1 for none
+	live    bool  // a recording: a skipped segment has no file
 }
 
 // permanentError is a refusal that retrying the same request cannot fix
@@ -125,21 +132,44 @@ const maxManifestSize = 16 << 20
 
 // runStream is Start for a segmented download.
 func (d *Download) runStream(ctx context.Context) {
-	tracks, err := d.loadStream(ctx)
-	if err == nil {
-		err = d.prepareStream(tracks)
-	}
-	if err == nil {
-		err = d.fetchStream(ctx, tracks)
-	}
-	if err == nil {
-		err = d.assembleStream(ctx, tracks)
+	d.mu.Lock()
+	live := d.Stream.Live
+	d.mu.Unlock()
+	var err error
+	if live {
+		err = d.recordLive(ctx)
+	} else {
+		var tracks []*streamTrack
+		tracks, err = d.loadStream(ctx)
+		if errors.Is(err, errLiveStream) {
+			live = true
+			err = d.recordLive(ctx)
+		} else {
+			if err == nil {
+				err = d.prepareStream(tracks)
+			}
+			if err == nil {
+				err = d.fetchStream(ctx, tracks)
+			}
+			if err == nil {
+				err = d.assembleStream(ctx, tracks)
+			}
+		}
 	}
 	// finish may move the result to a free name; the work folder keeps
 	// the name it was created under.
 	work := d.workDir()
+	if d.isRemoved() {
+		return // being removed: nothing to finish or report
+	}
 	if err == nil {
 		err = d.finish()
+	}
+	if live && err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, errRemoved) {
+		// A recording assembles after it was stopped, so ctx is done
+		// even when assembly itself failed: report that failure.
+		d.fail(err)
+		return
 	}
 	switch {
 	case err == nil:
@@ -184,7 +214,7 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 		return nil, nil, err
 	}
 	d.decorate(req)
-	resp, err := d.httpClient().Do(req)
+	resp, err := d.streamClient().Do(req)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -236,6 +266,25 @@ func (d *Download) decorate(req *http.Request) {
 			req.SetBasicAuth(user, pass)
 		}
 	}
+}
+
+// streamClient is the client for every request of a stream: the
+// download's own, kept off the local network when the manifest is public
+// (see localGuard).
+func (d *Download) streamClient() *http.Client {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	manifest := d.URL
+	if d.Stream != nil && d.Stream.Manifest != "" {
+		manifest = d.Stream.Manifest
+	}
+	if d.guarded == nil || d.guardedFrom != d.client || d.guardedFor != manifest {
+		if d.guarded != nil {
+			d.guarded.CloseIdleConnections() // its pool is its own
+		}
+		d.guarded, d.guardedFrom, d.guardedFor = guardLocal(d.client, manifest), d.client, manifest
+	}
+	return d.guarded
 }
 
 // sameSite reports whether u belongs to the site (registrable domain, e.g.
@@ -319,7 +368,7 @@ func (d *Download) loadHLS(ctx context.Context, job StreamJob) ([]*streamTrack, 
 		case m.Protected:
 			return nil, errors.New("this stream is DRM-protected and cannot be downloaded")
 		case m.Live():
-			return nil, errors.New("live streams are not supported yet")
+			return nil, errLiveStream
 		case len(m.Segments) == 0:
 			return nil, errors.New("the playlist has no segments")
 		}
@@ -738,6 +787,10 @@ func (d *Download) piecePath(track int, name string) string {
 func (d *Download) updateEstimate() {
 	d.mu.Lock()
 	defer d.mu.Unlock()
+	if d.Stream != nil && d.Stream.Live {
+		d.Total = d.streamDone // a recording has no end to estimate
+		return
+	}
 	switch {
 	case d.streamHave >= 3:
 		d.Total = d.streamDone * int64(d.streamSegs) / int64(d.streamHave)
@@ -850,7 +903,7 @@ func (s *streamRun) fetchWithRetry(ctx context.Context, j pieceJob) error {
 			return err
 		}
 		var perm permanentError
-		if errors.As(err, &perm) {
+		if errors.As(err, &perm) || errors.Is(err, errLocalNetwork) {
 			return err
 		}
 		if errors.Is(err, errExpired) {
@@ -936,7 +989,7 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	if p.rng != nil {
 		req.Header.Set("Range", p.rng.Header())
 	}
-	resp, err := d.httpClient().Do(req)
+	resp, err := d.streamClient().Do(req)
 	if err != nil {
 		return err
 	}
@@ -1086,7 +1139,7 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 		return nil, err
 	}
 	s.d.decorate(req)
-	resp, err := s.d.httpClient().Do(req)
+	resp, err := s.d.streamClient().Do(req)
 	if err != nil {
 		return nil, err
 	}
@@ -1182,6 +1235,9 @@ func (d *Download) concat(ctx context.Context, w io.Writer, ti int, t *streamTra
 	lastInit := -1
 	appendFile := func(name string) error {
 		f, err := os.Open(d.piecePath(ti, name))
+		if os.IsNotExist(err) && t.live && !strings.HasPrefix(name, "init") {
+			return nil // skipped while recording: a short jump in the file
+		}
 		if err != nil {
 			return err
 		}
@@ -1194,7 +1250,11 @@ func (d *Download) concat(ctx context.Context, w io.Writer, ti int, t *streamTra
 			return ctx.Err()
 		}
 		if in := t.segInit[i]; in >= 0 && in != lastInit {
-			if err := appendFile("init" + strconv.Itoa(in)); err != nil {
+			name := "init" + strconv.Itoa(in)
+			if t.live && fileSize(d.piecePath(ti, name)) <= 0 {
+				continue // a recording lost this init: its segments cannot play
+			}
+			if err := appendFile(name); err != nil {
 				return err
 			}
 			lastInit = in

@@ -3,12 +3,17 @@
 <head>
 <meta charset="utf-8" />
 <style>
-  body { font: 13px "Segoe UI", system-ui, sans-serif; width: 240px; margin: 0; padding: 12px; background: #171a23; color: #e6e8ef; }
+  body { font: 13px "Segoe UI", system-ui, sans-serif; width: 300px; margin: 0; padding: 12px; background: #171a23; color: #e6e8ef; }
   h1 { font-size: 13px; margin: 0 0 10px; display: flex; align-items: center; gap: 8px; }
   .dot { width: 9px; height: 9px; border-radius: 50%; background: #4f8cff; }
   label { display: flex; align-items: center; gap: 8px; margin: 8px 0; }
   button { width: 100%; background: #2b3242; color: #cfd6e6; border: 1px solid #333a4d; border-radius: 8px; padding: 7px; cursor: pointer; }
   .status { color: #8b93a7; margin-top: 8px; font-size: 12px; }
+  h2 { font-size: 12px; font-weight: 600; color: #8b93a7; margin: 14px 0 6px; }
+  #media { display: flex; flex-direction: column; gap: 4px; max-height: 260px; overflow-y: auto; }
+  #media button { text-align: left; display: flex; justify-content: space-between; gap: 8px; }
+  #media .when { color: #8b93a7; white-space: nowrap; }
+  .empty { color: #8b93a7; font-size: 12px; }
 </style>
 </head>
 <body>
@@ -16,6 +21,9 @@
   <label><input id="enabled" type="checkbox" /> Take over downloads</label>
   <button id="test">Test connection</button>
   <div class="status" id="status">—</div>
+  <h2>Media on this page</h2>
+  <div id="media"><div class="empty">Nothing yet. Start playing the video.</div></div>
+  <script src="medialist.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -76,8 +76,12 @@ queues. It runs as a desktop app, or headless with a JSON API.
   default); separate video and
   audio tracks are joined with [ffmpeg](https://ffmpeg.org/) if it is
   installed (next to ODM, on PATH, or chosen in Options > Downloads, which
-  also shows the ffmpeg version ODM found). Live streams are not supported yet. DRM-protected video
+  also shows the ffmpeg version ODM found). A live HLS stream is recorded
+  until you stop the download (Pause or Stop), the broadcast ends, or
+  nothing new arrives for a while; live DASH is not supported. DRM-protected video
   is not supported and never will be.
+- The extension's toolbar icon counts the media a page has loaded, and its
+  popup lists them (from every frame) for players the button cannot find.
 - A clipboard monitor queues downloadable URLs you copy. You can turn it on
   or off at any time.
 
@@ -262,7 +266,7 @@ extension/          MV3 browser extension source and native-host manifests
 - A properties dialog for each download.
 - A credentials prompt for HTTP 401 responses (Basic and Digest).
 - ZIP preview, sounds, a virus-scan hook, grabber projects, and translations.
-- Live HLS/DASH streams.
+- Live DASH streams.
 - Signed self-update, and code-signed Windows builds.
 
 ## License

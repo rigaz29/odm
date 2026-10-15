@@ -142,12 +142,17 @@ func TestProbeStreamRefusals(t *testing.T) {
 		"/master.m3u8": "#EXTM3U\n#EXT-X-STREAM-INF:BANDWIDTH=1\nlive.m3u8\n",
 	})
 	m := NewManager(DefaultSettings(t.TempDir()), "")
-	for path, want := range map[string]string{
-		"/live.m3u8": "live", "/master.m3u8": "live", "/drm.m3u8": "DRM", "/page.html": "not an HLS",
-	} {
+	for path, want := range map[string]string{"/drm.m3u8": "DRM", "/page.html": "not an HLS"} {
 		_, err := m.ProbeStream(context.Background(), srv.URL+path, nil)
 		if err == nil || !strings.Contains(err.Error(), want) || !errors.Is(err, ErrStreamRefused) {
 			t.Errorf("%s: %v, want a refusal %q", path, err, want)
+		}
+	}
+	// Live HLS is offered for recording, without a size estimate.
+	for _, path := range []string{"/live.m3u8", "/master.m3u8"} {
+		c, err := m.ProbeStream(context.Background(), srv.URL+path, nil)
+		if err != nil || !strings.Contains(c.Note, "Live stream") || c.Qualities[0].Estimate != 0 {
+			t.Errorf("%s: %+v %v, want a live note", path, c, err)
 		}
 	}
 	// A server error may be temporary: not a refusal.

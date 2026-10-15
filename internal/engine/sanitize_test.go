@@ -19,7 +19,7 @@ func TestSanitizeName(t *testing.T) {
 		{"Nul.tar.gz", "_Nul.tar.gz"},
 		{"COM1.mp4", "_COM1.mp4"},
 		{"lpt9", "_lpt9"},
-		{"COM0.mp4", "COM0.mp4"},
+		{"COM0.mp4", "_COM0.mp4"},
 		{"CONSOLE.txt", "CONSOLE.txt"},
 		{"concert.mp3", "concert.mp3"},
 	}

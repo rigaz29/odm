@@ -12,8 +12,11 @@
 //     with the final name. The muxer is passed with -f because the
 //     temporary name has no extension ffmpeg recognises.
 //   - "-c copy" only works when the codecs fit the container (H.264/AV1 +
-//     AAC in MP4, VP9 + Opus in WebM); callers pair streams
-//     that way. Anything else falls back to MKV, which holds every codec.
+//     AAC in MP4, VP9 + Opus in WebM). The container follows the output
+//     name (see muxer); there is no retry in another one, so a pair that
+//     does not fit fails with ffmpeg's error. Stream downloads ask for
+//     WebM when both tracks are WebM and MP4 otherwise; Matroska is only
+//     used for an output name that is neither.
 package ffmpeg
 
 import (

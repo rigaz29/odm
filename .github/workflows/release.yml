@@ -93,7 +93,9 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           files: odm-${{ matrix.label }}.*
-          generate_release_notes: true
+          # Every matrix job uploads to the same release, and each one that
+          # asks for generated notes appends another copy, so only one does.
+          generate_release_notes: ${{ matrix.label == 'linux-amd64' }}
           # Tags like v0.1.0-rc1 publish as pre-releases, which the in-app
           # update check (releases/latest) does not offer.
           prerelease: ${{ contains(github.ref_name, '-') }}

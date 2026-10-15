@@ -1386,6 +1386,7 @@ type progressView struct {
 	top        fyne.CanvasObject
 	hideBtn    *widget.Button
 	detailsOff bool
+	live       bool // a live stream being recorded
 }
 
 // infoGrid lays out "label  value" rows with muted, left-aligned captions.
@@ -1422,7 +1423,12 @@ func (a *application) openProgressWindow(id string) {
 	v.url, v.status, v.size, v.done = newValue(), newValue(), newValue(), newValue()
 	v.rate, v.limitRate, v.eta, v.resume, v.saveTo = newValue(), newValue(), newValue(), newValue(), newValue()
 	v.bar = widget.NewProgressBar()
-	v.bar.TextFormatter = func() string { return fmt.Sprintf("%.1f%%", v.bar.Value*100) }
+	v.bar.TextFormatter = func() string {
+		if v.live {
+			return "Recording"
+		}
+		return fmt.Sprintf("%.1f%%", v.bar.Value*100)
+	}
 	v.strip = newChunkStrip()
 
 	// Download status
@@ -1619,7 +1625,13 @@ func (a *application) updateProgressWindow(id string) {
 	if !ok {
 		return
 	}
-	v.win.SetTitle(fmt.Sprintf("%.0f%% %s", d.Progress, d.FileName))
+	// A recording's Total follows Done, so its percentage means nothing.
+	v.live = d.Live && d.Status == engine.StatusDownloading
+	if v.live {
+		v.win.SetTitle("Recording " + d.FileName)
+	} else {
+		v.win.SetTitle(fmt.Sprintf("%.0f%% %s", d.Progress, d.FileName))
+	}
 	v.url.SetText(d.URL)
 	// Same wording as the list's Status column, minus the percentage that
 	// the Downloaded row already shows.
@@ -1633,15 +1645,26 @@ func (a *application) updateProgressWindow(id string) {
 	if status == "" {
 		status = string(d.Status)
 	}
+	if v.live {
+		status = "Recording live stream…"
+	}
 	if d.Error != "" {
 		status += " — " + d.Error
 	}
 	v.status.SetText(status)
 	v.size.SetText(dash(humanBytes(d.Total)))
-	v.done.SetText(fmt.Sprintf("%s (%.2f %%)", dash(humanBytes(d.Done)), d.Progress))
+	if d.Live {
+		v.done.SetText(dash(humanBytes(d.Done)))
+	} else {
+		v.done.SetText(fmt.Sprintf("%s (%.2f %%)", dash(humanBytes(d.Done)), d.Progress))
+	}
 	v.rate.SetText(dash(rateText(d)))
 	v.limitRate.SetText(dash(rateText(d)))
-	v.eta.SetText(dash(etaText(d)))
+	if d.Live {
+		v.eta.SetText(dash("")) // until the broadcast ends or is stopped
+	} else {
+		v.eta.SetText(dash(etaText(d)))
+	}
 	if d.RangeOK {
 		v.resume.SetText("Yes")
 	} else {
@@ -1650,7 +1673,9 @@ func (a *application) updateProgressWindow(id string) {
 	if d.FileName != "" {
 		v.saveTo.SetText(filepath.Join(d.Dir, d.FileName))
 	}
-	if d.Total > 0 {
+	if v.live {
+		v.bar.SetValue(0)
+	} else if d.Total > 0 {
 		v.bar.SetValue(d.Progress / 100)
 	}
 	if d.Stream != "" {
@@ -1664,6 +1689,13 @@ func (a *application) updateProgressWindow(id string) {
 		if segs == 0 && d.Status == engine.StatusComplete {
 			segs, have, text = 1, 1, "complete"
 		}
+		if d.Live && d.Status != engine.StatusComplete {
+			text = ""
+			if d.SegmentsDone > 0 {
+				text = fmt.Sprintf("%d recorded", d.SegmentsDone)
+			}
+			segs, have = 0, 0 // nothing to fill toward
+		}
 		v.mapLabel.SetText("Segments: " + dash(text))
 		var bar []engine.ChunkInfo
 		if segs > 0 {
@@ -1674,7 +1706,11 @@ func (a *application) updateProgressWindow(id string) {
 	} else {
 		v.strip.set(d.Chunks, d.Total)
 	}
-	if d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued {
+	if v.live {
+		// Pausing a recording ends it and saves the file (live.go).
+		v.pauseBtn.SetText("Stop")
+		v.pauseBtn.SetIcon(theme.MediaStopIcon())
+	} else if d.Status == engine.StatusDownloading || d.Status == engine.StatusQueued {
 		v.pauseBtn.SetText("Pause")
 		v.pauseBtn.SetIcon(theme.MediaPauseIcon())
 	} else {

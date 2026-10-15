@@ -82,10 +82,15 @@ type Download struct {
 	h1      *http.Client
 	limiter *Limiter
 	shared  *Limiter
-	cancel  context.CancelFunc
+	cancel  context.CancelCauseFunc
 	// transferCancel stops the connections of the current pass. It is separate
 	// from cancel so one answered range can end the pass without pausing.
 	transferCancel context.CancelFunc
+	// abortCtx/abort belong to the current run; removed is set for good
+	// once the download is being removed (see abandon).
+	abortCtx context.Context
+	abort    context.CancelFunc
+	removed  bool
 	// pauseReq records a Pause that arrived while no transfer context exists
 	// yet (the manager has dispatched the download but Start has not run), so
 	// Start honours it instead of the pause being silently dropped.
@@ -156,6 +161,11 @@ type Download struct {
 	// Segmented downloads: bytes on disk, and segments present / total.
 	streamDone             int64
 	streamHave, streamSegs int
+	// guarded is client wrapped by guardLocal for stream requests. It is
+	// rebuilt when the client or the manifest (Readdress) changes, since
+	// its verdict on the manifest is cached.
+	guarded, guardedFrom *http.Client
+	guardedFor           string
 }
 
 // New creates a queued download. Probing happens on the first Start.
@@ -248,14 +258,22 @@ func (d *Download) setClient(c *http.Client) {
 
 // Start runs the transfer to completion, pause or error. It blocks.
 func (d *Download) Start(parent context.Context) {
-	ctx, cancel := context.WithCancel(parent)
+	ctx, cancel := context.WithCancelCause(parent)
+	// abortCtx outlives a Stop: a recording assembles under it after its
+	// own ctx is done, and only removing the download cancels it.
+	abortCtx, abort := context.WithCancel(context.Background())
+	defer abort()
 	done := make(chan struct{})
 	d.mu.Lock()
 	d.runDone = done
+	d.abortCtx, d.abort = abortCtx, abort
+	if d.removed {
+		abort()
+	}
 	d.mu.Unlock()
 	defer close(done)
 	defer func() {
-		cancel()
+		cancel(nil)
 		d.mu.Lock()
 		// Drop the spent cancel func: a Pause between this run and the next
 		// must set pauseReq, not cancel a context that is already gone.
@@ -1610,7 +1628,44 @@ func numberedName(name string, n int) string {
 }
 
 // Pause stops the running transfer, preserving progress.
-func (d *Download) Pause() {
+func (d *Download) Pause() { d.stop(nil) }
+
+// abandon stops the download for removal. A live recording, which a Pause
+// finishes into a file, then assembles nothing (see recordLive).
+//
+// It also cancels the run's abortCtx, under which a recording that was
+// already stopped may still be assembling: a context cause cannot do that,
+// as the first cause (the Stop) is the one kept.
+func (d *Download) abandon() {
+	d.mu.Lock()
+	d.removed = true
+	abort := d.abort
+	d.mu.Unlock()
+	if abort != nil {
+		abort()
+	}
+	d.stop(errRemoved)
+}
+
+// isRemoved reports whether abandon was called.
+func (d *Download) isRemoved() bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.removed
+}
+
+// assemblyContext is the context a recording assembles under after it was
+// stopped: cancelled only by removal.
+func (d *Download) assemblyContext() context.Context {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.abortCtx == nil {
+		return context.Background()
+	}
+	return d.abortCtx
+}
+
+func (d *Download) stop(cause error) {
 	d.mu.Lock()
 	cancel := d.cancel
 	if cancel == nil {
@@ -1618,7 +1673,7 @@ func (d *Download) Pause() {
 	}
 	d.mu.Unlock()
 	if cancel != nil {
-		cancel()
+		cancel(cause)
 	}
 }
 
@@ -1821,6 +1876,7 @@ func (d *Download) infoLocked() Info {
 		RangeOK: d.RangeOK, Category: d.category(), Queue: d.Queue, Description: d.Description, Order: d.Order, Chunks: chunks,
 		SpeedLimit: d.SpeedLimit, OpenWhenDone: d.OpenWhenDone,
 		Stream: stream, Segments: d.streamSegs, SegmentsDone: d.streamHave,
+		Live:      d.Stream != nil && d.Stream.Live,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}
 }

@@ -249,8 +249,7 @@ func TestStreamDASHNeedsFFmpeg(t *testing.T) {
 
 func TestStreamRefusals(t *testing.T) {
 	playlists := map[string]string{
-		"/live.m3u8": "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXTINF:2,\na.ts\n",
-		"/drm.m3u8":  "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://k\",KEYFORMAT=\"com.apple.streamingkeydelivery\"\n#EXTINF:2,\na.ts\n#EXT-X-ENDLIST\n",
+		"/drm.m3u8": "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-KEY:METHOD=SAMPLE-AES,URI=\"skd://k\",KEYFORMAT=\"com.apple.streamingkeydelivery\"\n#EXTINF:2,\na.ts\n#EXT-X-ENDLIST\n",
 	}
 	var segCount atomic.Int64
 	segCount.Store(3)
@@ -273,7 +272,7 @@ func TestStreamRefusals(t *testing.T) {
 	srv := httptest.NewServer(mux)
 	defer srv.Close()
 
-	for path, want := range map[string]string{"/live.m3u8": "live", "/drm.m3u8": "DRM"} {
+	for path, want := range map[string]string{"/drm.m3u8": "DRM"} {
 		d := newStreamDownload(t, srv.Client(), 1, StreamJob{Kind: media.KindHLS, Manifest: srv.URL + path})
 		d.Start(context.Background())
 		if info := d.Info(); info.Status != StatusError || !strings.Contains(info.Error, want) {

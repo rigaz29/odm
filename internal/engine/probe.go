@@ -159,7 +159,7 @@ func SanitizeName(name string) string {
 	if name == "" {
 		return ""
 	}
-	if reservedDeviceName(name) {
+	if windowsReserved(name) {
 		name = "_" + name
 	}
 	return name
@@ -185,18 +185,23 @@ func shortenName(name string, limit int) string {
 	return stem + ext
 }
 
-// reservedDeviceName reports whether Windows treats name as a device (CON,
-// PRN, AUX, NUL, COM1-COM9, LPT1-LPT9), with or without an extension.
-// Creating such a file opens the device instead.
-func reservedDeviceName(name string) bool {
-	stem := name
-	if i := strings.IndexByte(stem, '.'); i >= 0 {
-		stem = stem[:i]
-	}
+// windowsReserved reports whether Windows treats name as a device (CON,
+// NUL, COM1, …): there opening "nul.mp4" writes to the null device and
+// "con.mp4" fails. The device name counts with any extension and with
+// spaces before it, so only the part before the first dot is compared.
+// Checked on every OS, as the file may be copied to Windows later.
+func windowsReserved(name string) bool {
+	stem, _, _ := strings.Cut(name, ".")
 	stem = strings.ToUpper(strings.TrimRight(stem, " "))
 	switch stem {
-	case "CON", "PRN", "AUX", "NUL":
+	case "CON", "PRN", "AUX", "NUL", "CONIN$", "CONOUT$":
 		return true
 	}
-	return len(stem) == 4 && (stem[:3] == "COM" || stem[:3] == "LPT") && stem[3] >= '1' && stem[3] <= '9'
+	if len(stem) >= 4 && (strings.HasPrefix(stem, "COM") || strings.HasPrefix(stem, "LPT")) {
+		switch stem[3:] {
+		case "0", "1", "2", "3", "4", "5", "6", "7", "8", "9", "¹", "²", "³":
+			return true
+		}
+	}
+	return false
 }

@@ -100,6 +100,8 @@ func (m *Manager) ProbeStream(ctx context.Context, rawURL string, headers map[st
 	d := New("", rawURL, "", 1, headers, 0, m.HTTPClient())
 	d.SetAuthLookup(m.credentials)
 	d.Stream = &StreamJob{Manifest: rawURL}
+	// The probe's guarded client has a connection pool of its own.
+	defer d.streamClient().CloseIdleConnections()
 	data, base, err := d.fetchText(ctx, rawURL)
 	if err != nil {
 		return nil, err
@@ -132,10 +134,14 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 		if err := checkHLSMedia(p.Media); err != nil {
 			return nil, err
 		}
-		c.length = hlsLength(p.Media)
 		c.Qualities = []StreamQuality{{Label: "As found (one quality)"}}
 		c.Note = "This address is one quality of a stream, and its audio may be separate. " +
 			"Download from the page's main playlist to choose the quality."
+		if p.Media.Live() {
+			c.Note = liveNote + " " + c.Note
+		} else {
+			c.length = hlsLength(p.Media)
+		}
 		return c, nil
 	}
 	if len(p.Master.Variants) == 0 {
@@ -161,7 +167,12 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 	if err := checkHLSMedia(mp.Media); err != nil {
 		return nil, err
 	}
-	c.length = hlsLength(mp.Media)
+	if mp.Media.Live() {
+		// No length, so no size estimate.
+		c.Note = liveNote
+	} else {
+		c.length = hlsLength(mp.Media)
+	}
 
 	vs := make([]*media.HLSVariant, len(p.Master.Variants))
 	for i := range p.Master.Variants {
@@ -227,17 +238,20 @@ func hlsLength(m *media.HLSMedia) time.Duration {
 	return n
 }
 
+// checkHLSMedia refuses what cannot be downloaded. A live playlist is
+// recorded (live.go); it may not list a segment yet.
 func checkHLSMedia(m *media.HLSMedia) error {
 	switch {
 	case m.Protected:
 		return refusal("this stream is DRM-protected and cannot be downloaded")
-	case m.Live():
-		return refusal("live streams are not supported yet")
-	case len(m.Segments) == 0:
+	case !m.Live() && len(m.Segments) == 0:
 		return refusal("the playlist has no segments")
 	}
 	return nil
 }
+
+// liveNote is shown in the window for a live stream.
+const liveNote = "Live stream: ODM records it from now until you stop the download."
 
 func probeDASH(base *url.URL, data []byte) (*StreamChoices, error) {
 	m, err := media.ParseDASH(base, data)
@@ -245,7 +259,7 @@ func probeDASH(base *url.URL, data []byte) (*StreamChoices, error) {
 		return nil, refusal(err.Error())
 	}
 	if m.Live {
-		return nil, refusal("live streams are not supported yet")
+		return nil, refusal("live DASH streams are not supported; live HLS is recorded")
 	}
 	if len(m.Periods) == 0 {
 		return nil, refusal("the manifest lists no audio or video")

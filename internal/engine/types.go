@@ -126,8 +126,10 @@ type Info struct {
 	// Segments and SegmentsDone count a stream's media segments across
 	// all its tracks (video and separate audio), init sections left out.
 	// Both are 0 until a run has read the playlist, also after a restart.
-	Segments     int       `json:"segments,omitempty"`
-	SegmentsDone int       `json:"segments_done"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	Segments     int `json:"segments,omitempty"`
+	SegmentsDone int `json:"segments_done"`
+	// Live is a live stream being recorded: Pause stops and finishes it.
+	Live      bool      `json:"live,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

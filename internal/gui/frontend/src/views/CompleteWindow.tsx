@@ -33,7 +33,7 @@ export function CompleteWindow({ id }: { id: string }) {
   };
 
   return (
-    <div className="aurora flex h-full flex-col gap-4 bg-background p-5 text-foreground">
+    <main className="aurora flex h-full flex-col gap-4 bg-background p-5 text-foreground">
       <div className="flex items-center gap-2.5">
         <CheckCircle2 className="size-6 text-emerald-500" />
         <div className="min-w-0">
@@ -72,6 +72,6 @@ export function CompleteWindow({ id }: { id: string }) {
         </Button>
         <Button onClick={done()}>{t("Close")}</Button>
       </div>
-    </div>
+    </main>
   );
 }

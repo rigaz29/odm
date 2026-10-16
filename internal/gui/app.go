@@ -47,13 +47,16 @@ var (
 
 // Run opens the main window and blocks until it is closed or ctx ends.
 //
-// The window has no frame: the page draws the title bar, and marks its
-// parts with --wails-non-client-region (caption, minimize, maximize,
-// close). Windows itself then moves the window, maximizes it on a double
-// click, offers the snap layouts over the maximize button and keeps the
-// resize border and the shadow. Wails reads those regions only when
-// WebView2 is hosted through composition (WebView2CompositionHosting):
-// with a child window for the page, the frame never sees the pointer.
+// The window has no frame: the page draws the title bar, moves the window
+// from it (--wails-draggable, so Windows' own move: dragged to an edge it
+// snaps) and maximizes it on a double click; Windows keeps the resize
+// border and the shadow. WebView2 is hosted in a child window, not through
+// composition (WebView2CompositionHosting). With composition Windows would
+// take the title bar's parts as its own (--wails-non-client-region) and
+// offer the snap layouts over the maximize button, but the page's UI
+// Automation, what Narrator and other screen readers read, then reaches
+// Windows only through the host window, which Wails (v3.0.0-beta.30) does
+// not do: to a screen reader the window was empty.
 func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	assets, err := fs.Sub(dist, "frontend/dist")
 	if err != nil {
@@ -87,21 +90,22 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	if darkWindow(look.Theme) {
 		background = darkBackground
 	}
+	// Smaller on a screen too small for it (workarea.go).
+	areaW, areaH, _ := workArea()
+	width, height := fitSize(1280, 780, areaW, areaH, 32)
 	win := app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             "main",
 		Title:            "Ochi Download Manager",
-		Width:            1280,
-		Height:           780,
-		MinWidth:         860,
-		MinHeight:        520,
+		Width:            width,
+		Height:           height,
+		MinWidth:         min(860, width),
+		MinHeight:        min(520, height),
 		URL:              "/",
 		Frameless:        true,
 		Hidden:           opts.Hidden,
 		BackgroundColour: background,
 		Windows: application.WindowsWindow{
-			NonClientRegionSupport:     true,
-			WebView2CompositionHosting: true,
-			Theme:                      windowTheme(look.Theme),
+			Theme: windowTheme(look.Theme),
 		},
 	})
 

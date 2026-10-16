@@ -32,7 +32,7 @@ function Card({ d, onOpen }: { d: Item; onOpen: () => void }) {
           <p className="truncate text-xs text-muted-foreground">{host(d)}</p>
         </div>
         {live ? (
-          <span className="flex items-center gap-1.5 rounded-md bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-rose-600 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300">
+          <span className="flex items-center gap-1.5 rounded-md bg-rose-500/10 px-2 py-0.5 text-[11px] font-semibold tracking-wide text-rose-700 ring-1 ring-inset ring-rose-500/25 dark:text-rose-300">
             <span className="size-1.5 animate-pulse rounded-full bg-rose-500" /> LIVE
           </span>
         ) : d.total > 0 ? (

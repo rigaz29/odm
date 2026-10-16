@@ -23,7 +23,7 @@ function ToolsNotice() {
   useEffect(() => api.setTitle(t("Companion programs")), []);
   const answer = (on: boolean) => void api.setToolUpdates(on).then(api.closeWindow);
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
+    <main className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
       <div className="flex items-center gap-2.5">
         <Wrench className="size-5 text-violet-500" />
         <h1 className="text-base font-semibold">{t("Companion programs")}</h1>
@@ -37,14 +37,14 @@ function ToolsNotice() {
           <Download /> {t("Download now")}
         </Button>
       </div>
-    </div>
+    </main>
   );
 }
 
 function LimitNotice({ mb, hours }: { mb: string; hours: string }) {
   useEffect(() => api.setTitle(t("Download limit reached")), []);
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
+    <main className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
       <div className="flex items-center gap-2.5">
         <Gauge className="size-5 text-amber-500" />
         <h1 className="text-base font-semibold">{t("Download limit reached")}</h1>
@@ -57,7 +57,7 @@ function LimitNotice({ mb, hours }: { mb: string; hours: string }) {
           {t("OK")}
         </Button>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -91,7 +91,7 @@ function FinishNotice({ action }: { action: string }) {
   }, [left]);
 
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
+    <main className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
       <div className="flex items-center gap-2.5">
         <Power className="size-5 text-red-500" />
         <h1 className="text-base font-semibold">{t("Queues finished")}</h1>
@@ -111,6 +111,6 @@ function FinishNotice({ action }: { action: string }) {
           {t("Now")}
         </Button>
       </div>
-    </div>
+    </main>
   );
 }

@@ -36,10 +36,10 @@ export function FileTile({ category, size = "size-7", icon = "size-3.5" }: { cat
 
 const badgeStyle: Record<StatusKind, string> = {
   downloading: "bg-violet-500/10 text-violet-700 ring-violet-500/25 dark:text-violet-300",
-  recording: "bg-rose-500/10 text-rose-600 ring-rose-500/25 dark:text-rose-300",
+  recording: "bg-rose-500/10 text-rose-700 ring-rose-500/25 dark:text-rose-300",
   paused: "bg-amber-500/10 text-amber-700 ring-amber-500/25 dark:text-amber-300",
   queued: "bg-zinc-500/10 text-zinc-600 ring-zinc-500/20 dark:text-zinc-400",
-  error: "bg-red-500/10 text-red-600 ring-red-500/25 dark:text-red-400",
+  error: "bg-red-500/10 text-red-700 ring-red-500/25 dark:text-red-400",
   complete: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400",
   verifying: "bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-300",
 };

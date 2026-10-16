@@ -8,7 +8,12 @@
 // owns the order and the selection: a press selects
 // as Explorer does (Ctrl toggles, Shift picks a range), the checkbox toggles
 // one row, a right click on a row outside the selection selects it before
-// the menu opens.
+// the menu opens. To Narrator it is a grid: the header's cells and each
+// row's, the row count of the whole list though only those in view exist,
+// and the row the keyboard is on. The list is one stop for Tab: the arrows
+// move through the rows, Space ticks one, and the Menu key or Shift+F10
+// opens the row menu, so the rows' own checkboxes and menu buttons are
+// left out of the Tab order.
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Columns3, MoreHorizontal } from "lucide-react";
@@ -43,6 +48,9 @@ const backToList = (el: HTMLElement | null) => (e: Event) => {
 
 const label = (id: ColumnId) => t(COLUMNS.find((c) => c.id === id)!.label);
 
+// The element id of a download's row, for aria-activedescendant.
+const rowID = (id: string) => `row-${id}`;
+
 // TableHandle lets the page move the list: scroll a row into view, focus
 // it, and learn how many rows a page (Page Up, Page Down) holds.
 export interface TableHandle {
@@ -64,6 +72,7 @@ export function DownloadTable(props: {
   onContext: (id: string) => void;
   onOpen: (d: Item) => void;
   onKeyDown: (e: React.KeyboardEvent) => void;
+  lead?: string | null; // the row the keyboard is on
   rowMenu: ReactNode; // the row context menu's items
   empty: ReactNode;
   handle?: Ref<TableHandle>;
@@ -114,7 +123,8 @@ export function DownloadTable(props: {
 
   const openMenuAt = (el: HTMLElement) => {
     const r = el.getBoundingClientRect();
-    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: r.left, clientY: r.bottom, button: 2 }));
+    const x = el.getAttribute("role") === "row" ? r.left + 48 : r.left; // a row's: under its name
+    el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: x, clientY: r.bottom, button: 2 }));
   };
 
   const startDrag = (id: ColumnId, e: React.PointerEvent<HTMLElement>) => {
@@ -141,28 +151,60 @@ export function DownloadTable(props: {
     el.addEventListener("pointercancel", up);
   };
 
+  const rows = virtual.getVirtualItems();
+  // The keyboard's row, while it exists (scrolled away it does not).
+  const lead = props.lead && rows.some((v) => items[v.index]?.id === props.lead) ? rowID(props.lead) : undefined;
+
   return (
-    <div className="mx-6 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card">
-      <div ref={scroll} tabIndex={0} onKeyDown={props.onKeyDown} onScroll={measure} data-odm-list className="relative min-h-0 flex-1 overflow-auto outline-none">
+    <div className="mx-6 mb-3 flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-border bg-card has-[[data-odm-list]:focus-visible]:ring-2 has-[[data-odm-list]:focus-visible]:ring-ring/50">
+      <div
+        ref={scroll}
+        tabIndex={0}
+        onKeyDown={(e) => {
+          const row = props.lead ? document.getElementById(rowID(props.lead)) : null;
+          if (row && (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) {
+            e.preventDefault();
+            props.onContext(props.lead!);
+            openMenuAt(row);
+            return;
+          }
+          props.onKeyDown(e);
+        }}
+        onScroll={measure}
+        data-odm-list
+        role="grid"
+        aria-label={t("Download list")}
+        aria-multiselectable
+        aria-rowcount={items.length + 1}
+        aria-colcount={shown.length + 2}
+        aria-activedescendant={lead}
+        className="group/list relative min-h-0 flex-1 overflow-auto outline-none"
+      >
         <div style={{ minWidth: minWidth(cols) }} className="flex min-h-full flex-col">
           {/* Header */}
           <ContextMenu>
             <ContextMenuTrigger asChild>
               <div
+                role="row"
+                aria-rowindex={1}
                 className="sticky top-0 z-10 grid shrink-0 items-center border-b border-border bg-muted text-xs text-muted-foreground"
                 style={{ gridTemplateColumns: grid, height: HEADER_HEIGHT }}
               >
-                <div className={cn(stickLeft, "flex items-center pl-3")}>
+                <div role="columnheader" className={cn(stickLeft, "flex items-center pl-3")}>
                   <Checkbox checked={allState} onCheckedChange={props.onToggleAll} aria-label={t("Select all")} disabled={items.length === 0} />
                 </div>
                 {shown.map((id) => {
                   const sorted = props.sort?.id === id ? (props.sort.desc ? "desc" : "asc") : false;
                   return (
-                    <div key={id} className={cn("relative flex h-full min-w-0 items-center pr-3", id === "name" && cn(stickName, edges.left && edgeLeft))}>
+                    <div
+                      key={id}
+                      role="columnheader"
+                      aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined}
+                      className={cn("relative flex h-full min-w-0 items-center pr-3", id === "name" && cn(stickName, edges.left && edgeLeft))}
+                    >
                       <button
                         onClick={() => props.onSort(id)}
-                        className="flex h-full min-w-0 items-center gap-1 text-left font-medium hover:text-foreground"
-                        aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined}
+                        className="flex h-full min-w-0 items-center gap-1 rounded-sm text-left font-medium outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
                       >
                         <span className="truncate">{label(id)}</span>
                         {sorted === "asc" && <ArrowUp className="size-3 shrink-0" />}
@@ -170,9 +212,7 @@ export function DownloadTable(props: {
                       </button>
                       {id !== "name" && (
                         <span
-                          role="separator"
-                          aria-orientation="vertical"
-                          aria-label={tf("Resize %s", label(id))}
+                          aria-hidden // the mouse's: the Columns menu restores widths
                           title={t("Drag to resize, double-click to restore")}
                           onPointerDown={(e) => startDrag(id, e)}
                           onDoubleClick={() => props.onColumns(resetWidth(props.columns, id))}
@@ -184,7 +224,7 @@ export function DownloadTable(props: {
                     </div>
                   );
                 })}
-                <div className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
+                <div role="columnheader" className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
                   <DropdownMenu>
                     <DropdownMenuTrigger
                       aria-label={t("Columns")}
@@ -206,18 +246,25 @@ export function DownloadTable(props: {
           </ContextMenu>
 
           {items.length === 0 ? (
-            <div className="flex flex-1 items-center justify-center py-10">{props.empty}</div>
+            <div role="row" className="flex flex-1">
+              <div role="gridcell" className="flex flex-1 items-center justify-center py-10">
+                {props.empty}
+              </div>
+            </div>
           ) : (
             <ContextMenu>
               <ContextMenuTrigger asChild>
                 <div style={{ height: virtual.getTotalSize(), position: "relative" }}>
-                  {virtual.getVirtualItems().map((v) => {
+                  {rows.map((v) => {
                     const d = items[v.index];
                     const sel = selected.has(d.id);
                     return (
                       <div
                         key={d.id}
+                        id={rowID(d.id)}
                         data-index={v.index}
+                        role="row"
+                        aria-rowindex={v.index + 2}
                         aria-selected={sel}
                         onMouseDown={(e) => {
                           if (e.button !== 0) return;
@@ -236,19 +283,23 @@ export function DownloadTable(props: {
                           sel
                             ? "bg-[color-mix(in_oklab,var(--color-card)_94%,#8b5cf6)] dark:bg-[color-mix(in_oklab,var(--color-card)_91%,#8b5cf6)]"
                             : "bg-card hover:bg-[color-mix(in_oklab,var(--color-card)_60%,var(--color-muted))]",
+                          // The keyboard's row, while the list has the keyboard.
+                          d.id === props.lead && "group-focus-visible/list:shadow-[inset_0_0_0_2px_var(--color-ring)]",
                         )}
                         style={{ gridTemplateColumns: grid, height: v.size, transform: `translateY(${v.start - HEADER_HEIGHT}px)` }}
                       >
-                        <div className={cn(stickLeft, "relative flex items-center pl-3")} data-no-select>
+                        <div role="gridcell" className={cn(stickLeft, "relative flex items-center pl-3")} data-no-select>
                           {sel && <span className="accent-gradient absolute left-0 top-2 bottom-2 w-[3px] rounded-r-full" />}
-                          <Checkbox checked={sel} onCheckedChange={() => props.onToggle(d.id)} aria-label={displayName(d)} />
+                          {/* The row says whether it is selected; the box is the mouse's. */}
+                          <Checkbox checked={sel} tabIndex={-1} aria-hidden onCheckedChange={() => props.onToggle(d.id)} />
                         </div>
                         {shown.map((id) => (
                           <Cell key={id} id={id} d={d} className={id === "name" ? cn(stickName, edges.left && edgeLeft) : undefined} />
                         ))}
-                        <div data-no-select className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
+                        <div role="gridcell" data-no-select className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
                           <button
                             aria-label={t("More")}
+                            tabIndex={-1}
                             onClick={(e) => {
                               props.onContext(d.id);
                               openMenuAt(e.currentTarget);
@@ -279,7 +330,7 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
   switch (id) {
     case "name":
       return (
-        <div className={cn("flex min-w-0 items-center gap-2.5 pr-4", className)}>
+        <div role="gridcell" className={cn("flex min-w-0 items-center gap-2.5 pr-4", className)}>
           <FileTile category={d.category} />
           <div className="min-w-0">
             <p className="truncate font-medium" title={displayName(d)}>
@@ -292,12 +343,12 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
         </div>
       );
     case "queue":
-      return <div className={muted}>{d.queue}</div>;
+      return <div role="gridcell" className={muted}>{d.queue}</div>;
     case "size":
-      return <div className={cn(muted, "tabular-nums")}>{humanBytes(d.total) || "—"}</div>;
+      return <div role="gridcell" className={cn(muted, "tabular-nums")}>{humanBytes(d.total) || "—"}</div>;
     case "progress":
       return (
-        <div className="min-w-0 pr-4">
+        <div role="gridcell" className="min-w-0 pr-4">
           {k === "complete" ? (
             <span className="text-xs text-muted-foreground">100%</span>
           ) : k === "recording" || d.total <= 0 ? (
@@ -311,22 +362,22 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
         </div>
       );
     case "speed":
-      return <div className="truncate pr-3 tabular-nums">{speedText(d.speed) || <span className="text-muted-foreground">—</span>}</div>;
+      return <div role="gridcell" className="truncate pr-3 tabular-nums">{speedText(d.speed) || <span className="text-muted-foreground">—</span>}</div>;
     case "eta":
-      return <div className={cn(muted, "tabular-nums")}>{etaText(d) || "—"}</div>;
+      return <div role="gridcell" className={cn(muted, "tabular-nums")}>{etaText(d) || "—"}</div>;
     case "status":
       return (
-        <div className="min-w-0 overflow-hidden pr-2">
+        <div role="gridcell" className="min-w-0 overflow-hidden pr-2">
           <StatusBadge d={d} />
         </div>
       );
     case "added":
-      return <div className={muted}>{added(d.createdAt)}</div>;
+      return <div role="gridcell" className={muted}>{added(d.createdAt)}</div>;
     case "lastTry":
-      return <div className={muted}>{added(d.updatedAt)}</div>;
+      return <div role="gridcell" className={muted}>{added(d.updatedAt)}</div>;
     case "description":
       return (
-        <div className={muted} title={d.description || undefined}>
+        <div role="gridcell" className={muted} title={d.description || undefined}>
           {d.description}
         </div>
       );

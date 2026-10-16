@@ -12,7 +12,7 @@
   --color-card: #ffffff;
   --color-popover: #ffffff;
   --color-muted: #f4f4f5;
-  --color-muted-foreground: #71717a;
+  --color-muted-foreground: #6b6b74; /* zinc-500 darkened to 4.5:1 on muted */
   --color-border: #e4e4e7;
   --color-input: #e4e4e7;
   --color-ring: #a78bfa;
@@ -36,7 +36,7 @@
   --color-primary: #fafafa;
   --color-primary-foreground: #18181b;
   --color-accent: #1f1f23;
-  --color-destructive: #ef4444;
+  --color-destructive: #dc2626; /* white text on it: 4.5:1 */
   --color-brand: #a78bfa;
 }
 
@@ -110,4 +110,75 @@ textarea {
 ::-webkit-scrollbar-track,
 ::-webkit-scrollbar-corner {
   background: transparent;
+}
+
+/* Menus, popovers, tooltips and the command palette come with a short fade
+   and grow from where they open (Radix gives the origin), and go with a
+   shorter fade; Radix keeps them until the way out ends. Dialogs fade their
+   backdrop and grow from the middle. Tailwind places things with the
+   translate property, so these transforms do not move them. Nothing moves
+   for those who ask Windows for less motion. */
+@keyframes odm-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--odm-from-x, 0), var(--odm-from-y, 0)) scale(0.96);
+  }
+}
+@keyframes odm-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes odm-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes odm-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+.pop {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(--radix-context-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-tooltip-content-transform-origin, top center)))
+  );
+  animation: odm-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pop[data-side="bottom"] {
+  --odm-from-y: -4px;
+}
+.pop[data-side="top"] {
+  --odm-from-y: 4px;
+}
+.pop[data-side="right"] {
+  --odm-from-x: -4px;
+}
+.pop[data-side="left"] {
+  --odm-from-x: 4px;
+}
+.pop[data-state="closed"] {
+  animation: odm-pop-out 90ms ease-in forwards;
+}
+.dialog-fade[data-state="open"] {
+  animation: odm-fade-in 160ms ease-out;
+}
+.dialog-fade[data-state="closed"] {
+  animation: odm-fade-out 120ms ease-in forwards;
+}
+.dialog-pop[data-state="open"] {
+  animation: odm-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dialog-pop[data-state="closed"] {
+  animation: odm-pop-out 120ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop,
+  .pop[data-state="closed"],
+  .dialog-fade[data-state],
+  .dialog-pop[data-state] {
+    animation: none;
+  }
 }

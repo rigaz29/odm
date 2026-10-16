@@ -18,6 +18,7 @@ function NavItem({ icon: I, label, count, on, live, onClick }: { icon: Icon; lab
   return (
     <button
       onClick={onClick}
+      aria-current={on ? "page" : undefined}
       className={cn(
         "relative flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
         on ? "bg-accent font-medium text-foreground" : "text-muted-foreground hover:bg-accent hover:text-foreground",
@@ -51,23 +52,27 @@ export function Sidebar(props: {
   const now = props.speed;
   return (
     <aside className="flex w-60 shrink-0 flex-col gap-5 overflow-y-auto border-r border-border p-3">
-      <nav className="space-y-0.5">
+      <nav className="space-y-0.5" aria-label={t("Downloads")}>
         {nav({ kind: "all" }, Inbox, t("All downloads"), items.length)}
         {nav({ kind: "running" }, Zap, t("Running"), running)}
         {nav({ kind: "unfinished" }, Clock, t("Unfinished"), unfinished)}
         {nav({ kind: "finished" }, CheckCircle2, t("Finished"), items.length - unfinished)}
       </nav>
       <div>
-        <p className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">{t("Categories")}</p>
-        <nav className="space-y-0.5">
+        <p id="nav-categories" className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">
+          {t("Categories")}
+        </p>
+        <nav className="space-y-0.5" aria-labelledby="nav-categories">
           {props.categories.map((c) =>
             nav({ kind: "category", value: c }, categoryIcon(c), categoryLabel(c), items.filter((d) => d.category === c).length),
           )}
         </nav>
       </div>
       <div>
-        <p className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">{t("Queues")}</p>
-        <nav className="space-y-0.5">
+        <p id="nav-queues" className="mb-1.5 px-2.5 text-xs font-medium text-muted-foreground">
+          {t("Queues")}
+        </p>
+        <nav className="space-y-0.5" aria-labelledby="nav-queues">
           {props.queues.map((q) =>
             nav(
               { kind: "queue", value: q },

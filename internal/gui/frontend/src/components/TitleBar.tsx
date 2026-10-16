@@ -1,11 +1,7 @@
-// The title bar the page draws (the window has no frame). Its parts carry
-// --wails-non-client-region so Windows handles them as its own: the empty
-// areas move the window and maximize it on a double click, the buttons
-// minimize, maximize (with the snap layouts) and close. The search box in
-// the middle is not one of them, so it takes clicks. For a WebView2
-// without non-client regions the page does the same through the runtime:
-// the caption is also --wails-draggable and maximizes on a double click,
-// and the buttons call the window.
+// The title bar the page draws (the window has no frame, see app.go): its
+// empty areas are --wails-draggable, so they move the window as Windows'
+// own title bar does, and maximize it on a double click; the buttons call
+// the window. The search box in the middle takes clicks.
 //
 // The search box (Ctrl K) filters the list as it is typed and offers
 // commands under it (palette.ts): a pasted address first, then the
@@ -20,8 +16,6 @@ import { looksLikeURL } from "../format";
 import { t } from "../i18n";
 import { cn } from "../lib/utils";
 import { type Command, cycle, matchCommands } from "../palette";
-
-const region = (kind: "caption" | "minimize" | "maximize" | "close") => ({ "--wails-non-client-region": kind }) as CSSProperties;
 
 export function TitleBar(props: {
   query: string;
@@ -38,7 +32,7 @@ export function TitleBar(props: {
     if (inODM) void f();
   };
   const caption = {
-    style: { ...region("caption"), "--wails-draggable": "drag" } as CSSProperties,
+    style: { "--wails-draggable": "drag" } as CSSProperties,
     onDoubleClick: call(() => Window.ToggleMaximise()),
   };
 
@@ -75,6 +69,8 @@ export function TitleBar(props: {
           <input
             ref={props.searchRef}
             role="combobox"
+            aria-label={t("Search downloads or paste a URL…")}
+            aria-keyshortcuts="Control+K"
             aria-expanded={showing}
             aria-controls="odm-palette"
             aria-activedescendant={showing ? `odm-palette-${at}` : undefined}
@@ -106,18 +102,20 @@ export function TitleBar(props: {
               }
             }}
           />
-          <kbd className="rounded border border-border bg-background px-1.5 text-[10px] font-medium">Ctrl K</kbd>
+          <kbd aria-hidden className="rounded border border-border bg-background px-1.5 text-[10px] font-medium">
+            Ctrl K
+          </kbd>
         </label>
         {showing && (
-          <div
-            id="odm-palette"
-            role="listbox"
-            className="absolute left-1/2 top-full z-50 mt-1.5 w-[30rem] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-popover text-sm shadow-xl"
-          >
-            <div ref={list} className="max-h-80 overflow-y-auto p-1">
+          <div data-side="bottom" className="pop absolute left-1/2 top-full z-50 mt-1.5 w-[30rem] -translate-x-1/2 overflow-hidden rounded-lg border border-border bg-popover text-sm shadow-xl">
+            <div ref={list} id="odm-palette" role="listbox" aria-label={t("Commands")} tabIndex={-1} className="max-h-80 overflow-y-auto p-1">
               {items.map((c, i) => (
-                <div key={c.id}>
-                  {c.group && c.group !== items[i - 1]?.group && <p className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground">{c.group}</p>}
+                <div key={c.id} role="presentation">
+                  {c.group && c.group !== items[i - 1]?.group && (
+                    <p role="presentation" className="px-2 pb-1 pt-2 text-xs font-medium text-muted-foreground">
+                      {c.group}
+                    </p>
+                  )}
                   <div
                     id={`odm-palette-${i}`}
                     data-at={i}
@@ -161,7 +159,6 @@ export function TitleBar(props: {
             key={kind}
             aria-label={name}
             tabIndex={-1}
-            style={region(kind)}
             onClick={call(f)}
             className={cn(
               "flex w-11 items-center justify-center text-muted-foreground",

@@ -522,6 +522,7 @@ export function App() {
             }}
             onOpen={open}
             onKeyDown={onKeyDown}
+            lead={lead}
             rowMenu={<RowMenu chosen={chosen} current={current} queues={queues} can={{ open: current?.status === "complete", resume: resumable.length > 0, pause: pausable.length > 0 }} on={rowActions} />}
             empty={
               <div className="flex flex-col items-center gap-3 text-center">

@@ -17,7 +17,7 @@ export function AddWindow({ token }: { token: string }) {
   }, [token]);
 
   return (
-    <div className="aurora flex h-full flex-col bg-background p-5 text-foreground">
+    <main className="aurora flex h-full flex-col bg-background p-5 text-foreground">
       <div className="mb-4 flex items-center gap-2.5">
         <span className="accent-gradient flex size-8 items-center justify-center rounded-lg text-white shadow-sm shadow-violet-500/30">
           <ArrowDownToLine className="size-4" strokeWidth={2.5} />
@@ -30,6 +30,6 @@ export function AddWindow({ token }: { token: string }) {
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
         <AddForm token={token} onDone={api.closeWindow} />
       </div>
-    </div>
+    </main>
   );
 }

@@ -29,6 +29,10 @@ func (w *appWindows) open(name, title, view string, query url.Values, width, hei
 		return
 	}
 	query.Set("view", view)
+	// Smaller on a screen too small for it, with room for Windows' frame
+	// (workarea.go).
+	areaW, areaH, _ := workArea()
+	width, height = fitSize(width, height, areaW, areaH, 64)
 	win := w.app.Window.NewWithOptions(application.WebviewWindowOptions{
 		Name:             name,
 		Title:            title,

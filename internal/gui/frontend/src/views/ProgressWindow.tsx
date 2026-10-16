@@ -97,13 +97,13 @@ export function ProgressWindow({ id }: { id: string }) {
   ];
 
   return (
-    <div className="flex h-full flex-col gap-3 bg-background p-4 text-foreground">
+    <main className="flex h-full flex-col gap-3 bg-background p-4 text-foreground">
       <div className="flex items-center gap-2.5">
         <FileTile category={it.category} size="size-9" icon="size-4" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold" title={displayName(it)}>
+          <h1 className="truncate text-sm font-semibold" title={displayName(it)}>
             {displayName(it)}
-          </p>
+          </h1>
           <p className="truncate text-xs text-muted-foreground" title={it.url}>
             {it.url}
           </p>
@@ -232,7 +232,7 @@ export function ProgressWindow({ id }: { id: string }) {
       </div>
 
       {details && <Connections d={d} />}
-    </div>
+    </main>
   );
 }
 

@@ -14,7 +14,7 @@ export function Tooltip({ label, children, side = "bottom" }: { label: string; c
         <TooltipPrimitive.Content
           side={side}
           sideOffset={6}
-          className={cn("z-50 rounded-md border border-border bg-popover px-2 py-1 text-xs text-foreground shadow-md")}
+          className={cn("pop z-50 rounded-md border border-border bg-popover px-2 py-1 text-xs text-foreground shadow-md")}
         >
           {label}
         </TooltipPrimitive.Content>

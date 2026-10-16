@@ -135,7 +135,8 @@ export function OptionsWindow({ tab: first }: { tab: string }) {
           </button>
         ))}
       </nav>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <main className="flex min-w-0 flex-1 flex-col">
+        <h1 className="sr-only">{t(TABS.find(([k]) => k === tab)![1])}</h1>
         <div className="min-h-0 flex-1 space-y-6 overflow-y-auto p-5">
           {tab === "general" && <General o={o} set={set} />}
           {tab === "types" && <Types o={o} set={set} />}
@@ -155,7 +156,7 @@ export function OptionsWindow({ tab: first }: { tab: string }) {
             {t("OK")}
           </Button>
         </div>
-      </div>
+      </main>
     </div>
   );
 }

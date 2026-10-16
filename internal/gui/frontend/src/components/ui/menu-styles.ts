@@ -1,7 +1,7 @@
 // The look the context menu and the dropdown menu share.
 
 export const menuContent =
-  "z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-popover p-1 text-sm text-foreground shadow-lg outline-none";
+  "pop z-50 min-w-48 overflow-hidden rounded-lg border border-border bg-popover p-1 text-sm text-foreground shadow-lg outline-none";
 
 export const menuItem =
   "relative flex h-8 cursor-default select-none items-center gap-2 rounded-md px-2 outline-none data-[disabled]:pointer-events-none data-[highlighted]:bg-accent data-[disabled]:opacity-45 [&_svg]:size-4 [&_svg]:shrink-0 [&_svg]:text-muted-foreground";

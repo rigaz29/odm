@@ -95,13 +95,17 @@ internal/engine, server, native, tools …    tidak berubah
   - riwayat kecepatan per unduhan dan total, sebagai cincin sampel tiap
     detik;
   - lama rekaman siaran live.
-- **Title bar**: jendela `Frameless`, ditambah `NonClientRegionSupport` dan
-  properti CSS `--wails-non-client-region` (`caption`, `minimize`,
-  `maximize`, `close`). Dengan begitu menyeret jendela, klik ganda untuk
-  maximize, dan snap layout Windows 11 tetap dikerjakan Windows sendiri.
-  Di Wails beta.30 wilayah itu baru dibaca jika WebView2 di-host lewat
-  composition (`WebView2CompositionHosting`). Tanpa itu halaman berada di
-  jendela anak, dan bingkai jendela tidak pernah menerima kursor.
+- **Title bar**: jendela `Frameless`. Area kosongnya `--wails-draggable`,
+  sehingga jendela dipindah oleh Windows sendiri (diseret ke tepi layar
+  tetap snap), dan klik ganda me-maximize lewat runtime. WebView2 di-host
+  di jendela anak, bukan lewat composition (`WebView2CompositionHosting`).
+  Composition sempat dipakai di Tahap 1 agar Windows menangani bagian
+  title bar lewat `--wails-non-client-region`, termasuk snap layout di
+  tombol Maximize. Namun di Tahap 5 ternyata dalam mode itu UI Automation
+  halaman hanya sampai ke Windows lewat jendela induk, dan Wails beta.30
+  tidak meneruskannya, sehingga Narrator tidak bisa membaca jendela utama.
+  Pembaca layar diutamakan; snap layout di tombol Maximize (dan Win+Z)
+  dilepas.
 - **Terjemahan**: satu katalog `id.json` di `internal/i18n`, dipakai Fyne
   dan halaman. Tes memastikan setiap teks `t("…")` di halaman punya
   terjemahan.
@@ -144,7 +148,7 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Cabang `ui-next` dari `ui-fluent`, dengan `internal/fluent` diganti nama
   menjadi `internal/gui` dan tag menjadi `gui`.
 - Tailwind 4, komponen shadcn/ui yang dibutuhkan, dan token tema A+D.
-- Title bar buatan sendiri dengan wilayah non-client.
+- Title bar buatan sendiri (wilayah non-client, dilepas di Tahap 5).
 - Katalog terjemahan bersama `internal/i18n`.
 - Service ditambah data koneksi, riwayat kecepatan, dan lama rekaman.
 - Jendela utama pertama sesuai mockup dengan data engine sungguhan.
@@ -184,11 +188,10 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 
 - **Wails v3 masih beta.** Versinya dipatok dan lapisan `internal/gui`
   dibuat tipis.
-- **Title bar buatan sendiri.** Seret jendela, klik ganda, dan snap layout
-  diserahkan ke Windows lewat wilayah non-client. Sudah dicek di Tahap 1
-  dan berfungsi dengan composition hosting. Untuk WebView2 tanpa wilayah
-  non-client, halaman memakai `--wails-draggable` dan memanggil jendela
-  sendiri.
+- **Title bar buatan sendiri.** Seret jendela memakai `--wails-draggable`
+  (gerak jendela bawaan Windows), klik ganda dan tombol memanggil jendela.
+  Snap layout di tombol Maximize tidak tersedia tanpa composition hosting;
+  bisa dikembalikan bila Wails meneruskan UI Automation dalam mode itu.
 - **Konsistensi desain shadcn/ui.** Token warna, jarak, dan set komponen
   dikunci di Tahap 1; layar baru hanya memakai komponen itu.
 - **WebView2 tidak ada** di sebagian Windows 10 lama. Wails bisa menawarkan

@@ -98,12 +98,14 @@ queues. It runs as a desktop app, or headless with a JSON API.
   the one you pick through yt-dlp, with its progress, pause and resume.
   A YouTube address pasted into *New Download* works the same way. yt-dlp
   reads the page itself; the browser's cookies are not given to it.
-- A broadcast on such a page (YouTube Live, Twitch and others yt-dlp reads,
-  where they come as HLS) shows "● LIVE" with a Record row per quality.
-  ODM records the playlist yt-dlp finds with its own recorder, from the
-  click until you stop it, and asks yt-dlp for a fresh playlist when the
-  old address expires. The plan for TikTok (FLV) and Instagram/Facebook
-  (live DASH) is in [docs/ROADMAP.md](docs/ROADMAP.md), phase 6.
+- A broadcast on such a page (YouTube Live, Twitch, TikTok and others
+  yt-dlp reads) shows "● LIVE" with a Record row per quality. ODM records
+  the playlist or stream yt-dlp finds with its own recorder, from the
+  click until you stop it, and asks yt-dlp for a fresh address when the
+  old one expires. A live stream sent as one endless response (TikTok's
+  FLV, which the button also offers when the player loads it) is recorded
+  in parts that ffmpeg joins into one MP4. The plan for Instagram and
+  Facebook (live DASH) is in [docs/ROADMAP.md](docs/ROADMAP.md), phase 6.
 - yt-dlp and ffmpeg need no installing. The first time one is needed, ODM
   asks whether it may download them (about 20 MB): yt-dlp from its own
   releases, and a small ffmpeg built for ODM that only copies streams

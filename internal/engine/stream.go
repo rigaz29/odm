@@ -137,12 +137,16 @@ const maxManifestSize = 16 << 20
 // runStream is Start for a segmented download.
 func (d *Download) runStream(ctx context.Context) {
 	d.mu.Lock()
-	live := d.Stream.Live
+	live, kind := d.Stream.Live, d.Stream.Kind
 	d.mu.Unlock()
 	var err error
-	if live {
+	switch {
+	case kind == media.KindHTTPLive:
+		live = true
+		err = d.recordHTTPLive(ctx)
+	case live:
 		err = d.recordLive(ctx)
-	} else {
+	default:
 		var tracks []*streamTrack
 		tracks, err = d.loadStream(ctx)
 		if errors.Is(err, errLiveStream) {

@@ -117,6 +117,24 @@ func TestPromptCarriesTheQuality(t *testing.T) {
 	}
 }
 
+// An endless live response is added as a live recording, and a quality
+// label is not looked up: its address is never read before.
+func TestAddHTTPLive(t *testing.T) {
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	body := `{"url": "http://127.0.0.1:1/stage/s.flv", "stream": "http-live", "quality": "x", "page": "https://www.tiktok.com/@a/live", "start": false}`
+	w := httptest.NewRecorder()
+	New(mgr).Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/downloads", strings.NewReader(body)))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	data, _ := mgr.Export()
+	for _, want := range []string{`"kind": "http-live"`, `"live": true`, `"page": "https://www.tiktok.com/@a/live"`} {
+		if !strings.Contains(string(data), want) {
+			t.Fatalf("no %s in state:\n%s", want, data)
+		}
+	}
+}
+
 // A broadcast found by yt-dlp keeps its page with the stream, for asking
 // again when the playlist expires.
 func TestAddKeepsTheLivePage(t *testing.T) {

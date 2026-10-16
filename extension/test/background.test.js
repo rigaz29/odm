@@ -13,6 +13,10 @@ test("mediaKind", () => {
   assert.equal(bg.mediaKind("https://cdn/clip.mp4", "application/octet-stream"), "file");
   assert.equal(bg.mediaKind("https://cdn/page.html", "text/html"), null);
   assert.equal(bg.mediaKind("https://cdn/song", "audio/mpeg; charset=x"), "file");
+  // An FLV without a size is a live stream; with one, a file.
+  assert.equal(bg.mediaKind("https://pull-flv.example/stage/s_or4.flv?expire=1&sign=x", "video/x-flv", 0), "live");
+  assert.equal(bg.mediaKind("https://cdn/live/stream.flv", ""), "live");
+  assert.equal(bg.mediaKind("https://cdn/clip.flv", "video/x-flv", 5e6), "file");
 });
 
 test("normalizeMediaURL drops the fragment and keeps the query", () => {

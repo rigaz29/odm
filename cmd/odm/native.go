@@ -137,6 +137,15 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	if len(headers) > 0 {
 		payload["headers"] = headers
 	}
+	if m.Kind == "live" {
+		// One endless response (FLV): recorded as it comes, from the
+		// click until Stop.
+		payload["stream"] = string(media.KindHTTPLive)
+		payload["file_name"] = native.StreamName(m.Title)
+		if m.Page != "" {
+			payload["page"] = m.Page
+		}
+	}
 	if m.Kind == "stream" {
 		// The extension only saw the response headers, not the body, so
 		// the format comes from the Content-Type and the URL.

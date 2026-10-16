@@ -12,7 +12,7 @@
   let host = null;
   let ui = null;
   // medialist.js runs first in the same content-script world.
-  const { fmtSize, menuEntries, anyLive, sitePage, siteTitle } = self.odmMediaList;
+  const { fmtSize, menuEntries, anyLive, sitePage, siteName, siteTitle } = self.odmMediaList;
   // ODM's replies about the streams and site pages (their qualities), by
   // URL; asked once each, again when the reply was a failure that may pass.
   const infos = new Map();
@@ -96,7 +96,7 @@
   function renderMenu() {
     const all = allItems();
     for (const it of all) {
-      if (it.kind === "file" || asked.has(it.url)) continue;
+      if (it.kind === "file" || it.kind === "live" || asked.has(it.url)) continue;
       asked.add(it.url);
       chrome.runtime.sendMessage({ type: "odm-media-info", item: it }, (reply) => {
         const r = chrome.runtime.lastError || !reply ? { ok: false, error: "ODM is not reachable" } : reply;
@@ -130,6 +130,10 @@
   }
 
   function send(item) {
+    // A live stream the player of a site's page reads: yt-dlp can find its
+    // new address on the page when this one expires.
+    const s = item.kind === "live" && !item.sitePage ? siteItem() : null;
+    if (s) item = { ...item, sitePage: s.url };
     chrome.runtime.sendMessage({ type: "odm-grab", item }, (reply) => {
       if (chrome.runtime.lastError || !reply) flash("ODM is not reachable");
       else if (!reply.ok) flash(`ODM: ${reply.error}`);
@@ -137,12 +141,13 @@
     });
   }
 
-  // siteItem is the video of a site's page that yt-dlp downloads (YouTube),
-  // null elsewhere. A player embedded in another site's page counts too.
+  // siteItem is the video of a site's page that yt-dlp downloads (YouTube,
+  // TikTok), null elsewhere. A player embedded in another site's page
+  // counts too.
   function siteItem() {
     const url = sitePage(location.href);
     if (!url) return null;
-    return { kind: "site", site: "YouTube", url, title: siteTitle(document.title) };
+    return { kind: "site", site: siteName(url), url, title: siteTitle(document.title) };
   }
 
   // allItems is what the button offers: the page's video, then what the

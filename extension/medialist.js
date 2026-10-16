@@ -13,24 +13,28 @@
     return `${n.toFixed(i ? 2 : 0)} ${u[i]}`;
   }
 
-  // The video of a site's page first, then streams in the order the
-  // player loaded them: a player reads the playlist listing every quality
-  // before the one quality it plays, so the first is usually the complete
-  // one. Files follow, largest first.
+  // The video of a site's page first, then streams (live ones sent as one
+  // response too) in the order the player loaded them: a player reads the
+  // playlist listing every quality before the one quality it plays, so the
+  // first is usually the complete one. Files follow, largest first.
   function orderMedia(items) {
+    const isStream = (i) => i.kind === "stream" || i.kind === "live";
     const sites = items.filter((i) => i.kind === "site");
-    const streams = items.filter((i) => i.kind === "stream").sort((a, b) => (a.at || 0) - (b.at || 0));
-    const files = items.filter((i) => i.kind !== "stream" && i.kind !== "site").sort((a, b) => b.size - a.size);
+    const streams = items.filter(isStream).sort((a, b) => (a.at || 0) - (b.at || 0));
+    const files = items.filter((i) => !isStream(i) && i.kind !== "site").sort((a, b) => b.size - a.size);
     return [...sites, ...streams, ...files];
   }
 
   const YOUTUBE_ID = /^[A-Za-z0-9_-]{11}$/;
 
+  const TIKTOK_USER = /^@[A-Za-z0-9._-]+$/;
+
   // sitePage is the page yt-dlp is given for a video site's address, or ""
-  // when the address shows no single video. YouTube only for now: its
-  // player fetches signed pieces no extension can hand over, so yt-dlp
-  // reads the page. Embedded players (youtube-nocookie too) and short
-  // links become the watch page, so one video has one address.
+  // when the address shows no single video. YouTube: its player fetches
+  // signed pieces no extension can hand over, so yt-dlp reads the page.
+  // Embedded players (youtube-nocookie too) and short links become the
+  // watch page, so one video has one address. TikTok: a video's page, and
+  // a live page, whose stream address yt-dlp finds again when it expires.
   function sitePage(href) {
     let u;
     try {
@@ -40,6 +44,12 @@
     }
     const host = u.hostname.toLowerCase().replace(/^www\./, "");
     const parts = u.pathname.split("/").filter(Boolean);
+    if (host === "tiktok.com" || host === "m.tiktok.com") {
+      if (!TIKTOK_USER.test(parts[0] || "")) return "";
+      if (parts[1] === "live" && parts.length === 2) return `https://www.tiktok.com/${parts[0]}/live`;
+      if (parts[1] === "video" && /^\d+$/.test(parts[2] || "")) return `https://www.tiktok.com/${parts[0]}/video/${parts[2]}`;
+      return "";
+    }
     let id = "";
     if (host === "youtu.be") {
       id = parts[0] || "";
@@ -51,9 +61,14 @@
     return YOUTUBE_ID.test(id) ? `https://www.youtube.com/watch?v=${id}` : "";
   }
 
+  // siteName names the site of a page sitePage gave.
+  function siteName(page) {
+    return /^https:\/\/www\.tiktok\.com\//.test(page) ? "TikTok" : "YouTube";
+  }
+
   // siteTitle drops the site's name a page title ends with.
   function siteTitle(title) {
-    return String(title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*YouTube( Music)?$/, "").trim();
+    return String(title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*(YouTube( Music)?|TikTok)$/, "").trim();
   }
 
   function mediaLabel(it) {
@@ -61,6 +76,7 @@
     // Only headers were seen for a stream: whether its playlist lists every
     // quality or is one of them is known once ODM reads it.
     if (it.kind === "stream") return `${it.format || "Media"} stream`;
+    if (it.kind === "live") return `${it.format || "Live"} stream`;
     const type = (it.mime && it.mime.split("/")[1]) || "video";
     return `${type} file${it.size ? ", " + fmtSize(it.size) : ""}`;
   }
@@ -87,6 +103,12 @@
     for (const it of ordered) {
       if (it.kind === "site") {
         out.push(...siteEntries(it, info(it)));
+        continue;
+      }
+      if (it.kind === "live") {
+        // One endless response, one quality: nothing for ODM to read first.
+        out.push({ text: `● LIVE · ${mediaLabel(it)}`, heading: true, at: it.at });
+        out.push({ text: "Record · as the player gets it", item: it, sub: true });
         continue;
       }
       if (it.kind !== "stream") {
@@ -139,14 +161,17 @@
     return [{ text: `${name} · best quality`, item: it, at: it.at }];
   }
 
-  // liveEntries are a broadcast's rows: ODM records the HLS playlist yt-dlp
-  // found (site.manifest, fetched with site.headers) and keeps the page to
-  // ask yt-dlp again when the playlist's address expires.
+  // liveEntries are a broadcast's rows: ODM records the playlist or stream
+  // yt-dlp found (site.manifest, fetched with site.headers; site.kind is
+  // "hls", "dash" or "http-live") and keeps the page to ask yt-dlp again
+  // when its address expires.
   function liveEntries(it, site, name) {
-    const live = {
-      kind: "stream", url: site.manifest, headers: site.headers || {}, page: it.url,
-      title: it.title, mime: "application/vnd.apple.mpegurl", format: "HLS", at: it.at,
-    };
+    const live = site.kind === "http-live"
+      ? { kind: "live", mime: "video/x-flv", format: "FLV" }
+      : site.kind === "dash"
+        ? { kind: "stream", mime: "application/dash+xml", format: "DASH" }
+        : { kind: "stream", mime: "application/vnd.apple.mpegurl", format: "HLS" };
+    Object.assign(live, { url: site.manifest, headers: site.headers || {}, sitePage: it.url, title: it.title, at: it.at });
     const out = [{ text: `● LIVE · ${name}`, heading: true, at: it.at }];
     const s = site.stream;
     if (s && !s.single && s.qualities && s.qualities.length) {
@@ -158,9 +183,11 @@
     return out;
   }
 
-  // anyLive reports whether ODM said one of the items is a broadcast.
+  // anyLive reports whether one of the items is a broadcast: ODM said so,
+  // or it is one endless response.
   function anyLive(items, infos) {
     return items.some((it) => {
+      if (it.kind === "live") return true;
       const r = infos ? infos.get(it.url) : undefined;
       return !!(r && r.ok && ((r.site && r.site.live) || (r.stream && r.stream.live)));
     });
@@ -175,7 +202,7 @@
     return `${Math.round(s / 3600)} h ago`;
   }
 
-  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, anyLive, sitePage, siteTitle, ago };
+  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, anyLive, sitePage, siteName, siteTitle, ago };
   // Always set: in a content script, a page element with id="module"
   // makes the global "module" look defined.
   root.odmMediaList = api;

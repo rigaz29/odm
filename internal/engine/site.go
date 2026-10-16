@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 
 	"odm/internal/ffmpeg"
+	"odm/internal/media"
 	"odm/internal/ytdlp"
 )
 
@@ -83,12 +84,30 @@ func ytdlpConfigured() string {
 type SiteChoices struct {
 	Title     string
 	Qualities []ytdlp.Quality
-	// Live is a broadcast on now. ODM records it itself from Manifest, its
-	// HLS playlist, fetched with Headers; Qualities is then empty (the
-	// playlist lists them, see ProbeStream).
+	// Live is a broadcast on now. ODM records it itself from Manifest,
+	// fetched with Headers: an HLS playlist or a DASH manifest (Kind; the
+	// playlist lists the qualities, see ProbeStream), else the address of
+	// an endless HTTP response (KindHTTPLive, one quality). Qualities is
+	// then empty.
 	Live     bool
+	Kind     media.Kind
 	Manifest string
 	Headers  map[string]string
+}
+
+// siteLive picks what ODM records of a live video: its HLS playlist, else
+// its DASH manifest, else an endless HTTP response.
+func siteLive(v *ytdlp.Video) (media.Kind, string, map[string]string, bool) {
+	if m, h, ok := v.LiveManifest(); ok {
+		return media.KindHLS, m, h, true
+	}
+	if m, h, ok := v.LiveDASH(); ok {
+		return media.KindDASH, m, h, true
+	}
+	if m, h, ok := v.LiveHTTP(); ok {
+		return media.KindHTTPLive, m, h, true
+	}
+	return media.KindNone, "", nil, false
 }
 
 // Quality returns the index of the quality labelled label, -1 for none.
@@ -115,11 +134,11 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	}
 	switch {
 	case v.IsLive():
-		m, h, ok := v.LiveManifest()
+		kind, m, h, ok := siteLive(v)
 		if !ok {
-			return nil, refusal("this live stream is not HLS, which is what ODM records so far")
+			return nil, refusal("this live stream comes in a form ODM cannot record")
 		}
-		return &SiteChoices{Title: v.Title, Live: true, Manifest: m, Headers: h}, nil
+		return &SiteChoices{Title: v.Title, Live: true, Kind: kind, Manifest: m, Headers: h}, nil
 	case v.LiveStatus == "is_upcoming":
 		return nil, refusal("this live stream has not started yet")
 	}
@@ -130,10 +149,10 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	return c, nil
 }
 
-// resolveSiteLive asks yt-dlp again for the HLS playlist of the broadcast
-// on page: a recording's playlist address is signed and expires, YouTube's
-// after some hours.
-func resolveSiteLive(ctx context.Context, page string) (string, map[string]string, error) {
+// resolveSiteLive asks yt-dlp again for the address of the broadcast on
+// page, of the kind the recording reads: it is signed and expires,
+// YouTube's after some hours, TikTok's sooner.
+func resolveSiteLive(ctx context.Context, page string, kind media.Kind) (string, map[string]string, error) {
 	bin, err := locateYtDlp(ctx)
 	if err != nil {
 		return "", nil, err
@@ -145,9 +164,19 @@ func resolveSiteLive(ctx context.Context, page string) (string, map[string]strin
 	if !v.IsLive() {
 		return "", nil, refusal("the broadcast is over")
 	}
-	m, h, ok := v.LiveManifest()
+	var m string
+	var h map[string]string
+	var ok bool
+	switch kind {
+	case media.KindDASH:
+		m, h, ok = v.LiveDASH()
+	case media.KindHTTPLive:
+		m, h, ok = v.LiveHTTP()
+	default:
+		m, h, ok = v.LiveManifest()
+	}
 	if !ok {
-		return "", nil, refusal("the broadcast is no longer offered as HLS")
+		return "", nil, refusal("the broadcast is no longer offered as it was")
 	}
 	return m, h, nil
 }

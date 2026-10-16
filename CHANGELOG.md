@@ -20,6 +20,17 @@ All notable changes to ODM are documented here. The format is based on
   Download is recorded likewise. `POST /api/probe/site` answers `live`,
   `manifest`, `headers` and the playlist's qualities; `POST
   /api/downloads` takes `page`.
+- Live streams sent as one endless response, as TikTok's player reads its
+  broadcasts (FLV), are recorded: from the click until Stop, opened again
+  into a new part when the connection drops, and joined into one MP4 with
+  ffmpeg (Matroska when the streams do not fit; without ffmpeg the parts
+  are kept as they came). The extension lists such a response (an FLV
+  without a size) as "● LIVE · FLV stream". TikTok's video and live pages
+  go to yt-dlp like YouTube's; a broadcast is recorded from its HLS
+  playlist, else its DASH manifest, else its FLV, and yt-dlp is asked for
+  a fresh address when the signed one is refused. The small ffmpeg reads
+  FLV and joins parts (`ffmpeg-min-n8.1-2`). `POST /api/downloads` takes
+  `"stream": "http-live"`; `POST /api/probe/site` answers `kind`.
 - Stream and recording results in MPEG-TS, video and audio in one track,
   become MP4 when they finish, copied with ffmpeg without re-encoding, or
   Matroska when their streams do not fit MP4; without ffmpeg the TS file
@@ -224,6 +235,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- The extension in Firefox no longer sends the frame a stream was found in
+  as the stream's page: ODM keeps a page to ask yt-dlp for a live
+  stream's fresh address, and would have asked it about that frame.
 - Right-clicking a download in the list opens its menu at once. The click
   used to reach the list rather than the row, so the menu acted on what
   was selected before, and a row had to be left-clicked first. Now a row

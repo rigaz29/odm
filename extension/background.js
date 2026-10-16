@@ -114,9 +114,11 @@ function isExcluded(url, patterns) {
 }
 
 // mediaKind classifies a response: "stream" for HLS/DASH playlists (ODM
-// fetches their segments), "file" for a single audio/video file, null for
-// anything else.
-function mediaKind(url, mime) {
+// fetches their segments), "live" for a live stream sent as one endless
+// response (an FLV without a size: TikTok's, many others'), "file" for a
+// single audio/video file, null for anything else. size is the response's
+// full size, 0 when unknown.
+function mediaKind(url, mime, size) {
   mime = String(mime || "").split(";")[0].trim().toLowerCase();
   let path = "";
   try {
@@ -136,6 +138,7 @@ function mediaKind(url, mime) {
   // MP4 (DASH, newer HLS). Listing them would also push the playlists out.
   if (mime === "video/mp2t" || path.endsWith(".ts")) return null;
   if (mime === "video/iso.segment" || mime === "audio/iso.segment" || path.endsWith(".m4s")) return null;
+  if (mime === "video/x-flv" || path.endsWith(".flv")) return size ? "file" : "live";
   if (mime.startsWith("video/") || mime.startsWith("audio/")) return "file";
   if (MEDIA_EXT.test(path) && (mime === "" || mime === "application/octet-stream")) return "file";
   return null;
@@ -195,7 +198,7 @@ function mergeMedia(list, item) {
   }
   const next = [item, ...rest];
   while (next.length > MAX_MEDIA_PER_TAB) {
-    const f = next.findLastIndex((x) => x.kind !== "stream");
+    const f = next.findLastIndex((x) => x.kind !== "stream" && x.kind !== "live");
     next.splice(f >= 0 ? f : next.length - 1, 1);
   }
   return next;
@@ -295,12 +298,13 @@ function grab(item, referrer, title) {
     // A broadcast's own title, without the site's name the tab's has.
     url: item.url, referrer, title: item.title || title,
     mime: item.mime || "", size: item.size || 0,
-    kind: item.kind === "stream" ? "stream" : "file",
+    kind: item.kind === "stream" || item.kind === "live" ? item.kind : "file",
     quality: item.quality || "",
     // A broadcast found by yt-dlp: the headers its playlist needs, and the
-    // page to ask yt-dlp again when the playlist expires.
+    // page to ask yt-dlp again when the address expires. (item.page is the
+    // frame a response came from, which yt-dlp is not asked about.)
     headers: item.headers || undefined,
-    page: item.page || "",
+    page: item.sitePage || "",
   });
 }
 
@@ -394,9 +398,9 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
       if (d.tabId < 0 || (d.statusCode !== 200 && d.statusCode !== 206)) return;
       const ct = (d.responseHeaders || []).find((h) => h.name.toLowerCase() === "content-type");
       const mime = ct ? ct.value.split(";")[0].trim().toLowerCase() : "";
-      const kind = mediaKind(d.url, mime);
-      if (!kind) return;
       const size = totalSize(d.responseHeaders);
+      const kind = mediaKind(d.url, mime, size);
+      if (!kind) return;
       if (kind === "file" && size > 0 && size < MIN_MEDIA_BYTES) return;
       const item = { url: normalizeMediaURL(d.url), mime, size, kind, frameId: d.frameId, at: Date.now() };
       // The document that asked for it, for the referrer when the popup
@@ -404,6 +408,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
       if (d.documentUrl) item.page = d.documentUrl;
       else if (d.initiator && d.initiator !== "null") item.origin = d.initiator;
       if (kind === "stream") item.format = streamFormat(d.url, mime);
+      if (kind === "live") item.format = "FLV";
       updateTab(d.tabId, async () => {
         const next = mergeMedia(await tabMedia(d.tabId), item);
         await chrome.storage.session.set({ [tabKey(d.tabId)]: next });

@@ -24,16 +24,21 @@ document.getElementById("test").onclick = () => {
 // Media the tab has loaded, from every frame: also what the in-page button
 // cannot offer (audio-only pages, canvas players, a frame without a large
 // <video>, or the button closed with ✕).
-const { menuEntries, sitePage, siteTitle, ago } = self.odmMediaList;
+const { menuEntries, sitePage, siteName, siteTitle, ago } = self.odmMediaList;
 const mediaBox = document.getElementById("media");
 
 chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
   if (!tab) return;
   chrome.runtime.sendMessage({ type: "odm-tab-media", tabId: tab.id }, (found) => {
     let list = chrome.runtime.lastError || !Array.isArray(found) ? [] : found;
-    // The video of a site's page (YouTube), which yt-dlp downloads.
+    // The video of a site's page (YouTube, TikTok), which yt-dlp downloads.
+    // A live stream its player reads keeps the page, where yt-dlp finds
+    // its new address when this one expires.
     const page = sitePage(tab.url || "");
-    if (page) list = [{ kind: "site", site: "YouTube", url: page, title: siteTitle(tab.title), frameId: 0 }, ...list];
+    if (page) {
+      list = list.map((it) => (it.kind === "live" && !it.sitePage ? { ...it, sitePage: page } : it));
+      list = [{ kind: "site", site: siteName(page), url: page, title: siteTitle(tab.title), frameId: 0 }, ...list];
+    }
     if (list.length === 0) return;
     // ODM's replies about the streams (their qualities), by playlist URL.
     const infos = new Map();
@@ -65,7 +70,7 @@ chrome.tabs.query({ active: true, currentWindow: true }).then(([tab]) => {
       });
     };
     for (const it of list) {
-      if (it.kind === "file") continue;
+      if (it.kind === "file" || it.kind === "live") continue;
       chrome.runtime.sendMessage({ type: "odm-media-info", item: it, tabId: tab.id }, (reply) => {
         infos.set(it.url, chrome.runtime.lastError || !reply ? { ok: false, error: "ODM is not reachable" } : reply);
         render();

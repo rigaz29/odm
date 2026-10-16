@@ -27,6 +27,9 @@ const (
 	KindSmooth Kind = "smooth" // Microsoft Smooth Streaming manifest
 	KindF4M    Kind = "f4m"    // Adobe HTTP Dynamic Streaming manifest
 	KindFile   Kind = "file"   // a plain audio or video file
+	// KindHTTPLive is a live stream sent as one endless HTTP response
+	// (FLV, as TikTok sends it), recorded from start to stop.
+	KindHTTPLive Kind = "http-live"
 )
 
 // IsManifest reports whether k describes a stream that is assembled from

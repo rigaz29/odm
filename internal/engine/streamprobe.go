@@ -101,8 +101,18 @@ func (c *StreamChoices) Job(manifest string, q, a int) (StreamJob, error) {
 	case media.KindDASH:
 		job.VideoRep, job.AudioRep = sq.key, au.key
 		job.Estimate = estimate(sq.bps+au.bps, c.length)
+	case media.KindHTTPLive:
+		job.Live = true
 	}
 	return job, nil
+}
+
+// HTTPLiveChoices is what a live stream sent as one endless response
+// offers: one quality, as the server sends it. Its address is not read
+// first, as a playlist is: the response never ends.
+func HTTPLiveChoices() *StreamChoices {
+	return &StreamChoices{Kind: media.KindHTTPLive, Live: true, Note: liveNote,
+		Qualities: []StreamQuality{{Label: "As sent (one quality)"}}}
 }
 
 // ProbeStream reads the playlist at rawURL and lists its qualities. The

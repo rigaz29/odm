@@ -215,7 +215,16 @@ Tahap 1: dasar (HLS)
 
 Tahap 2: aliran kontinu (TikTok)
 
-- [ ] Perekam aliran HTTP tanpa akhir (FLV, kadang TS) sampai Stop. **S**
+- [x] Perekam aliran HTTP tanpa akhir (FLV, kadang TS) sampai Stop. **S**
+      `recordHTTPLive` (`livehttp.go`): respons disalin ke bagian p1,
+      p2… di folder kerja; koneksi putus → bagian baru; alamat ditolak
+      (403/404/410) → alamat baru dari yt-dlp; berhenti saat Stop atau
+      saat lama tidak ada data; respons berukuran tetap yang tuntas
+      dianggap file, bukan siaran. Bagian digabung dengan demuxer concat
+      ffmpeg ke MP4 (gagal → MKV; tanpa ffmpeg bagian disimpan apa
+      adanya). Ekstensi: FLV tanpa ukuran = "● LIVE · FLV stream";
+      halaman TikTok (`/@user/live`, `/@user/video/ID`) lewat yt-dlp,
+      dengan urutan HLS → DASH → FLV untuk siaran.
 - [ ] Demuxer FLV di ffmpeg ringan (rilis `ffmpeg-min-n8.1-2`), lalu remux
       FLV → MP4. **K**
 

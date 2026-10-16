@@ -132,6 +132,32 @@ func Remux(ctx context.Context, bin, in, out, format string) error {
 	return run(ctx, bin, out, func(tmp string) []string { return remuxArgs(in, tmp, format) })
 }
 
+// Concat joins the parts (pieces of one recording, each with its own
+// header, as a live stream reconnected) into out, in the container named by
+// format, copying their video and audio. ffmpeg's concat demuxer moves each
+// part's timestamps on after the one before.
+func Concat(ctx context.Context, bin string, parts []string, out, format string) error {
+	list := out + ".list.txt"
+	var b strings.Builder
+	for _, p := range parts {
+		// The list's own quoting: a ' is closed, escaped and reopened.
+		b.WriteString("file '" + strings.ReplaceAll(filepath.ToSlash(p), "'", `'\''`) + "'\n")
+	}
+	if err := os.WriteFile(list, []byte(b.String()), 0o644); err != nil {
+		return err
+	}
+	defer os.Remove(list)
+	return run(ctx, bin, out, func(tmp string) []string {
+		return []string{
+			"-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+			"-f", "concat", "-safe", "0", "-i", list,
+			"-map", "0:v?", "-map", "0:a?",
+			"-c", "copy",
+			"-f", format, tmp,
+		}
+	})
+}
+
 // run runs ffmpeg with the arguments args gives for a temporary output,
 // and renames that to out when ffmpeg succeeds.
 func run(ctx context.Context, bin, out string, args func(tmp string) []string) error {

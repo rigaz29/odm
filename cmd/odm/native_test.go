@@ -192,6 +192,15 @@ func TestRelaySiteDownload(t *testing.T) {
 	}
 }
 
+// An endless live response the player read is recorded as one.
+func TestRelayHTTPLive(t *testing.T) {
+	got, _ := relayed(t, native.Message{Kind: "live", URL: "https://pull.example/stage/s.flv", Title: "someone is LIVE",
+		Page: "https://www.tiktok.com/@someone/live"})
+	if got["stream"] != "http-live" || got["file_name"] != "someone_is_LIVE" || got["page"] != "https://www.tiktok.com/@someone/live" {
+		t.Fatalf("posted %v", got)
+	}
+}
+
 func TestRelayLivePage(t *testing.T) {
 	got, _ := relayed(t, native.Message{Kind: "stream", URL: "https://cdn.example/master.m3u8", Page: "https://www.youtube.com/watch?v=live",
 		Headers: map[string]string{"X-Live": "1"}})

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -15,11 +16,14 @@ import (
 // (see fakeYtDlp): it reports progress for each format of -f and writes
 // the joined file to -o, or, for -J, describes a two-quality video; with
 // FAKE_YTDLP=live, a broadcast whose master playlist is
-// FAKE_LIVE_MANIFEST. With FAKE_FFMPEG set it stands in for ffmpeg: "copy"
-// copies the input to the output, "fail" fails.
+// FAKE_LIVE_MANIFEST (its DASH manifest with FAKE_LIVE_KIND=dash, its
+// endless FLV with FAKE_LIVE_KIND=flv). With FAKE_FFMPEG set it stands in
+// for ffmpeg: "copy" copies the input to the output (the parts one after
+// the other, for the concat demuxer), "fail" fails. With both set, a run
+// with ffmpeg's -hide_banner is ffmpeg.
 func TestMain(m *testing.M) {
 	switch {
-	case os.Getenv("FAKE_FFMPEG") != "":
+	case os.Getenv("FAKE_FFMPEG") != "" && (os.Getenv("FAKE_YTDLP") == "" || slices.Contains(os.Args[1:], "-hide_banner")):
 		fakeFFmpegMain()
 	case os.Getenv("FAKE_YTDLP") == "":
 		os.Exit(m.Run())
@@ -32,9 +36,17 @@ func TestMain(m *testing.M) {
 				fmt.Println("2026.09.27")
 				os.Exit(0)
 			case "-J":
-				fmt.Printf(`{"title": "Launch", "is_live": true, "live_status": "is_live", "formats": [
-					{"format_id": "95", "ext": "mp4", "protocol": "m3u8_native", "height": 720, "url": "https://example.invalid/720.m3u8",
-					 "manifest_url": %q, "http_headers": {"X-Live": "1"}}]}`, os.Getenv("FAKE_LIVE_MANIFEST"))
+				format := `{"format_id": "95", "ext": "mp4", "protocol": "m3u8_native", "height": 720, "url": "https://example.invalid/720.m3u8",
+					 "manifest_url": %q, "http_headers": {"X-Live": "1"}}`
+				switch os.Getenv("FAKE_LIVE_KIND") {
+				case "dash":
+					format = `{"format_id": "v1", "ext": "mp4", "protocol": "http_dash_segments", "height": 720,
+					 "manifest_url": %q, "http_headers": {"X-Live": "1"}}`
+				case "flv":
+					format = `{"format_id": "flv-ld", "ext": "flv", "protocol": "https", "url": "https://example.invalid/ld.flv"},
+					 {"format_id": "flv-hd", "ext": "flv", "protocol": "https", "url": %q, "http_headers": {"X-Live": "1"}}`
+				}
+				fmt.Printf(`{"title": "Launch", "is_live": true, "live_status": "is_live", "formats": [`+format+`]}`, os.Getenv("FAKE_LIVE_MANIFEST"))
 				os.Exit(0)
 			}
 		}
@@ -82,15 +94,32 @@ func fakeFFmpegMain() {
 		fmt.Fprintln(os.Stderr, "Invalid data found when processing input")
 		os.Exit(1)
 	}
-	in := ""
+	in, concat := "", false
 	for i, a := range args {
 		if a == "-i" && i+1 < len(args) {
 			in = args[i+1]
+		}
+		if a == "-f" && i+1 < len(args) && args[i+1] == "concat" {
+			concat = true
 		}
 	}
 	data, err := os.ReadFile(in)
 	if err != nil {
 		os.Exit(1)
+	}
+	if concat {
+		// The list: file '<path>' per line, a ' written as '\''.
+		var joined []byte
+		for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+			path := strings.ReplaceAll(strings.TrimSuffix(strings.TrimPrefix(line, "file '"), "'"), `'\''`, "'")
+			part, err := os.ReadFile(path)
+			if err != nil {
+				os.Exit(1)
+			}
+			joined = append(joined, part...)
+		}
+		os.WriteFile(args[len(args)-1], append([]byte("joined:"), joined...), 0o644)
+		os.Exit(0)
 	}
 	os.WriteFile(args[len(args)-1], append([]byte("remuxed:"), data...), 0o644)
 	os.Exit(0)

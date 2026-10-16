@@ -94,6 +94,8 @@ func Site(raw string) string {
 	switch host {
 	case "youtube.com", "m.youtube.com", "music.youtube.com", "youtu.be", "youtube-nocookie.com":
 		return "YouTube"
+	case "tiktok.com", "m.tiktok.com", "vm.tiktok.com":
+		return "TikTok"
 	}
 	return ""
 }
@@ -203,6 +205,38 @@ func (v *Video) LiveManifest() (string, map[string]string, bool) {
 			return f.ManifestURL, f.Headers, true
 		}
 		if f.URL != "" && (best == nil || f.Height > best.Height || (f.Height == best.Height && f.TBR > best.TBR)) {
+			best = f
+		}
+	}
+	if best == nil {
+		return "", nil, false
+	}
+	return best.URL, best.Headers, true
+}
+
+// LiveDASH is the DASH manifest of a live video (Facebook's) and the
+// headers to fetch it with.
+func (v *Video) LiveDASH() (string, map[string]string, bool) {
+	for _, f := range v.Formats {
+		if f.ManifestURL != "" && (f.Protocol == "http_dash_segments" || strings.Contains(strings.ToLower(f.ManifestURL), ".mpd")) {
+			return f.ManifestURL, f.Headers, true
+		}
+	}
+	return "", nil, false
+}
+
+// LiveHTTP is the address of a live video sent as one endless HTTP
+// response (TikTok's FLV) and the headers to fetch it with: the best
+// format with both video and audio. yt-dlp lists formats worst first, so
+// of two that look alike the later one wins.
+func (v *Video) LiveHTTP() (string, map[string]string, bool) {
+	var best *Format
+	for i := range v.Formats {
+		f := &v.Formats[i]
+		if (f.Protocol != "http" && f.Protocol != "https") || f.URL == "" || f.VCodec == "none" || f.ACodec == "none" {
+			continue
+		}
+		if best == nil || f.Height > best.Height || (f.Height == best.Height && f.TBR >= best.TBR) {
 			best = f
 		}
 	}

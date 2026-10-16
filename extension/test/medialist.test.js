@@ -94,9 +94,25 @@ test("sitePage gives YouTube videos one watch address", () => {
   }
 });
 
+test("sitePage gives TikTok videos and live pages", () => {
+  const cases = {
+    "https://www.tiktok.com/@some.one/live?enter_from_merge=others_homepage": "https://www.tiktok.com/@some.one/live",
+    "https://m.tiktok.com/@some_one/video/7301234567890123456?lang=en": "https://www.tiktok.com/@some_one/video/7301234567890123456",
+    "https://www.tiktok.com/": "",
+    "https://www.tiktok.com/foryou": "",
+    "https://www.tiktok.com/@someone": "",
+    "https://www.tiktok.com/@someone/video/abc": "",
+    "https://www.tiktok.com/@someone/live/extra": "",
+  };
+  for (const [href, want] of Object.entries(cases)) assert.equal(ml.sitePage(href), want, href);
+  assert.equal(ml.siteName("https://www.tiktok.com/@someone/live"), "TikTok");
+  assert.equal(ml.siteName("https://www.youtube.com/watch?v=jNQXAC9IVRw"), "YouTube");
+});
+
 test("siteTitle drops the site's name", () => {
   assert.equal(ml.siteTitle("(3) Me at the zoo - YouTube"), "Me at the zoo");
   assert.equal(ml.siteTitle("A song - YouTube Music"), "A song");
+  assert.equal(ml.siteTitle("someone is LIVE | TikTok"), "someone is LIVE");
   assert.equal(ml.siteTitle("Plain"), "Plain");
 });
 
@@ -140,7 +156,7 @@ test("menuEntries offers to record a broadcast yt-dlp found on a page", () => {
     ["Records until you stop it in ODM", false],
   ]);
   const it = got[1].item;
-  assert.deepEqual([it.kind, it.url, it.page, it.quality, it.headers["User-Agent"], it.mime],
+  assert.deepEqual([it.kind, it.url, it.sitePage, it.quality, it.headers["User-Agent"], it.mime],
     ["stream", "https://manifest.example/master.m3u8", page.url, "1080p · 4.5 Mbps · H.264, AAC", "yt", "application/vnd.apple.mpegurl"]);
   assert.ok(ml.anyLive([page], new Map([[page.url, reply]])));
 
@@ -149,6 +165,35 @@ test("menuEntries offers to record a broadcast yt-dlp found on a page", () => {
   const rows = ml.menuEntries([page], new Map([[page.url, bare]]));
   assert.equal(rows[1].text, "Record · best quality");
   assert.equal(rows[1].item.quality, undefined);
+});
+
+test("menuEntries records an endless stream yt-dlp found on a page", () => {
+  const page = { kind: "site", site: "TikTok", url: "https://www.tiktok.com/@someone/live", title: "someone is LIVE" };
+  const reply = { ok: true, site: { live: true, kind: "http-live", manifest: "https://pull-flv.example/stage/s.flv?sign=1", headers: { Referer: "t" } } };
+  const got = ml.menuEntries([page], new Map([[page.url, reply]]));
+  assert.deepEqual(got.map((e) => [e.text, !!e.item]), [
+    ["● LIVE · TikTok video", false],
+    ["Record · best quality", true],
+    ["Records until you stop it in ODM", false],
+  ]);
+  const it = got[1].item;
+  assert.deepEqual([it.kind, it.url, it.sitePage, it.format, it.headers.Referer], ["live", reply.site.manifest, page.url, "FLV", "t"]);
+
+  const dash = { ok: true, site: { live: true, kind: "dash", manifest: "https://fb.example/live.mpd" } };
+  const d = ml.menuEntries([page], new Map([[page.url, dash]]))[1].item;
+  assert.deepEqual([d.kind, d.format, d.mime], ["stream", "DASH", "application/dash+xml"]);
+});
+
+test("menuEntries offers to record an endless stream the player reads", () => {
+  const flv = { url: "https://pull-flv.example/stage/s.flv", kind: "live", format: "FLV", at: 5 };
+  const file = { url: "https://cdn/v.mp4", kind: "file", size: 9e6, mime: "video/mp4", at: 1 };
+  // Not asked about: it is recorded as it comes.
+  assert.deepEqual(ml.menuEntries([file, flv], new Map()).map((e) => [e.text, !!e.item]), [
+    ["● LIVE · FLV stream", false],
+    ["Record · as the player gets it", true],
+    ["mp4 file, 8.58 MB", true],
+  ]);
+  assert.ok(ml.anyLive([flv], new Map()));
 });
 
 test("menuEntries marks a live stream the page's player loaded", () => {

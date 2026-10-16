@@ -166,9 +166,9 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		siteErr error
 		siteFor string
 	)
-	// A broadcast on a video site's page: yt-dlp found its HLS playlist
-	// (liveSite.Manifest), which ODM records as a stream, with the page
-	// kept for asking yt-dlp again when the playlist expires.
+	// A broadcast on a video site's page: yt-dlp found its playlist or
+	// stream address (liveSite.Manifest), which ODM records as a stream,
+	// with the page kept for asking yt-dlp again when it expires.
 	var (
 		liveSite *engine.SiteChoices
 		liveFor  string
@@ -260,7 +260,11 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			}
 		}
 		qualitySelect.SetSelectedIndex(sel) // OnChanged fills the audio list
-		info := Tf("%s stream", strings.ToUpper(string(c.Kind)))
+		format := strings.ToUpper(string(c.Kind))
+		if c.Kind == media.KindHTTPLive {
+			format = "HTTP" // one endless response
+		}
+		info := Tf("%s stream", format)
 		if c.Note != "" {
 			info += " · " + c.Note
 		}
@@ -369,7 +373,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 				c, err := a.mgr.ProbeSite(ctx, strings.TrimSpace(s))
 				var sc *engine.StreamChoices
 				var serr error
-				if err == nil && c.Live {
+				switch {
+				case err == nil && c.Live && c.Kind == media.KindHTTPLive:
+					sc = engine.HTTPLiveChoices()
+				case err == nil && c.Live:
 					sc, serr = a.mgr.ProbeStream(ctx, c.Manifest, c.Headers)
 				}
 				fyne.Do(func() {
@@ -383,7 +390,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 						if nameEntry.Text == "" {
 							nameEntry.SetText(engine.SanitizeName(c.Title))
 						}
-						showStream(addr, media.KindHLS, sc, serr)
+						showStream(addr, c.Kind, sc, serr)
 						liveSite, liveFor = c, addr
 						return
 					}
@@ -411,7 +418,10 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 				}
 			}
 			var choices *engine.StreamChoices
-			if kind != "" {
+			if kind == media.KindHTTPLive {
+				// An endless response: nothing to read before.
+				choices = engine.HTTPLiveChoices()
+			} else if kind != "" {
 				choices, err = a.mgr.ProbeStream(ctx, s, pre.Headers)
 				if choices != nil {
 					kind = choices.Kind // the playlist itself is the better judge

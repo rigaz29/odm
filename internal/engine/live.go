@@ -194,7 +194,7 @@ func (d *Download) recordLive(ctx context.Context) error {
 	if err != nil && job.Page != "" && ctx.Err() == nil {
 		// A playlist found by yt-dlp may have expired since (a Resume
 		// hours later): ask it for the broadcast's current one.
-		if m, h, rerr := resolveSiteLive(ctx, job.Page); rerr == nil {
+		if m, h, rerr := resolveSiteLive(ctx, job.Page, media.KindHLS); rerr == nil {
 			d.useSiteManifest(m, h)
 			job.Manifest = m
 			urls, err = d.livePlaylists(ctx, job)
@@ -376,7 +376,7 @@ func (r *liveRecorder) resolveAgain(ctx context.Context) {
 	if err != nil && r.job.Page != "" {
 		// The master playlist itself expired: yt-dlp finds the
 		// broadcast's current one on its page.
-		if m, h, rerr := resolveSiteLive(ctx, r.job.Page); rerr == nil {
+		if m, h, rerr := resolveSiteLive(ctx, r.job.Page, media.KindHLS); rerr == nil {
 			r.d.useSiteManifest(m, h)
 			r.job.Manifest = m
 			urls, err = r.d.livePlaylists(ctx, r.job)

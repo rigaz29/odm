@@ -6,7 +6,8 @@
 # another container. So this build has no encoders and no filters beyond
 # the few the ffmpeg program requires, only:
 #   - containers: MP4/M4A/MOV, Matroska/WebM, MPEG-TS, Ogg, and raw AAC,
-#     MP3, FLAC, AC-3 audio;
+#     MP3, FLAC, AC-3 audio; FLV read only (live streams such as TikTok's),
+#     and the concat demuxer, which joins a recording's parts;
 #   - parsers and bitstream filters for H.264, H.265, VP8/VP9, AV1, AAC,
 #     Opus, Vorbis, MP3, AC-3 and FLAC, which copying between those
 #     containers needs;
@@ -33,7 +34,7 @@ jobs="${JOBS:-$(nproc 2>/dev/null || echo 4)}"
 list() { local IFS=,; echo "$*"; }
 
 protocols=(file pipe)
-demuxers=(mov matroska mpegts ogg aac mp3 flac ac3 eac3 wav)
+demuxers=(mov matroska mpegts ogg aac mp3 flac ac3 eac3 wav flv live_flv concat)
 muxers=(mp4 mov ipod matroska webm mpegts ogg opus adts mp3 flac null)
 parsers=(h264 hevc vp8 vp9 av1 mpeg4video mpegvideo aac aac_latm ac3 mpegaudio opus vorbis flac dca)
 bsfs=(aac_adtstoasc h264_mp4toannexb hevc_mp4toannexb extract_extradata

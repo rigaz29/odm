@@ -30,7 +30,9 @@ type Message struct {
 	Size      int64  `json:"size"`
 	UserAgent string `json:"userAgent"`
 	// Kind is "stream" for an HLS/DASH playlist the extension saw the
-	// page's player load; anything else is a plain file.
+	// page's player load, "live" for a live stream it reads as one
+	// endless response (FLV) and "site" for a video site's page; anything
+	// else is a plain file.
 	Kind string `json:"kind"`
 	// Quality is the label of the stream quality picked in the
 	// extension's menu, as a "streams" reply listed it. Empty: the best.
@@ -68,8 +70,10 @@ type SiteInfo struct {
 	Title     string        `json:"title"`
 	Qualities []SiteQuality `json:"qualities"`
 	// A live broadcast is recorded as a stream from Manifest, fetched with
-	// Headers; Stream lists its qualities when ODM could read them.
+	// Headers; Stream lists its qualities when ODM could read them. Kind
+	// is "hls", "dash" or "http-live" (one endless response, one quality).
 	Live     bool              `json:"live,omitempty"`
+	Kind     string            `json:"kind,omitempty"`
 	Manifest string            `json:"manifest,omitempty"`
 	Headers  map[string]string `json:"headers,omitempty"`
 	Stream   *StreamInfo       `json:"stream,omitempty"`

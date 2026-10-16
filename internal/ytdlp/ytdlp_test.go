@@ -142,6 +142,7 @@ func TestSite(t *testing.T) {
 		"https://www.youtube.com/watch?v=abc":   "YouTube",
 		"https://youtu.be/abc":                  "YouTube",
 		"https://music.youtube.com/watch?v=abc": "YouTube",
+		"https://www.tiktok.com/@a/live":        "TikTok",
 		"https://example.com/watch?v=abc":       "",
 		"ftp://youtube.com/x":                   "",
 		"not a url":                             "",
@@ -290,5 +291,29 @@ func TestLiveManifest(t *testing.T) {
 	}
 	if _, _, ok := (&Video{Formats: []Format{{Protocol: "https", URL: "https://f/v.flv"}}}).LiveManifest(); ok {
 		t.Fatal("a live stream without HLS gave a playlist")
+	}
+}
+
+func TestLiveDASHAndHTTP(t *testing.T) {
+	v := Video{LiveStatus: "is_live", Formats: []Format{
+		{ID: "a", Protocol: "http_dash_segments", ManifestURL: "https://fb/live.mpd", Headers: map[string]string{"Referer": "fb"}},
+	}}
+	if m, h, ok := v.LiveDASH(); !ok || m != "https://fb/live.mpd" || h["Referer"] != "fb" {
+		t.Fatalf("DASH: %q %v %v", m, h, ok)
+	}
+	if _, _, ok := v.LiveHTTP(); ok {
+		t.Fatal("DASH segments taken for one endless response")
+	}
+	// TikTok's: FLV per quality, worst first, without heights.
+	v = Video{LiveStatus: "is_live", Formats: []Format{
+		{ID: "flv-ld", Protocol: "https", Ext: "flv", URL: "https://t/ld.flv"},
+		{ID: "audio", Protocol: "https", Ext: "flv", URL: "https://t/a.flv", VCodec: "none"},
+		{ID: "flv-origin", Protocol: "https", Ext: "flv", URL: "https://t/origin.flv", Headers: map[string]string{"Referer": "tt"}},
+	}}
+	if m, h, ok := v.LiveHTTP(); !ok || m != "https://t/origin.flv" || h["Referer"] != "tt" {
+		t.Fatalf("FLV: %q %v %v", m, h, ok)
+	}
+	if _, _, ok := v.LiveDASH(); ok {
+		t.Fatal("FLV taken for DASH")
 	}
 }

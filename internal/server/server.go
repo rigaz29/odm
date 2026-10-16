@@ -161,7 +161,8 @@ type addRequest struct {
 	// UI may confirm it in the New Download window (202) rather than add it.
 	Prompt bool `json:"prompt"`
 	// Stream ("hls" or "dash") makes URL a playlist to download segment
-	// by segment instead of a file.
+	// by segment instead of a file; "http-live" makes it a live stream
+	// sent as one endless response, recorded until stopped.
 	Stream string `json:"stream"`
 	// Quality is the label of one of the stream's qualities, as
 	// POST /api/probe/stream lists them. Empty: the best.
@@ -209,11 +210,11 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 	}
 	if req.Stream != "" {
 		k := media.Kind(req.Stream)
-		if k != media.KindHLS && k != media.KindDASH {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stream must be hls or dash"})
+		if k != media.KindHLS && k != media.KindDASH && k != media.KindHTTPLive {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "stream must be hls, dash or http-live"})
 			return
 		}
-		opts.Stream = &engine.StreamJob{Kind: k, Manifest: req.URL}
+		opts.Stream = &engine.StreamJob{Kind: k, Manifest: req.URL, Live: k == media.KindHTTPLive}
 		opts.StreamQuality = req.Quality
 		if p := strings.TrimSpace(req.Page); strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
 			opts.Stream.Page = p
@@ -235,7 +236,7 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusAccepted, map[string]bool{"prompted": true})
 		return
 	}
-	if opts.Stream != nil && req.Quality != "" {
+	if opts.Stream != nil && opts.Stream.Kind != media.KindHTTPLive && req.Quality != "" {
 		s.pinQuality(r.Context(), &opts, req.Quality)
 	}
 	// Requests here come from the browser relay or scripts, so the
@@ -359,11 +360,14 @@ func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if c.Live {
-		// A broadcast: ODM records its HLS playlist itself, and lists the
-		// playlist's qualities as for any stream ("stream", when it reads).
-		out := map[string]any{"title": c.Title, "live": true, "manifest": c.Manifest, "headers": c.Headers}
-		if sc, err := s.mgr.ProbeStream(ctx, c.Manifest, c.Headers); err == nil {
-			out["stream"] = newStreamInfo(sc)
+		// A broadcast: ODM records it itself, and lists a playlist's
+		// qualities as for any stream ("stream", when it reads). An
+		// endless response has one quality and is not read before.
+		out := map[string]any{"title": c.Title, "live": true, "kind": c.Kind, "manifest": c.Manifest, "headers": c.Headers}
+		if c.Kind != media.KindHTTPLive {
+			if sc, err := s.mgr.ProbeStream(ctx, c.Manifest, c.Headers); err == nil {
+				out["stream"] = newStreamInfo(sc)
+			}
 		}
 		writeJSON(w, http.StatusOK, out)
 		return

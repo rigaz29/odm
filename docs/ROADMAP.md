@@ -289,7 +289,10 @@ tray) + WebView2 + React 19 + Fluent UI React v9 (punya DataGrid dan Tree)
       dari engine sungguhan, toolbar, kategori, status bar, Mica,
       gelap/terang. Diukur ukuran exe, memori, dan kelancaran daftar 1.000
       item; tangkapan layarnya dibandingkan dengan UI Fyne. Pengguna
-      memutuskan lanjut atau tidak. **S**
+      memutuskan lanjut atau tidak. **S** Prototipe selesai (2026-10-16):
+      exe 15,4 MB (Fyne 28,6 MB), build tanpa CGO, scroll 1.023 item 60
+      fps, memori ±365 MB (Fyne 338 MB). Hasil lengkap di FLUENT-UI.md.
+      Menunggu keputusan pengguna.
 - [ ] **Tahap 1** Fondasi: paket bersama `uicore` dan `i18n`, service dan
       event untuk semua fungsi engine yang dipakai UI, `go.mod` naik ke Go
       1.25, job CI (Node + Vitest + `-tags fluent`), `scripts/build.sh

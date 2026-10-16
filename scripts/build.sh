@@ -6,6 +6,9 @@
 #   Linux    -> libgl1-mesa-dev xorg-dev
 #   macOS    -> Xcode command line tools
 # The "cli" target builds the engine + web UI with no cgo and no desktop UI.
+# The "fluent" target builds the Windows 11 (Fluent) UI preview,
+# internal/fluent: the page first (needs Node and npm), then the exe, with
+# no cgo.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -57,16 +60,25 @@ cli() {
   echo "built $OUT/$name"
 }
 
+fluent() {
+  echo "building fluent windows/amd64 -> $OUT/ODM-Fluent.exe"
+  (cd internal/fluent/frontend && npm ci --no-audit --no-fund && npm run build)
+  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
+    go build -tags fluent -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/ODM-Fluent.exe" ./cmd/odm
+  echo "built $OUT/ODM-Fluent.exe"
+}
+
 case "${1:-windows}" in
   windows) desktop windows amd64 ODM.exe ;;
   linux) desktop linux amd64 odm ;;
   darwin) desktop darwin arm64 odm ;;
   darwin-intel) desktop darwin amd64 odm ;;
   cli) cli linux amd64 odm-cli ;;
+  fluent) fluent ;;
   all)
     desktop windows amd64 ODM.exe
     desktop linux amd64 odm
     desktop darwin arm64 odm
     ;;
-  *) echo "usage: $0 [windows|linux|darwin|darwin-intel|cli|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [windows|linux|darwin|darwin-intel|cli|fluent|all]" >&2; exit 2 ;;
 esac

@@ -319,10 +319,26 @@ bawaan sampai UI baru setara fiturnya.
       header ternyata tidak pernah berfungsi di TanStack Table (kolom
       tanpa accessor), jadi kini halaman mengurutkan sendiri dan TanStack
       Table dilepas.
-- [ ] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas
+- [x] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas
       stream, yt-dlp, live), Progres (peta koneksi, grafik), Opsi, Penjadwal,
       Kategori, Program pendamping, Unduhan selesai, Impor/Ekspor,
-      pratinjau ZIP, perbarui alamat, Tentang, Pintasan. **B**
+      pratinjau ZIP, perbarui alamat, Tentang, Pintasan. **B** Dikerjakan
+      dalam tiga bagian:
+      - 3a: kerangka multi-jendela (satu halaman, `?view=`, bingkai
+        Windows), Unduhan Baru, Progres, dan Unduhan selesai. Logika
+        probe dan pembuatan unduhan dipindah ke Go (`internal/gui/add.go`).
+      - 3b: jendela Opsi dengan 8 bagian. Tema dan bahasa kini tersimpan
+        di settings ODM dan langsung berlaku di semua jendela.
+      - 3c: Penjadwal, Antrean baru/hapus, Site Grabber, Impor/Ekspor,
+        Pintasan, cek pembaruan, dan Tentang.
+
+      Ditemukan bahwa UI baru belum menjalankan aksi penjadwal: membuka
+      file, peringatan batas unduhan, dan hitung mundur 30 detik sebelum
+      keluar/tidur/matikan komputer. Sekarang sudah ditangani. Semua diuji
+      di exe dengan klik dan keyboard nyata: hand-off dari browser lewat
+      socket kontrol, unduhan sampai jendela selesai, validasi jam di
+      Penjadwal, batas unduhan, hitung mundur yang dibatalkan, dan ekspor
+      lewat dialog Save As.
 - [ ] **Tahap 4** Integrasi Windows: tray, notifikasi, `-hidden`, prompt dari
       ekstensi (selalu di atas), mulai bersama Windows, clipboard, cek
       pembaruan, suara. **S**

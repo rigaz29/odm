@@ -99,6 +99,9 @@ internal/engine, server, native, tools …    tidak berubah
   properti CSS `--wails-non-client-region` (`caption`, `minimize`,
   `maximize`, `close`). Dengan begitu menyeret jendela, klik ganda untuk
   maximize, dan snap layout Windows 11 tetap dikerjakan Windows sendiri.
+  Di Wails beta.30 wilayah itu baru dibaca jika WebView2 di-host lewat
+  composition (`WebView2CompositionHosting`). Tanpa itu halaman berada di
+  jendela anak, dan bingkai jendela tidak pernah menerima kursor.
 - **Terjemahan**: satu katalog `id.json` di `internal/i18n`, dipakai Fyne
   dan halaman. Tes memastikan setiap teks `t("…")` di halaman punya
   terjemahan.
@@ -182,7 +185,10 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - **Wails v3 masih beta.** Versinya dipatok dan lapisan `internal/gui`
   dibuat tipis.
 - **Title bar buatan sendiri.** Seret jendela, klik ganda, dan snap layout
-  diserahkan ke Windows lewat wilayah non-client, dan dicek di Tahap 1.
+  diserahkan ke Windows lewat wilayah non-client. Sudah dicek di Tahap 1
+  dan berfungsi dengan composition hosting. Untuk WebView2 tanpa wilayah
+  non-client, halaman memakai `--wails-draggable` dan memanggil jendela
+  sendiri.
 - **Konsistensi desain shadcn/ui.** Token warna, jarak, dan set komponen
   dikunci di Tahap 1; layar baru hanya memakai komponen itu.
 - **WebView2 tidak ada** di sebagian Windows 10 lama. Wails bisa menawarkan

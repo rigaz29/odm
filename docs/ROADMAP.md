@@ -291,13 +291,17 @@ bawaan sampai UI baru setara fiturnya.
       scroll 1.023 item 60 fps, memori ±365 MB (Fyne 338 MB). Tampilan
       Fluent ditolak. Tiga mockup (cabang `ui-mockups`) dibandingkan, dan
       gaya A+D dipilih.
-- [ ] **Tahap 1** Fondasi: cabang `ui-next`, `internal/fluent` →
+- [x] **Tahap 1** Fondasi: cabang `ui-next`, `internal/fluent` →
       `internal/gui` (tag `gui`), Tailwind 4 + komponen shadcn/ui + token
       tema A+D, title bar buatan sendiri dengan wilayah non-client (seret,
       klik ganda, snap layout), katalog terjemahan bersama `internal/i18n`,
       service ditambah data koneksi, riwayat kecepatan, dan lama rekaman,
       jendela utama pertama sesuai mockup dengan data engine, job CI,
-      `scripts/build.sh gui`, `ODM-Next.exe` pratinjau. **S**
+      `scripts/build.sh gui`, `ODM-Next.exe` pratinjau. **S** Hasilnya:
+      exe 14,7 MB tanpa CGO, scroll 1.000 item 60 fps. Title bar dicek di
+      exe: seret, klik ganda, tombol jendela, dan snap layout. Wilayah
+      non-client Wails baru berfungsi dengan `WebView2CompositionHosting`.
+      Tes `internal/i18n` memeriksa terjemahan kedua UI.
 - [ ] **Tahap 2** Jendela utama setara: tabel (sortir, lebar dan kolom
       tampil/sembunyi diingat, klik/Ctrl/Shift/Ctrl+A, klik kanan, klik
       ganda, pintasan), kartu "Sedang berjalan" (paling banyak 3, +N

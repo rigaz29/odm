@@ -5,3 +5,7 @@
 # internal research notes — not for publication
 RE-*.md
 .omc/
+
+# The Fluent UI page (internal/fluent/frontend): npm packages and the build
+node_modules/
+internal/fluent/frontend/dist/

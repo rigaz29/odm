@@ -283,10 +283,30 @@ const AppearanceEvent = "odm:appearance"
 
 func (s *Service) emitLook(look Appearance) {
 	s.mu.Lock()
-	emit := s.emit
+	emit, onLook := s.emit, s.onLook
 	s.mu.Unlock()
 	if emit != nil {
 		emit(AppearanceEvent, look)
+	}
+	if onLook != nil {
+		onLook()
+	}
+}
+
+// SetToolUpdates answers the question asked the first time yt-dlp or
+// ffmpeg is needed: on lets ODM download them and keep them updated.
+func (s *Service) SetToolUpdates(on bool) {
+	mode := tools.ModeOff
+	if on {
+		mode = tools.ModeAuto
+	}
+	next := s.mgr.Settings()
+	if next.ToolUpdates != mode {
+		next.ToolUpdates = mode
+		s.mgr.UpdateSettings(next)
+	}
+	if k := s.tools(); on && k != nil {
+		k.Kick()
 	}
 }
 

@@ -65,12 +65,20 @@ func fyneKeys(t *testing.T) map[string]string {
 }
 
 // pageKeys is every text the new UI's page passes to t or tf, or marks
-// with markT.
+// with markT, and the ones its Go side translates with tr (the tray, the
+// notifications).
 func pageKeys(t *testing.T) map[string]string {
 	call := regexp.MustCompile(`\b(?:t|tf|markT)\(\s*("(?:[^"\\]|\\.)*")`)
-	return keysIn(t, "../gui/frontend/src", call, func(p string) bool {
+	keys := keysIn(t, "../gui/frontend/src", call, func(p string) bool {
 		return (strings.HasSuffix(p, ".ts") || strings.HasSuffix(p, ".tsx")) && !strings.HasSuffix(p, ".test.ts")
 	})
+	tr := regexp.MustCompile(`\btr\(("(?:[^"\\]|\\.)*")`)
+	for k, f := range keysIn(t, "../gui", tr, func(p string) bool {
+		return filepath.Dir(p) == filepath.Clean("../gui") && strings.HasSuffix(p, ".go") && !strings.HasSuffix(p, "_test.go")
+	}) {
+		keys[k] = f
+	}
+	return keys
 }
 
 var verb = regexp.MustCompile(`%[-+# 0]*\d*(?:\.\d+)?[a-zA-Z%]`)

@@ -1,9 +1,10 @@
-// The scheduler's notices (?view=notice&kind=…), above other windows as
-// ODM may be out of sight: the download limit reached (kind=limit), or the
-// countdown before the action set for when the queues finish
-// (kind=finish&action=…), which Cancel stops, as in the Fyne UI.
+// ODM's notices (?view=notice&kind=…), above other windows as ODM may be
+// out of sight: the download limit reached (kind=limit), the countdown
+// before the action set for when the queues finish (kind=finish&action=…),
+// which Cancel stops, and the question whether ODM may download yt-dlp and
+// ffmpeg itself (kind=tools), as in the Fyne UI.
 
-import { Gauge, Power } from "lucide-react";
+import { Download, Gauge, Power, Wrench } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api } from "../api";
 import { Button } from "../components/ui/button";
@@ -14,7 +15,30 @@ const WAIT = 30; // seconds before the action runs
 export function NoticeWindow({ q }: { q: URLSearchParams }) {
   const kind = q.get("kind");
   if (kind === "limit") return <LimitNotice mb={q.get("mb") ?? ""} hours={q.get("hours") ?? ""} />;
+  if (kind === "tools") return <ToolsNotice />;
   return <FinishNotice action={q.get("action") ?? ""} />;
+}
+
+function ToolsNotice() {
+  useEffect(() => api.setTitle(t("Companion programs")), []);
+  const answer = (on: boolean) => void api.setToolUpdates(on).then(api.closeWindow);
+  return (
+    <div className="flex h-full flex-col gap-3 bg-background p-5 text-foreground">
+      <div className="flex items-center gap-2.5">
+        <Wrench className="size-5 text-violet-500" />
+        <h1 className="text-base font-semibold">{t("Companion programs")}</h1>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        {t("YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 20 MB), check their checksums, and keep them up to date by itself. Download them now?")}
+      </p>
+      <div className="mt-auto flex justify-end gap-2">
+        <Button onClick={() => answer(false)}>{t("No")}</Button>
+        <Button variant="brand" autoFocus onClick={() => answer(true)}>
+          <Download /> {t("Download now")}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 function LimitNotice({ mb, hours }: { mb: string; hours: string }) {

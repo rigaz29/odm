@@ -102,6 +102,7 @@ export interface Api {
   onGrab(cb: (p: GrabProgress) => void): () => void;
   stopGrab(): Promise<void>;
   runFinish(action: string): Promise<void>;
+  setToolUpdates(on: boolean): Promise<void>;
 
   // This window: its title and size, and closing it.
   setTitle(title: string): void;
@@ -176,6 +177,7 @@ const wailsApi: Api = {
   onGrab: (cb) => Events.On(GRAB_EVENT, (e) => cb(e.data as GrabProgress)),
   stopGrab: () => Service.StopGrab(),
   runFinish: (action) => Service.RunFinish(action),
+  setToolUpdates: (on) => Service.SetToolUpdates(on),
   setTitle: (title) => {
     document.title = title;
     void Window.SetTitle(title);

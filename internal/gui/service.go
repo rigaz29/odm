@@ -104,8 +104,12 @@ type Service struct {
 	// yt-dlp and ffmpeg; nil in builds without it. Both under mu.
 	windows windowOpener
 	keeper  *tools.Keeper
-	// quit closes ODM, for a finish action; nil in tests.
-	quit func()
+	// quit closes ODM, for a finish action; nil in tests. announce
+	// notifies and plays sounds (announce.go); nil in tests.
+	quit     func()
+	announce announcer
+	// onLook is told when the Options change the look (the tray's menu).
+	onLook func()
 }
 
 // NewService makes the page's Service for mgr.

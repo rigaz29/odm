@@ -40,6 +40,10 @@ func (s *Service) opener() windowOpener {
 	return s.windows
 }
 
+// freshFor is how recent a download first seen finished or failed must be
+// to be announced: a few of watch's looks.
+const freshFor = 15 * time.Second
+
 // Chunk is one connection's part of a file.
 type Chunk struct {
 	Start int64  `json:"start"`
@@ -146,29 +150,42 @@ func (s *Service) Readdress(id, address string) error {
 
 // noticeFinished closes the progress window of each download that just
 // finished and opens the download complete window in its place, unless
-// that is turned off. The first look only learns the statuses.
+// that is turned off, and announces each download that just finished or
+// failed. The first look only learns the statuses. A download first seen
+// already finished or failed counts when it was added moments ago (it
+// failed at once); one imported from a list, added long ago, does not.
 func (s *Service) noticeFinished(list []engine.Info) {
 	s.amu.Lock()
 	first := s.statuses == nil
 	prev := s.statuses
 	s.statuses = make(map[string]engine.Status, len(list))
-	var done []string
+	var done, failed []engine.Info
 	for _, d := range list {
 		s.statuses[d.ID] = d.Status
-		if was, seen := prev[d.ID]; !first && seen && was != d.Status && d.Status == engine.StatusComplete {
-			done = append(done, d.ID)
+		was, seen := prev[d.ID]
+		if first || (seen && was == d.Status) || (!seen && s.now().Sub(d.CreatedAt) > freshFor) {
+			continue
+		}
+		switch d.Status {
+		case engine.StatusComplete:
+			done = append(done, d)
+		case engine.StatusError:
+			failed = append(failed, d)
 		}
 	}
 	s.amu.Unlock()
 	w := s.opener()
-	if len(done) == 0 || w == nil {
-		return
-	}
-	show := !s.mgr.Settings().NoCompleteDialog
-	for _, id := range done {
-		w.closeProgress(id)
-		if show {
-			w.openComplete(id)
+	show := !s.mgr.Settings().NoCompleteDialog && w != nil
+	for _, d := range done {
+		if w != nil {
+			w.closeProgress(d.ID)
 		}
+		if show {
+			w.openComplete(d.ID)
+		}
+		s.announceDone(d, false, show)
+	}
+	for _, d := range failed {
+		s.announceDone(d, true, false)
 	}
 }

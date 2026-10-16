@@ -12,7 +12,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
-	"github.com/wailsapp/wails/v3/pkg/events"
+	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
 	"odm/internal/engine"
 	"odm/internal/tools"
@@ -31,8 +31,8 @@ type Options struct {
 	// Prompt receives downloads handed over by the browser, each shown in
 	// a New Download window.
 	Prompt <-chan engine.AddOptions
-	// Hidden would start in the tray, which stage 4 brings: the window
-	// shows anyway.
+	// Hidden starts ODM in the tray, the main window out of sight (at
+	// login, or for a download from the browser).
 	Hidden bool
 	// Tools keeps ODM's copies of yt-dlp and ffmpeg; nil for none.
 	Tools *tools.Keeper
@@ -60,10 +60,12 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		return err
 	}
 	svc := NewService(mgr)
+	notes := notifications.New()
 	app := application.New(application.Options{
 		Name:        "Ochi Download Manager",
 		Description: "Ochi Download Manager",
-		Services:    []application.Service{application.NewService(svc)},
+		Icon:        appIcon(256), // the windows' and the taskbar's: the exe has none
+		Services:    []application.Service{application.NewService(svc), application.NewService(notes)},
 		Assets:      application.AssetOptions{Handler: application.BundledAssetFileServer(assets)},
 		Windows: application.WindowsOptions{
 			// WebView2's profile next to ODM's state, not in a folder
@@ -94,6 +96,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		MinHeight:        520,
 		URL:              "/",
 		Frameless:        true,
+		Hidden:           opts.Hidden,
 		BackgroundColour: background,
 		Windows: application.WindowsWindow{
 			NonClientRegionSupport:     true,
@@ -108,13 +111,17 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	svc.keeper = opts.Tools
 	svc.quit = app.Quit
 	svc.mu.Unlock()
+	d := newDesk(app, win, svc, notes)
+	d.hookTools(opts.Tools)
+	svc.mu.Lock()
+	svc.announce = d
+	svc.onLook = d.relabel
+	svc.mu.Unlock()
+	go d.watch(ctx)
 	// The UI carries out the scheduler's requests while it runs, so a
 	// shutdown can be cancelled from a countdown instead of happening blind.
 	mgr.SetActionHandler(svc.handleAction)
 	go svc.checkAtStart(ctx)
-	// The other windows close with the main one: until ODM has a tray
-	// (stage 4), closing the main window quits.
-	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { app.Quit() })
 
 	go svc.watch(ctx, 500*time.Millisecond)
 	if opts.Prompt != nil {
@@ -127,9 +134,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	if opts.Show != nil {
 		go func() {
 			for range opts.Show {
-				win.Show()
-				win.Restore()
-				win.Focus()
+				d.showMain()
 			}
 		}()
 	}

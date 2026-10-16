@@ -410,6 +410,7 @@ export function mockApi(): Api {
     },
     stopGrab: async () => {},
     runFinish: async () => {},
+    setToolUpdates: async () => {},
     setTitle: (title) => void (document.title = title),
     setSize: () => {},
     closeWindow: () => window.close(),

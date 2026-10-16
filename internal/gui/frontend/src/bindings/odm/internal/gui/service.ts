@@ -371,6 +371,14 @@ export function SetSpeedLimiter(on: boolean, bytesPerSecond: number): $Cancellab
     return $Call.ByID(35223205, on, bytesPerSecond);
 }
 
+/**
+ * SetToolUpdates answers the question asked the first time yt-dlp or
+ * ffmpeg is needed: on lets ODM download them and keep them updated.
+ */
+export function SetToolUpdates(on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(602377492, on);
+}
+
 export function ShowInFolder(id: string): $CancellablePromise<void> {
     return $Call.ByID(3487002806, id);
 }

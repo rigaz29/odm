@@ -246,6 +246,14 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Recording a YouTube broadcast failed when it was stopped ("merge
+  failed … Invalid data found"). YouTube's live playlists now list the
+  last hour, with video and audio apart: the recording began an hour in
+  the past and fetched all the video before any audio, so a recording
+  stopped early had no audio to join. A live recording now starts at the
+  live edge (the last three segments, as a player does; live DASH did
+  already), fetches video and audio pieces in turn, and keeps the one
+  track alone when the other has nothing.
 - A left click selects a download in the list again, and a double click
   opens its progress window: since right-clicks picked their row, the
   cells took every click and left clicks were lost. Ctrl+click adds a

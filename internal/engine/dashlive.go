@@ -124,7 +124,7 @@ func (r *liveRecorder) reloadDASH(ctx context.Context) ([]pieceJob, bool, time.D
 	}
 	var longest time.Duration
 	r.inits = nil
-	var jobs []pieceJob
+	perTrack := make([][]pieceJob, len(r.dash))
 	for ti, id := range r.dash {
 		t := r.st.Tracks[ti]
 		var segs []dashLiveSeg
@@ -148,8 +148,9 @@ func (r *liveRecorder) reloadDASH(ctx context.Context) ([]pieceJob, bool, time.D
 				longest = max(longest, s.Duration)
 			}
 		}
-		jobs = append(jobs, r.takeDASH(ti, segs)...)
+		perTrack[ti] = r.takeDASH(ti, segs)
 	}
+	jobs := interleave(perTrack)
 	r.lastTaken = jobs
 	wait := m.UpdatePeriod
 	if wait <= 0 {

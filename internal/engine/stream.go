@@ -1267,10 +1267,40 @@ func (d *Download) assembleStream(ctx context.Context, tracks []*streamTrack) er
 		parts = append(parts, p)
 	}
 	merged := filepath.Join(d.workDir(), "merged"+ext)
+	if tracks[0].live {
+		// A recording stopped before one track had anything: the other
+		// one alone, in the file's container, rather than a failed join.
+		var kept []string
+		for _, p := range parts {
+			if fileSize(p) > 0 {
+				kept = append(kept, p)
+			}
+		}
+		switch len(kept) {
+		case 0:
+			return errors.New("the recording has no segments")
+		case 1:
+			if err := ffmpeg.Remux(ctx, bin, kept[0], merged, muxerFor(ext)); err != nil {
+				return err
+			}
+			return os.Rename(merged, target)
+		}
+	}
 	if err := ffmpeg.Merge(ctx, bin, parts[0], parts[1], merged); err != nil {
 		return err
 	}
 	return os.Rename(merged, target)
+}
+
+// muxerFor is ffmpeg's muxer for a file extension: WebM, Matroska, else MP4.
+func muxerFor(ext string) string {
+	switch strings.ToLower(ext) {
+	case ".webm":
+		return "webm"
+	case ".mkv":
+		return "matroska"
+	}
+	return "mp4"
 }
 
 // concat writes a track's pieces to w in order, repeating the init

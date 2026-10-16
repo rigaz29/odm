@@ -26,9 +26,11 @@ import (
 // The pieces are then joined like those of a finished stream.
 //
 // Gotchas:
-//   - Recording starts with the oldest segment the playlist still lists:
-//     usually seconds to a minute before "now", the whole event so far on
-//     an EVENT playlist.
+//   - A new recording starts at the live edge, with the last
+//     liveStartSegments segments, as a player starts (RFC 8216 6.3.3):
+//     not with the oldest one listed, which can be an hour back (YouTube
+//     lists the last hour) or the whole event so far (EVENT playlists).
+//     One that continues after a gap takes whatever is listed since.
 //   - A segment is listed only for a while. One that cannot be fetched in
 //     time is skipped, which leaves a short jump in the file, instead of
 //     failing the recording. An init section that cannot be fetched drops
@@ -40,7 +42,12 @@ import (
 //     after a gap.
 //   - With separate audio, both playlists must load in a round before
 //     either one's new segments are taken, or one track would advance
-//     past segments that are then never fetched.
+//     past segments that are then never fetched. A round fetches the
+//     tracks' pieces in turn (interleave), so a recording stopped mid-round
+//     has some of each.
+//   - A track with nothing recorded at all is left out of the file
+//     (assembleStream): the other one is kept rather than the join
+//     failing.
 //   - A reload can return an older copy of the playlist (a lagging CDN
 //     edge). Numbers going back count as an encoder restart only when
 //     they drop below the whole window; a slightly older copy is ignored.
@@ -85,6 +92,10 @@ var (
 	liveMinStall     = 30 * time.Second
 	liveStallTargets = time.Duration(6)
 )
+
+// liveStartSegments is how many of a playlist's latest segments a new
+// recording starts with.
+const liveStartSegments = 3
 
 // liveResolveAfter is the number of failed reloads in a row after which
 // the master playlist is read again: media playlist URLs often carry a
@@ -473,13 +484,34 @@ func (r *liveRecorder) reload(ctx context.Context) ([]pieceJob, bool, time.Durat
 	}
 	// Only inits the current playlists still use are worth fetching again.
 	r.inits = nil
-	var jobs []pieceJob
+	perTrack := make([][]pieceJob, len(lists))
 	for ti, m := range lists {
 		r.noteInits(ti, m)
-		jobs = append(jobs, r.take(ti, m)...)
+		perTrack[ti] = r.take(ti, m)
 	}
+	jobs := interleave(perTrack)
 	r.lastTaken = jobs
 	return jobs, ended, target, nil
+}
+
+// interleave takes the tracks' jobs in turn, each track's in its order
+// (an init before the segments that need it), so the tracks advance
+// together: one after the other, a long round stopped half way had only
+// video.
+func interleave(perTrack [][]pieceJob) []pieceJob {
+	var out []pieceJob
+	for i := 0; ; i++ {
+		added := false
+		for _, jobs := range perTrack {
+			if i < len(jobs) {
+				out = append(out, jobs[i])
+				added = true
+			}
+		}
+		if !added {
+			return out
+		}
+	}
 }
 
 // initID identifies an init section across reloads: by URL path and byte
@@ -515,8 +547,12 @@ func (r *liveRecorder) take(ti int, m *media.HLSMedia) []pieceJob {
 		t.LastSeq = m.Segments[0].Sequence - 1
 	}
 	r.regressed[ti] = 0
+	segs := m.Segments
+	if !t.Started && len(segs) > liveStartSegments {
+		segs = segs[len(segs)-liveStartSegments:] // the live edge
+	}
 	var jobs []pieceJob
-	for _, s := range m.Segments {
+	for _, s := range segs {
 		if t.Started && s.Sequence <= t.LastSeq {
 			continue
 		}

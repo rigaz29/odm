@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -25,15 +26,17 @@ func fastLive(t *testing.T) {
 	t.Cleanup(func() { liveMinWait, liveMaxWait, liveMinStall, liveStallTargets = minW, maxW, stall, targets })
 }
 
-// liveServer serves a sliding three-segment live playlist that gains one
-// segment per reload, starting at sequence first. With total > 0 it ends
-// (EXT-X-ENDLIST) once that many segments are out. Segment s<n>.ts serves
-// "[s<n>]" unless fail says otherwise.
+// liveServer serves a sliding live playlist of the latest three segments
+// (window, when set) that gains one segment per reload, starting at
+// sequence first. With total > 0 it ends (EXT-X-ENDLIST) once that many
+// segments are out. Segment s<n>.ts serves "[s<n>]" unless fail says
+// otherwise.
 type liveServer struct {
 	mu      sync.Mutex
 	first   int
 	next    int // segments published so far, counted from first
 	total   int
+	window  int
 	fail    map[string]int // path -> status
 	reloads int
 }
@@ -54,7 +57,11 @@ func (l *liveServer) start(t *testing.T) *httptest.Server {
 		if l.total == 0 || l.next < l.total {
 			l.next++
 		}
-		lo := max(0, l.next-3)
+		window := l.window
+		if window == 0 {
+			window = 3
+		}
+		lo := max(0, l.next-window)
 		fmt.Fprintf(w, "#EXTM3U\n#EXT-X-TARGETDURATION:1\n#EXT-X-MEDIA-SEQUENCE:%d\n", l.first+lo)
 		for i := lo; i < l.next; i++ {
 			fmt.Fprintf(w, "#EXTINF:1,\ns%d.ts\n", l.first+i)
@@ -77,6 +84,20 @@ func TestLiveRecordsUntilEnd(t *testing.T) {
 	}
 	if info := d.Info(); !info.Live || info.FileName != "clip.ts" {
 		t.Fatalf("info %+v", info)
+	}
+}
+
+// A playlist that lists a long window (YouTube's, the last hour) is
+// recorded from its live edge, not from its oldest segment. (It is read as
+// a stream, then as a live one, then by the first reload, which lists
+// s0…s21.)
+func TestLiveStartsAtTheEdge(t *testing.T) {
+	fastLive(t)
+	srv := (&liveServer{next: 19, total: 25, window: 40}).start(t)
+	d := newStreamDownload(t, srv.Client(), 2, StreamJob{Kind: media.KindHLS, Manifest: srv.URL + "/live.m3u8"})
+	d.Start(context.Background())
+	if got := string(readResult(t, d)); got != "[s19][s20][s21][s22][s23][s24]" {
+		t.Fatalf("recording %q", got)
 	}
 }
 
@@ -498,5 +519,49 @@ func TestLiveStateReadErrors(t *testing.T) {
 	d.Start(context.Background())
 	if got := string(readResult(t, d)); got != "[s3]" {
 		t.Fatalf("recording %q", got)
+	}
+}
+
+func TestInterleave(t *testing.T) {
+	job := func(track int, name string) pieceJob { return pieceJob{track: track, name: name} }
+	got := interleave([][]pieceJob{
+		{job(0, "init0"), job(0, "0"), job(0, "1")},
+		{job(1, "0")},
+	})
+	var names []string
+	for _, j := range got {
+		names = append(names, fmt.Sprintf("%d/%s", j.track, j.name))
+	}
+	if strings.Join(names, " ") != "0/init0 1/0 0/0 0/1" {
+		t.Fatalf("order %v", names)
+	}
+}
+
+// A recording stopped before its audio track had anything keeps the video
+// alone in the file's container, rather than failing to join them.
+func TestLiveAssemblesOneEmptyTrack(t *testing.T) {
+	fakeFFmpeg(t, "copy")
+	d := New("r", "http://h/live.m3u8", t.TempDir(), 1, nil, 0, nil)
+	d.FileName = "show.mp4"
+	tracks := []*streamTrack{
+		{ext: "ts", video: true, live: true, segs: make([]piece, 2), segInit: []int{-1, -1}},
+		{ext: "m4a", live: true, segs: make([]piece, 2), segInit: []int{-1, -1}},
+	}
+	for i, data := range []string{"[v0]", "[v1]"} {
+		p := d.piecePath(0, strconv.Itoa(i))
+		os.MkdirAll(filepath.Dir(p), 0o755)
+		os.WriteFile(p, []byte(data), 0o644)
+	}
+	if err := d.assembleStream(context.Background(), tracks); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(filepath.Join(d.Dir, "show.mp4.odmpart")); string(got) != "remuxed:[v0][v1]" {
+		t.Fatalf("file %q", got)
+	}
+
+	// Neither track has anything: an error, not an empty file.
+	os.RemoveAll(filepath.Join(d.workDir(), "t0"))
+	if err := d.assembleStream(context.Background(), tracks); err == nil || !strings.Contains(err.Error(), "no segments") {
+		t.Fatalf("empty recording: %v", err)
 	}
 }

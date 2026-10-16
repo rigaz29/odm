@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"reflect"
 	"slices"
 	"sync"
 	"time"
@@ -70,8 +71,27 @@ const (
 	maxConns     = 16 // connection bars on a card
 )
 
-// SnapshotEvent is the event that carries a new Snapshot to the page.
+// SnapshotEvent is the event that carries a Change to the page.
 const SnapshotEvent = "odm:snapshot"
+
+// Change is what changed in the Snapshot since the last one sent: a list
+// of a thousand downloads with a few running sends those few twice a
+// second, not the thousand. The page applies it to the snapshot it holds
+// (frontend/src/snapshot.ts).
+type Change struct {
+	// Items are the downloads that are new or changed, whole.
+	Items []Item `json:"items"`
+	// IDs lists every download, in order, when that changed: one was added
+	// or removed, or the order changed. Nil (null) when it did not.
+	IDs []string `json:"ids"`
+	// The rest is the Snapshot's, sent whole: it is small.
+	Categories []string `json:"categories"`
+	Queues     []string `json:"queues"`
+	Running    []string `json:"running"`
+	Limit      int64    `json:"limit"`
+	SavedLimit int64    `json:"savedLimit"`
+	Speeds     []int64  `json:"speeds"`
+}
 
 // Service is what the page calls. Its exported methods become the
 // frontend's bindings (frontend/src/bindings, made by wails3 generate
@@ -81,9 +101,13 @@ type Service struct {
 	// emit sends an event to the page; nil until the window exists.
 	emit func(name string, data any)
 
-	mu   sync.Mutex
-	last []byte        // the snapshot sent last, to send only changes
-	wake chan struct{} // asks watch to send now
+	mu sync.Mutex
+	// What the page was sent last, to send only changes (send): each
+	// download, the list's order and the rest of the snapshot.
+	sent     map[string]Item
+	sentIDs  []string
+	sentRest []byte
+	wake     chan struct{} // asks watch to send now
 
 	hmu    sync.Mutex
 	speeds map[string][]int64   // per running download, see sample
@@ -114,7 +138,7 @@ type Service struct {
 
 // NewService makes the page's Service for mgr.
 func NewService(mgr *engine.Manager) *Service {
-	return &Service{mgr: mgr, wake: make(chan struct{}, 1),
+	return &Service{mgr: mgr, wake: make(chan struct{}, 1), sent: map[string]Item{},
 		speeds: map[string][]int64{}, since: map[string]time.Time{}, now: time.Now,
 		prefills: map[string]engine.AddOptions{}, probes: map[string]*probed{}}
 }
@@ -266,22 +290,51 @@ func (s *Service) watch(ctx context.Context, interval time.Duration) {
 	}
 }
 
-// send emits the snapshot if it differs from the last one sent.
+// send emits what changed in the snapshot since the last one sent, if
+// anything did.
 func (s *Service) send() {
 	snap := s.Snapshot()
-	data, err := json.Marshal(snap)
+	ch := Change{Items: []Item{}, Categories: snap.Categories, Queues: snap.Queues, Running: snap.Running,
+		Limit: snap.Limit, SavedLimit: snap.SavedLimit, Speeds: snap.Speeds}
+	rest, err := json.Marshal(ch) // before the items go in: the rest
 	if err != nil {
 		return
 	}
+	ids := make([]string, len(snap.Items))
+	for i, d := range snap.Items {
+		ids[i] = d.ID
+	}
 	s.mu.Lock()
-	same := bytes.Equal(data, s.last)
-	if !same {
-		s.last = data
+	for _, d := range snap.Items {
+		if was, ok := s.sent[d.ID]; !ok || !reflect.DeepEqual(was, d) {
+			ch.Items = append(ch.Items, d)
+		}
+	}
+	if !slices.Equal(ids, s.sentIDs) {
+		ch.IDs = ids
+	}
+	changed := len(ch.Items) > 0 || ch.IDs != nil || !bytes.Equal(rest, s.sentRest)
+	if changed {
+		for _, d := range ch.Items {
+			s.sent[d.ID] = d
+		}
+		if ch.IDs != nil {
+			keep := make(map[string]bool, len(ids))
+			for _, id := range ids {
+				keep[id] = true
+			}
+			for id := range s.sent {
+				if !keep[id] {
+					delete(s.sent, id)
+				}
+			}
+		}
+		s.sentIDs, s.sentRest = ids, rest
 	}
 	emit := s.emit
 	s.mu.Unlock()
-	if !same && emit != nil {
-		emit(SnapshotEvent, snap)
+	if changed && emit != nil {
+		emit(SnapshotEvent, ch)
 	}
 }
 

@@ -16,6 +16,7 @@ import {
   type Detail,
   type GrabProgress,
   type GrabRequest,
+  Item,
   type Limits,
   type Schedule,
   type SchedulerData,
@@ -24,11 +25,12 @@ import {
   type OptionsForm,
   type ProbeResult,
   type SaveResult,
-  Snapshot,
+  type Snapshot,
   type ToolStatus,
   type ZipListing,
 } from "./bindings/odm/internal/gui/models";
 import * as Service from "./bindings/odm/internal/gui/service";
+import { applyChange, type Change } from "./snapshot";
 import { mockApi } from "./mock";
 
 export interface Api {
@@ -117,9 +119,22 @@ const GRAB_EVENT = "odm:grab";
 
 export const inODM = location.hostname === "wails.localhost";
 
+// held is the snapshot this window has: the one it asked for, brought up to
+// date with each Change ODM sends after it. Changes before it are dropped:
+// it is newer than they are, and the next change mends what an older one
+// arriving late undid.
+let held: Snapshot | null = null;
+
 const wailsApi: Api = {
-  snapshot: () => Service.Snapshot(),
-  onSnapshot: (cb) => Events.On(SNAPSHOT_EVENT, (e) => cb(Snapshot.createFrom(e.data))),
+  snapshot: () => Service.Snapshot().then((s) => (held = s)),
+  onSnapshot: (cb) =>
+    Events.On(SNAPSHOT_EVENT, (e) => {
+      if (!held) return;
+      const ch = e.data as Change;
+      // As the bindings make them: Go's empty lists come as null.
+      ch.items = (ch.items ?? []).map((d) => Item.createFrom(d));
+      cb((held = applyChange(held, ch)));
+    }),
   appearance: () => Service.Appearance(),
   onAppearance: (cb) => Events.On(APPEARANCE_EVENT, (e) => cb(Appearance.createFrom(e.data))),
   resume: (ids) => Service.Resume(ids),

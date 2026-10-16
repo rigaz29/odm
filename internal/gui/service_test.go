@@ -3,8 +3,10 @@ package gui
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -37,18 +39,18 @@ func TestSnapshot(t *testing.T) {
 	}
 }
 
-// The page hears of a change once: watch sends a snapshot when it differs
-// from the last one, and at once when an action pokes it.
+// The page hears of a change once: watch sends what changed when the
+// snapshot differs from the last one, and at once when an action pokes it.
 func TestWatchSendsChanges(t *testing.T) {
 	svc, mgr := newTestService(t)
 	var mu sync.Mutex
-	var sent []Snapshot
+	var sent []Change
 	svc.emit = func(name string, data any) {
 		if name != SnapshotEvent {
 			t.Errorf("event %q", name)
 		}
 		mu.Lock()
-		sent = append(sent, data.(Snapshot))
+		sent = append(sent, data.(Change))
 		mu.Unlock()
 	}
 	count := func() int {
@@ -86,8 +88,50 @@ func TestWatchSendsChanges(t *testing.T) {
 	mu.Lock()
 	last := sent[len(sent)-1]
 	mu.Unlock()
-	if len(last.Items) != 1 || last.Items[0].FileName != "c.zip" {
-		t.Fatalf("last snapshot %+v", last.Items)
+	if len(last.Items) != 1 || last.Items[0].FileName != "c.zip" || len(last.IDs) != 1 {
+		t.Fatalf("last change %+v", last)
+	}
+}
+
+// A change carries the downloads that changed, and the list's order only
+// when that changed.
+func TestChangeCarriesWhatChanged(t *testing.T) {
+	svc, mgr := newTestService(t)
+	var got []Change
+	svc.emit = func(_ string, data any) { got = append(got, data.(Change)) }
+	a := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/a.zip", FileName: "a.zip"})
+	b := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/b.zip", FileName: "b.zip"})
+	names := func(c Change) string {
+		var s []string
+		for _, d := range c.Items {
+			s = append(s, d.FileName)
+		}
+		return fmt.Sprint(s, c.IDs != nil)
+	}
+
+	svc.send()
+	if len(got) != 1 || names(got[0]) != "[a.zip b.zip] true" || got[0].IDs[0] != a.ID {
+		t.Fatalf("first change %+v", got)
+	}
+	svc.send()
+	if len(got) != 1 {
+		t.Fatalf("nothing changed, yet %d changes", len(got))
+	}
+	mgr.AddQueue("Night")
+	svc.MoveToQueue([]string{b.ID}, "Night")
+	svc.send()
+	if len(got) != 2 || names(got[1]) != "[b.zip] false" || got[1].Items[0].Queue != "Night" || !slices.Contains(got[1].Queues, "Night") {
+		t.Fatalf("after moving b: %+v", got[len(got)-1])
+	}
+	svc.Remove([]string{a.ID}, false)
+	svc.send()
+	if len(got) != 3 || names(got[2]) != "[] true" || !slices.Equal(got[2].IDs, []string{b.ID}) {
+		t.Fatalf("after removing a: %+v", got[len(got)-1])
+	}
+	svc.Remove([]string{b.ID}, false)
+	svc.send()
+	if len(got) != 4 || got[3].IDs == nil || len(got[3].IDs) != 0 {
+		t.Fatalf("an emptied list must say so: %+v", got[len(got)-1])
 	}
 }
 

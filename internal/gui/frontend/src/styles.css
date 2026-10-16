@@ -1,0 +1,113 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* The design (docs/GUI.md): shadcn/ui's zinc theme, with ODM's
+   violet-to-cyan accent. Every colour the page uses is one of these. */
+@theme {
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  --color-background: #ffffff;
+  --color-foreground: #09090b;
+  --color-card: #ffffff;
+  --color-popover: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #71717a;
+  --color-border: #e4e4e7;
+  --color-input: #e4e4e7;
+  --color-ring: #a78bfa;
+  --color-primary: #18181b;
+  --color-primary-foreground: #fafafa;
+  --color-accent: #f4f4f5;
+  --color-destructive: #dc2626;
+  --color-brand: #7c3aed;
+}
+
+.dark {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #0c0c0f;
+  --color-popover: #111114;
+  --color-muted: #18181b;
+  --color-muted-foreground: #a1a1aa;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #8b5cf6;
+  --color-primary: #fafafa;
+  --color-primary-foreground: #18181b;
+  --color-accent: #1f1f23;
+  --color-destructive: #ef4444;
+  --color-brand: #a78bfa;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  /* An application, not a document: text is chosen only where typed. */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The accent: violet to cyan. Utilities, so variants apply to them
+   (data-[state=checked]:accent-gradient). */
+@utility accent-gradient {
+  background-image: linear-gradient(110deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
+}
+@utility accent-text {
+  background-image: linear-gradient(110deg, #8b5cf6, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  @variant dark {
+    background-image: linear-gradient(110deg, #a78bfa, #67e8f9);
+  }
+}
+
+/* A faint aurora at the top of the window. background-image, not
+   background: the shorthand would drop the colour. */
+.aurora {
+  background-image:
+    radial-gradient(600px 220px at 18% -60px, rgba(139, 92, 246, 0.1), transparent 70%),
+    radial-gradient(560px 200px at 85% -70px, rgba(34, 211, 238, 0.1), transparent 70%);
+}
+.dark .aurora {
+  background-image:
+    radial-gradient(640px 240px at 18% -60px, rgba(139, 92, 246, 0.16), transparent 70%),
+    radial-gradient(600px 220px at 85% -70px, rgba(34, 211, 238, 0.11), transparent 70%);
+}
+
+/* Thin scrollbars that show while the pointer is over the area. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background-clip: content-box;
+}
+:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}

@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui-next]
   pull_request:
 
 jobs:
@@ -21,6 +21,40 @@ jobs:
       - run: go test ./...
       - name: Build CLI
         run: CGO_ENABLED=0 go build -o /tmp/odm ./cmd/odm
+
+  gui:
+    name: New UI preview (Windows)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: internal/gui/frontend/package-lock.json
+      - name: Page tests and build
+        working-directory: internal/gui/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
+      - run: go test -tags gui ./internal/gui/ ./internal/i18n/
+      - name: Build ODM-Next.exe
+        run: |
+          CGO_ENABLED=0 go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" \
+            -o dist/ODM-Next.exe ./cmd/odm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ODM-Next-windows-amd64.exe
+          path: dist/ODM-Next.exe
 
   desktop:
     name: Desktop (${{ matrix.os }})

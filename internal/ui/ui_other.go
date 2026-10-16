@@ -1,4 +1,4 @@
-//go:build !fyne && !fluent
+//go:build !fyne && !gui
 
 package ui
 

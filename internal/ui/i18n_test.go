@@ -4,73 +4,17 @@ package ui
 
 import (
 	"encoding/json"
-	"os"
-	"path/filepath"
-	"regexp"
-	"strconv"
 	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
 
-	"odm/internal/browserreg"
 	"odm/internal/engine"
+	"odm/internal/i18n"
 )
 
-// sourceKeys is every text the UI passes to T, Tf or markT.
-func sourceKeys(t *testing.T) map[string]string {
-	t.Helper()
-	call := regexp.MustCompile(`\b(?:T|Tf|markT)\(("(?:[^"\\]|\\.)*")`)
-	files, _ := filepath.Glob("*.go")
-	keys := map[string]string{}
-	for _, f := range files {
-		if strings.HasSuffix(f, "_test.go") {
-			continue
-		}
-		src, err := os.ReadFile(f)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, m := range call.FindAllStringSubmatch(string(src), -1) {
-			k, err := strconv.Unquote(m[1])
-			if err != nil {
-				t.Fatalf("%s: %s: %v", f, m[1], err)
-			}
-			keys[k] = f
-		}
-	}
-	return keys
-}
-
-var verb = regexp.MustCompile(`%[-+# 0]*\d*(?:\.\d+)?[a-zA-Z%]`)
-
-func TestIndonesianCoversTheUI(t *testing.T) {
-	id, err := readTranslations("translations/id.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	keys := sourceKeys(t)
-	if len(keys) < 300 {
-		t.Fatalf("found only %d texts in the sources", len(keys))
-	}
-	for _, k := range browserreg.SummaryTexts { // shown through SummaryWith(…, T)
-		keys[k] = "browserreg"
-	}
-	for k, file := range keys {
-		v, ok := id[k]
-		switch {
-		case !ok || v == "":
-			t.Errorf("%s: no Indonesian for %q", file, k)
-		case strings.Join(verb.FindAllString(k, -1), " ") != strings.Join(verb.FindAllString(v, -1), " "):
-			t.Errorf("%q and %q have different verbs", k, v)
-		}
-	}
-	for k := range id {
-		if _, used := keys[k]; !used {
-			t.Errorf("id.json has %q, which the UI no longer uses", k)
-		}
-	}
-}
+// The coverage of id.json (every text has a translation, none is unused)
+// is checked for both UIs in internal/i18n.
 
 func TestFyneTextInIndonesian(t *testing.T) {
 	data, err := translationFS.ReadFile("translations/fyne.id.json")
@@ -115,7 +59,7 @@ func TestLanguageChoice(t *testing.T) {
 		t.Fatal("languageIndex")
 	}
 
-	id, err := readTranslations("translations/id.json")
+	id, err := i18n.Indonesian()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +78,7 @@ func engineInfoPaused() engine.Info {
 }
 
 func TestWindowInIndonesian(t *testing.T) {
-	id, err := readTranslations("translations/id.json")
+	id, err := i18n.Indonesian()
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -1,0 +1,257 @@
+package gui
+
+import (
+	"bytes"
+	"context"
+	"net/http"
+	"net/http/httptest"
+	"sync"
+	"testing"
+	"time"
+
+	"odm/internal/engine"
+)
+
+func newTestService(t *testing.T) (*Service, *engine.Manager) {
+	t.Helper()
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	mgr.Begin(ctx)
+	return NewService(mgr), mgr
+}
+
+func TestSnapshot(t *testing.T) {
+	svc, mgr := newTestService(t)
+	mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/a/movie.mp4", FileName: "movie.mp4", Description: "note"})
+	snap := svc.Snapshot()
+	if len(snap.Items) != 1 {
+		t.Fatalf("%d items", len(snap.Items))
+	}
+	d := snap.Items[0]
+	if d.FileName != "movie.mp4" || d.Category != "Video" || d.Status != "paused" || d.Description != "note" || d.Queue == "" {
+		t.Fatalf("item %+v", d)
+	}
+	if len(snap.Categories) == 0 || len(snap.Queues) == 0 {
+		t.Fatalf("snapshot %+v", snap)
+	}
+}
+
+// The page hears of a change once: watch sends a snapshot when it differs
+// from the last one, and at once when an action pokes it.
+func TestWatchSendsChanges(t *testing.T) {
+	svc, mgr := newTestService(t)
+	var mu sync.Mutex
+	var sent []Snapshot
+	svc.emit = func(name string, data any) {
+		if name != SnapshotEvent {
+			t.Errorf("event %q", name)
+		}
+		mu.Lock()
+		sent = append(sent, data.(Snapshot))
+		mu.Unlock()
+	}
+	count := func() int {
+		mu.Lock()
+		defer mu.Unlock()
+		return len(sent)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go svc.watch(ctx, time.Hour) // no ticks: only the first send and pokes
+
+	waitFor := func(n int) {
+		t.Helper()
+		deadline := time.Now().Add(3 * time.Second)
+		for count() < n {
+			if time.Now().After(deadline) {
+				t.Fatalf("%d snapshots sent, want %d", count(), n)
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	}
+	waitFor(1)
+	svc.poke() // nothing changed: nothing sent
+	time.Sleep(50 * time.Millisecond)
+	if count() != 1 {
+		t.Fatalf("an unchanged snapshot was sent again (%d)", count())
+	}
+	d := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/b.zip", FileName: "b.zip"})
+	svc.Remove([]string{d.ID}) // pokes; the list is back as it was
+	svc.poke()
+	time.Sleep(50 * time.Millisecond)
+	mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/c.zip", FileName: "c.zip"})
+	svc.poke()
+	waitFor(2)
+	mu.Lock()
+	last := sent[len(sent)-1]
+	mu.Unlock()
+	if len(last.Items) != 1 || last.Items[0].FileName != "c.zip" {
+		t.Fatalf("last snapshot %+v", last.Items)
+	}
+}
+
+func TestAddURL(t *testing.T) {
+	svc, mgr := newTestService(t)
+	if _, err := svc.AddURL("ftp://x/y"); err == nil {
+		t.Fatal("a non-http address was added")
+	}
+	it, err := svc.AddURL("  http://127.0.0.1:9/z.iso ")
+	if err != nil || it.ID == "" {
+		t.Fatalf("%+v %v", it, err)
+	}
+	if d, ok := mgr.Get(it.ID); !ok || d.URL != "http://127.0.0.1:9/z.iso" {
+		t.Fatalf("download %+v %v", d, ok)
+	}
+	if err := svc.OpenFile("nope"); err == nil {
+		t.Fatal("an unknown download was opened")
+	}
+}
+
+func TestResolveAppearance(t *testing.T) {
+	for _, c := range []struct{ choice, system, want string }{
+		{"id", "en-US", "id"},
+		{"en", "id-ID", "en"},
+		{"system", "id-ID", "id"},
+		{"", "in_ID", "id"},
+		{"system", "en-GB", "en"},
+		{"", "", "en"},
+	} {
+		if got := resolveLanguage(c.choice, c.system); got != c.want {
+			t.Errorf("resolveLanguage(%q, %q) = %q, want %q", c.choice, c.system, got, c.want)
+		}
+	}
+	if resolveTheme("dark") != "dark" || resolveTheme("light") != "light" || resolveTheme("") != "system" || resolveTheme("odd") != "system" {
+		t.Fatal("resolveTheme")
+	}
+}
+
+func TestConnProgress(t *testing.T) {
+	if connProgress(nil) != nil {
+		t.Fatal("no chunks gave bars")
+	}
+	got := connProgress([]engine.ChunkInfo{
+		{Done: 50, Remaining: 50},
+		{Complete: true},
+		{Done: 0, Remaining: 0},
+	})
+	if len(got) != 3 || got[0] != 0.5 || got[1] != 1 || got[2] != 0 {
+		t.Fatalf("%v", got)
+	}
+	// More connections than bars: neighbours are averaged.
+	many := make([]engine.ChunkInfo, 32)
+	for i := range many {
+		if i%2 == 0 {
+			many[i].Complete = true
+		}
+	}
+	bars := connProgress(many)
+	if len(bars) != maxConns || bars[0] != 0.5 || bars[maxConns-1] != 0.5 {
+		t.Fatalf("%d bars: %v", len(bars), bars)
+	}
+}
+
+// sample keeps a minute of speeds per running download and in total, and
+// when each started; a download that stops loses both.
+func TestSampleSpeeds(t *testing.T) {
+	svc, mgr := newTestService(t)
+	clock := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	svc.now = func() time.Time { return clock }
+	d := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/x.bin", FileName: "x.bin"})
+
+	svc.sample() // paused: nothing to keep
+	if len(svc.speeds) != 0 || len(svc.since) != 0 || len(svc.total) != 1 {
+		t.Fatalf("speeds %v since %v total %v", svc.speeds, svc.since, svc.total)
+	}
+	for i := 0; i < speedSamples+5; i++ {
+		svc.total = appendSample(svc.total, int64(i))
+	}
+	if len(svc.total) != speedSamples || svc.total[len(svc.total)-1] != speedSamples+4 {
+		t.Fatalf("total history %d long, last %d", len(svc.total), svc.total[len(svc.total)-1])
+	}
+
+	// A running download, as the engine lists it, by hand.
+	svc.hmu.Lock()
+	svc.speeds[d.ID] = []int64{1, 2}
+	svc.since[d.ID] = clock
+	svc.hmu.Unlock()
+	svc.sample() // still paused in the engine: forgotten
+	if _, ok := svc.speeds[d.ID]; ok {
+		t.Fatal("a stopped download kept its speeds")
+	}
+	if _, ok := svc.since[d.ID]; ok {
+		t.Fatal("a stopped download kept its start time")
+	}
+	if snap := svc.Snapshot(); len(snap.Speeds) != speedSamples+1-1 || snap.Items[0].Speeds != nil || !snap.Items[0].ActiveSince.IsZero() {
+		t.Fatalf("snapshot %d total samples, item %+v", len(snap.Speeds), snap.Items[0])
+	}
+}
+
+// A download that really runs gets its connections' bars, its speeds and
+// its start time in the snapshot.
+func TestSnapshotOfARunningDownload(t *testing.T) {
+	body := bytes.Repeat([]byte("x"), 4<<20)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Slow, so the download is still running when it is sampled.
+		w = &slowWriter{ResponseWriter: w}
+		http.ServeContent(w, r, "big.bin", time.Time{}, bytes.NewReader(body))
+	}))
+	t.Cleanup(srv.Close)
+	svc, mgr := newTestService(t)
+	d := mgr.Create(engine.AddOptions{URL: srv.URL + "/big.bin", FileName: "big.bin", Start: true, Connections: 4})
+	t.Cleanup(func() { mgr.Pause(d.ID) })
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		if got, _ := mgr.Get(d.ID); got.Status == engine.StatusDownloading && got.Done > 0 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the download did not start")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	svc.sample()
+	svc.sample()
+	snap := svc.Snapshot()
+	it := snap.Items[0]
+	if it.Status != "downloading" || len(it.Speeds) != 2 || it.ActiveSince.IsZero() || len(it.Conns) == 0 || len(snap.Speeds) != 2 {
+		t.Fatalf("item %+v, total %v", it, snap.Speeds)
+	}
+	for _, c := range it.Conns {
+		if c < 0 || c > 1 {
+			t.Fatalf("connection progress %v", it.Conns)
+		}
+	}
+
+	mgr.Pause(d.ID)
+	for {
+		if got, _ := mgr.Get(d.ID); got.Status == engine.StatusPaused {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatal("the download did not pause")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	if it := svc.Snapshot().Items[0]; it.Speed != 0 || it.Conns != nil || it.Speeds != nil || !it.ActiveSince.IsZero() {
+		t.Fatalf("a paused download shows %+v", it)
+	}
+}
+
+// slowWriter writes 16 KB at a time with a pause between.
+type slowWriter struct{ http.ResponseWriter }
+
+func (w *slowWriter) Write(p []byte) (int, error) {
+	n := 0
+	for len(p) > 0 {
+		k := min(len(p), 16<<10)
+		m, err := w.ResponseWriter.Write(p[:k])
+		n += m
+		if err != nil {
+			return n, err
+		}
+		p = p[k:]
+		time.Sleep(20 * time.Millisecond)
+	}
+	return n, nil
+}

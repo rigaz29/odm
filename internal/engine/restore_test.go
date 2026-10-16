@@ -44,3 +44,30 @@ func TestImportJoinsTheEndOfTheQueue(t *testing.T) {
 		t.Fatalf("imported position %d does not follow %d", imported.Order, first.Order)
 	}
 }
+
+// A download added without starting it ("Download Later", or start:false
+// from the API or the browser) is saved at once: it used to be saved only
+// when its state changed, so it was gone after ODM closed.
+func TestCreateSavesAStoppedDownload(t *testing.T) {
+	dir := t.TempDir()
+	store, err := NewStore(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Settings{Dir: t.TempDir()}, "")
+	m.SetStore(store)
+	d := m.Create(AddOptions{URL: "http://h/later.zip", FileName: "later.zip"})
+
+	states, err := store.Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(states) != 1 || states[0].ID != d.ID || states[0].Status != StatusPaused || states[0].FileName != "later.zip" {
+		t.Fatalf("saved %+v", states)
+	}
+	again := NewManager(Settings{Dir: t.TempDir()}, "")
+	again.Restore(states)
+	if got, ok := again.Get(d.ID); !ok || got.FileName != "later.zip" {
+		t.Fatalf("after a restart: %+v %v", got, ok)
+	}
+}

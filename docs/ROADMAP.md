@@ -196,16 +196,22 @@ Rancangan (disepakati 2026-10-16):
 
 Tahap 1: dasar (HLS)
 
-- [ ] Hasil rekaman (dan unduhan HLS) satu jalur MPEG-TS dikemas ulang ke
+- [x] Hasil rekaman (dan unduhan HLS) satu jalur MPEG-TS dikemas ulang ke
       MP4 setelah selesai; gagal → MKV; tanpa ffmpeg → tetap TS. **K**
-- [ ] Siaran live dari halaman yang dibaca yt-dlp (YouTube Live, Twitch,
+      `remuxTS` sebelum `finish`, juga untuk rekaman yang dihentikan.
+      Dicek dengan ffmpeg penuh dan ffmpeg ringan ODM (TS → MP4 dan MKV).
+- [x] Siaran live dari halaman yang dibaca yt-dlp (YouTube Live, Twitch,
       TikTok bila ada HLS): yt-dlp memberi alamat playlist HLS dan
       header-nya, ODM merekam dengan perekamnya sendiri, dan meminta
       alamat baru ke yt-dlp saat alamat lama kedaluwarsa (juga saat Resume
-      berjam-jam kemudian). **S**
-- [ ] Ekstensi menandai siaran langsung: tombol "● Record live", judul
+      berjam-jam kemudian). **S** `StreamJob.Page`; `/api/probe/site`
+      mengembalikan `live`, `manifest`, `headers` dan kualitas playlist.
+      Dicek dengan siaran NASA di YouTube: menu ekstensi → 720p60 → rekam
+      ~40 detik → Hentikan → MP4 H.264 720p + AAC.
+- [x] Ekstensi menandai siaran langsung: tombol "● Record live", judul
       "LIVE", dan baris kualitas dengan keterangan bahwa perekaman berjalan
-      sampai dihentikan. **K**
+      sampai dihentikan. **K** Label tombol berubah setelah ODM menjawab
+      (saat menu dibuka); ODM tidak ditanya hanya karena halaman dibuka.
 
 Tahap 2: aliran kontinu (TikTok)
 

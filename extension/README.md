@@ -96,6 +96,13 @@ the system tray first. Then:
   browser's cookies are not given to it, so videos that need a sign-in are
   not available. The pieces the player fetches
   (`googlevideo.com`) are no longer listed.
+- **Live broadcasts:** on a YouTube Live page (and other live pages yt-dlp
+  reads, when they come as HLS) the menu shows "● LIVE" with a "Record" row
+  per quality; a live stream a page's player loads is marked the same way.
+  ODM records from the click until you press Stop in ODM, then joins the
+  recording into one MP4. The button reads "● Record live" once ODM has
+  answered, after the menu was opened once: ODM is not asked about every
+  page you visit.
 - **Right-click** a link, video, audio or image → **Download with ODM**.
 - **Toolbar popup:** the icon's badge counts the media the page has loaded
   (up to 15, from every frame), and the popup lists them, streams with

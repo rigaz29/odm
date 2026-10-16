@@ -41,6 +41,9 @@ type Message struct {
 	Format   string `json:"format"`
 	Ext      string `json:"ext"`
 	Estimate int64  `json:"estimate"`
+	// Page is the video site's page a live stream's playlist (URL) was
+	// found on, as a "site-formats" reply gave it.
+	Page string `json:"page"`
 }
 
 // Reply is the response sent back to the extension.
@@ -64,6 +67,12 @@ type Reply struct {
 type SiteInfo struct {
 	Title     string        `json:"title"`
 	Qualities []SiteQuality `json:"qualities"`
+	// A live broadcast is recorded as a stream from Manifest, fetched with
+	// Headers; Stream lists its qualities when ODM could read them.
+	Live     bool              `json:"live,omitempty"`
+	Manifest string            `json:"manifest,omitempty"`
+	Headers  map[string]string `json:"headers,omitempty"`
+	Stream   *StreamInfo       `json:"stream,omitempty"`
 }
 
 // SiteQuality is one way to download a page's video: its label, yt-dlp's
@@ -81,6 +90,7 @@ type SiteQuality struct {
 type StreamInfo struct {
 	Kind      string          `json:"kind"`
 	Single    bool            `json:"single,omitempty"`
+	Live      bool            `json:"live,omitempty"`
 	Note      string          `json:"note,omitempty"`
 	Qualities []StreamQuality `json:"qualities"`
 }

@@ -154,6 +154,9 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 		if m.Quality != "" {
 			payload["quality"] = m.Quality
 		}
+		if m.Page != "" {
+			payload["page"] = m.Page
+		}
 	}
 	body, _ := json.Marshal(payload)
 	resp, err := client.Post(ipc.BaseURL+"/api/downloads", "application/json", bytes.NewReader(body))

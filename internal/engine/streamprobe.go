@@ -37,6 +37,8 @@ type StreamChoices struct {
 	// Single is set for an address that is one quality of a stream (a
 	// media playlist) rather than the playlist that lists them.
 	Single bool
+	// Live is a broadcast on now: downloading it records it until stopped.
+	Live bool
 	// length is the stream's duration, 0 when unknown.
 	length time.Duration
 }
@@ -153,6 +155,7 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 		c.Note = "This address is one quality of a stream, and its audio may be separate. " +
 			"Download from the page's main playlist to choose the quality."
 		if p.Media.Live() {
+			c.Live = true
 			c.Note = liveNote + " " + c.Note
 		} else {
 			c.length = hlsLength(p.Media)
@@ -184,6 +187,7 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 	}
 	if mp.Media.Live() {
 		// No length, so no size estimate.
+		c.Live = true
 		c.Note = liveNote
 	} else {
 		c.length = hlsLength(mp.Media)

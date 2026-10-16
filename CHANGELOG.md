@@ -8,6 +8,23 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- Live broadcasts on video sites can be recorded: YouTube Live, Twitch,
+  and others yt-dlp reads, where they come as HLS. yt-dlp finds the
+  broadcast's playlist and the headers it needs; ODM records it with its
+  own recorder (Stop finishes and joins the file, as for any live stream)
+  and asks yt-dlp for a fresh playlist when the signed address expires,
+  also on a Resume hours later. The extension's menu on such a page shows
+  "● LIVE" with a "Record" row per quality, and its button reads
+  "● Record live" once ODM has answered; a live stream a page's player
+  loads is marked the same way. A YouTube live address pasted into New
+  Download is recorded likewise. `POST /api/probe/site` answers `live`,
+  `manifest`, `headers` and the playlist's qualities; `POST
+  /api/downloads` takes `page`.
+- Stream and recording results in MPEG-TS, video and audio in one track,
+  become MP4 when they finish, copied with ffmpeg without re-encoding, or
+  Matroska when their streams do not fit MP4; without ffmpeg the TS file
+  stays.
+
 - yt-dlp and ffmpeg no longer need installing. The first time one is
   needed (a YouTube video, a stream whose video and audio are apart), ODM
   asks once whether it may download them; then it downloads yt-dlp from

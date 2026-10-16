@@ -166,6 +166,13 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		siteErr error
 		siteFor string
 	)
+	// A broadcast on a video site's page: yt-dlp found its HLS playlist
+	// (liveSite.Manifest), which ODM records as a stream, with the page
+	// kept for asking yt-dlp again when the playlist expires.
+	var (
+		liveSite *engine.SiteChoices
+		liveFor  string
+	)
 	qualitySelect := widget.NewSelect(nil, nil)
 	audioSelect := widget.NewSelect(nil, nil)
 	fillAudio := func(q int) {
@@ -266,6 +273,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 	hideStream := func() {
 		stream, streamKind, streamErr, streamFor = nil, "", nil, ""
 		site, siteErr, siteFor = nil, nil, ""
+		liveSite, liveFor = nil, ""
 		if streamRows {
 			qualitySelect.Options = nil
 			qualitySelect.ClearSelected()
@@ -359,10 +367,27 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 				ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 				defer cancel()
 				c, err := a.mgr.ProbeSite(ctx, strings.TrimSpace(s))
+				var sc *engine.StreamChoices
+				var serr error
+				if err == nil && c.Live {
+					sc, serr = a.mgr.ProbeStream(ctx, c.Manifest, c.Headers)
+				}
 				fyne.Do(func() {
-					if urlEntry.Text == s {
-						showSite(strings.TrimSpace(s), c, err)
+					if urlEntry.Text != s {
+						return
 					}
+					addr := strings.TrimSpace(s)
+					if err == nil && c.Live {
+						// Recorded as a stream: its qualities come from
+						// the playlist, its name from the page.
+						if nameEntry.Text == "" {
+							nameEntry.SetText(engine.SanitizeName(c.Title))
+						}
+						showStream(addr, media.KindHLS, sc, serr)
+						liveSite, liveFor = c, addr
+						return
+					}
+					showSite(addr, c, err)
 				})
 				return
 			}
@@ -490,6 +515,19 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			j := *pre.Site
 			siteJob = &j
 		}
+		// A broadcast found on a page is recorded from its playlist.
+		manifest, headers := url, pre.Headers
+		live := liveFor == url && liveSite != nil
+		if live {
+			manifest = liveSite.Manifest
+			headers = map[string]string{}
+			for k, v := range pre.Headers {
+				headers[k] = v
+			}
+			for k, v := range liveSite.Headers {
+				headers[k] = v
+			}
+		}
 		var job *engine.StreamJob
 		switch {
 		case siteJob != nil:
@@ -497,7 +535,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			dialog.ShowError(streamErr, parent)
 			return
 		case streamFor == url && stream != nil:
-			j, err := stream.Job(url, qualitySelect.SelectedIndex(), audioSelect.SelectedIndex())
+			j, err := stream.Job(manifest, qualitySelect.SelectedIndex(), audioSelect.SelectedIndex())
 			if err != nil {
 				dialog.ShowError(err, parent)
 				return
@@ -506,13 +544,20 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		case streamFor == url && streamKind != "":
 			// The playlist could not be read just now: ODM picks the best
 			// quality when the download runs.
-			job = &engine.StreamJob{Kind: streamKind, Manifest: url}
+			job = &engine.StreamJob{Kind: streamKind, Manifest: manifest}
 		case pre.Stream != nil && url == pre.URL:
 			// Started before the playlist was read: ODM picks the best.
 			j := *pre.Stream
 			job = &j
 		}
-		if existing, dup := a.mgr.FindByURL(url); dup && !confirmed {
+		switch {
+		case job == nil:
+		case live:
+			job.Page = url
+		case pre.Stream != nil && url == strings.TrimSpace(pre.URL):
+			job.Page = pre.Stream.Page // a broadcast the browser found on a page
+		}
+		if existing, dup := a.mgr.FindByURL(manifest); dup && !confirmed {
 			a.askDuplicate(parent, existing, func() { create(start, true) })
 			return
 		}
@@ -520,7 +565,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 		info := a.mgr.Create(engine.AddOptions{
 			Stream:      job,
 			Site:        siteJob,
-			URL:         url,
+			URL:         manifest,
 			Dir:         folder,
 			FileName:    engine.SanitizeName(nameEntry.Text),
 			Description: strings.TrimSpace(descEntry.Text),
@@ -528,7 +573,7 @@ func (a *application) newAddForm(parent fyne.Window, pre engine.AddOptions, done
 			Connections: conns,
 			Category:    catSelect.Selected,
 			Queue:       queueSelect.Selected,
-			Headers:     pre.Headers,
+			Headers:     headers,
 			Start:       start,
 		})
 		a.mgr.NoteSaveFolder(folder)

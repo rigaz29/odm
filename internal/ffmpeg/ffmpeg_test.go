@@ -68,6 +68,7 @@ func fake(t *testing.T, dir, mode string) string {
 }
 
 func TestLocate(t *testing.T) {
+	t.Setenv("ODM_TOOLS_DIR", t.TempDir()) // not the copy ODM keeps for this user
 	dir := t.TempDir()
 	bin := fake(t, dir, "ok")
 	if got, err := Locate(bin); err != nil || got != bin {

@@ -13,12 +13,33 @@ import (
 
 // TestMain lets the test binary stand in for yt-dlp when FAKE_YTDLP is set
 // (see fakeYtDlp): it reports progress for each format of -f and writes
-// the joined file to -o, or, for -J, describes a two-quality video.
+// the joined file to -o, or, for -J, describes a two-quality video; with
+// FAKE_YTDLP=live, a broadcast whose master playlist is
+// FAKE_LIVE_MANIFEST. With FAKE_FFMPEG set it stands in for ffmpeg: "copy"
+// copies the input to the output, "fail" fails.
 func TestMain(m *testing.M) {
-	if os.Getenv("FAKE_YTDLP") == "" {
+	switch {
+	case os.Getenv("FAKE_FFMPEG") != "":
+		fakeFFmpegMain()
+	case os.Getenv("FAKE_YTDLP") == "":
 		os.Exit(m.Run())
 	}
 	args := os.Args[1:]
+	if os.Getenv("FAKE_YTDLP") == "live" {
+		for _, a := range args {
+			switch a {
+			case "--version":
+				fmt.Println("2026.09.27")
+				os.Exit(0)
+			case "-J":
+				fmt.Printf(`{"title": "Launch", "is_live": true, "live_status": "is_live", "formats": [
+					{"format_id": "95", "ext": "mp4", "protocol": "m3u8_native", "height": 720, "url": "https://example.invalid/720.m3u8",
+					 "manifest_url": %q, "http_headers": {"X-Live": "1"}}]}`, os.Getenv("FAKE_LIVE_MANIFEST"))
+				os.Exit(0)
+			}
+		}
+		os.Exit(2)
+	}
 	value := func(flag string) string {
 		for i, a := range args {
 			if a == flag && i+1 < len(args) {
@@ -51,6 +72,40 @@ func TestMain(m *testing.M) {
 	}
 	os.WriteFile(out+".mkv", []byte("joined video"), 0o644)
 	os.Exit(0)
+}
+
+// fakeFFmpegMain is ffmpeg for FAKE_FFMPEG: the output is the last
+// argument, the input the one after -i.
+func fakeFFmpegMain() {
+	args := os.Args[1:]
+	if os.Getenv("FAKE_FFMPEG") == "fail" {
+		fmt.Fprintln(os.Stderr, "Invalid data found when processing input")
+		os.Exit(1)
+	}
+	in := ""
+	for i, a := range args {
+		if a == "-i" && i+1 < len(args) {
+			in = args[i+1]
+		}
+	}
+	data, err := os.ReadFile(in)
+	if err != nil {
+		os.Exit(1)
+	}
+	os.WriteFile(args[len(args)-1], append([]byte("remuxed:"), data...), 0o644)
+	os.Exit(0)
+}
+
+// fakeFFmpeg makes downloads run this test binary as ffmpeg.
+func fakeFFmpeg(t *testing.T, mode string) {
+	t.Helper()
+	t.Setenv("FAKE_FFMPEG", mode)
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	setFFmpegPath(exe)
+	t.Cleanup(func() { setFFmpegPath("") })
 }
 
 // fakeYtDlp makes the manager run this test binary as yt-dlp.

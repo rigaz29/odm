@@ -116,3 +116,19 @@ func TestPromptCarriesTheQuality(t *testing.T) {
 		t.Fatalf("prompt: %d, options %+v", w.Code, got)
 	}
 }
+
+// A broadcast found by yt-dlp keeps its page with the stream, for asking
+// again when the playlist expires.
+func TestAddKeepsTheLivePage(t *testing.T) {
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	body := `{"url": "https://cdn.example/master.m3u8", "stream": "hls", "page": "https://www.youtube.com/watch?v=live", "start": false}`
+	w := httptest.NewRecorder()
+	New(mgr).Handler().ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/downloads", strings.NewReader(body)))
+	if w.Code != http.StatusCreated {
+		t.Fatalf("%d %s", w.Code, w.Body)
+	}
+	data, _ := mgr.Export()
+	if !strings.Contains(string(data), `"page": "https://www.youtube.com/watch?v=live"`) {
+		t.Fatalf("state:\n%s", data)
+	}
+}

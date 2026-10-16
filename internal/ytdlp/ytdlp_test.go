@@ -273,3 +273,22 @@ func TestLocate(t *testing.T) {
 		t.Fatal("a missing path was accepted")
 	}
 }
+
+func TestLiveManifest(t *testing.T) {
+	v := Video{LiveStatus: "is_live", Formats: []Format{
+		{ID: "sb0", Protocol: "mhtml", URL: "https://i/sb"},
+		{ID: "94", Protocol: "m3u8_native", Height: 480, URL: "https://m/480.m3u8"},
+		{ID: "95", Protocol: "m3u8_native", Height: 720, URL: "https://m/720.m3u8", Headers: map[string]string{"User-Agent": "yt"}},
+	}}
+	// Without a master playlist, the best quality's own playlist.
+	if m, h, ok := v.LiveManifest(); !v.IsLive() || !ok || m != "https://m/720.m3u8" || h["User-Agent"] != "yt" {
+		t.Fatalf("media playlist: %q %v %v", m, h, ok)
+	}
+	v.Formats[1].ManifestURL = "https://m/master.m3u8"
+	if m, _, ok := v.LiveManifest(); !ok || m != "https://m/master.m3u8" {
+		t.Fatalf("master playlist: %q", m)
+	}
+	if _, _, ok := (&Video{Formats: []Format{{Protocol: "https", URL: "https://f/v.flv"}}}).LiveManifest(); ok {
+		t.Fatal("a live stream without HLS gave a playlist")
+	}
+}

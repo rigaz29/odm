@@ -334,6 +334,50 @@ func TestStreamDASHMergeRealFFmpeg(t *testing.T) {
 	}
 }
 
+// TestStreamTSBecomesMP4RealFFmpeg downloads a generated HLS stream of
+// MPEG-TS segments, video and audio in one track, and checks that it ends
+// as MP4; it runs when ffmpeg is on PATH (or ODM_TEST_FFMPEG) and can
+// encode the input.
+func TestStreamTSBecomesMP4RealFFmpeg(t *testing.T) {
+	bin := os.Getenv("ODM_TEST_FFMPEG")
+	if bin == "" {
+		var err error
+		if bin, err = exec.LookPath("ffmpeg"); err != nil {
+			t.Skip("no ffmpeg")
+		}
+	}
+	src := t.TempDir()
+	cmd := exec.Command(bin, "-hide_banner", "-loglevel", "error",
+		"-f", "lavfi", "-i", "testsrc=duration=4:size=160x120:rate=10",
+		"-f", "lavfi", "-i", "sine=duration=4",
+		"-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-g", "10", "-c:a", "aac",
+		"-f", "hls", "-hls_time", "1", "-hls_playlist_type", "vod", "-hls_segment_type", "mpegts",
+		"p.m3u8")
+	cmd.Dir = src
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Skipf("cannot generate HLS input: %v %s", err, out)
+	}
+	srv := httptest.NewServer(http.FileServer(http.Dir(src)))
+	defer srv.Close()
+
+	setFFmpegPath(bin)
+	defer setFFmpegPath("")
+	d := newStreamDownload(t, srv.Client(), 4, StreamJob{Kind: media.KindHLS, Manifest: srv.URL + "/p.m3u8"})
+	d.Start(context.Background())
+	info := d.Info()
+	if info.Status != StatusComplete || info.FileName != "clip.mp4" {
+		t.Fatalf("%s %q: %s", info.Status, info.FileName, info.Error)
+	}
+	if _, err := os.Stat(filepath.Join(info.Dir, "clip.ts")); !os.IsNotExist(err) {
+		t.Fatal("the TS file was left next to the MP4")
+	}
+	probe, _ := exec.Command(bin, "-hide_banner", "-i", filepath.Join(info.Dir, info.FileName)).CombinedOutput()
+	s := string(probe)
+	if !strings.Contains(s, "mov,mp4") || !strings.Contains(s, "Video: h264") || !strings.Contains(s, "Audio: aac") || !strings.Contains(s, "Duration: 00:00:0") {
+		t.Fatalf("remuxed file:\n%s", s)
+	}
+}
+
 // Regressions found in review.
 
 func segServer(t *testing.T, playlist string, extra map[string]http.HandlerFunc) *httptest.Server {

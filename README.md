@@ -88,14 +88,22 @@ queues. It runs as a desktop app, or headless with a JSON API.
   installed (next to ODM, on PATH, or chosen in Options > Downloads, which
   also shows the ffmpeg version ODM found). A live HLS stream is recorded
   until you stop the download (Pause or Stop), the broadcast ends, or
-  nothing new arrives for a while; live DASH is not supported. DRM-protected video
-  is not supported and never will be.
+  nothing new arrives for a while; live DASH is not supported. A result in
+  MPEG-TS becomes MP4 when it finishes (copied, not re-encoded; Matroska
+  when the streams do not fit MP4). DRM-protected video is not supported
+  and never will be.
 - On YouTube (watch pages, Shorts, embedded players) the button lists the
   video's qualities and audio-only formats as
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) reads them, and ODM downloads
   the one you pick through yt-dlp, with its progress, pause and resume.
   A YouTube address pasted into *New Download* works the same way. yt-dlp
   reads the page itself; the browser's cookies are not given to it.
+- A broadcast on such a page (YouTube Live, Twitch and others yt-dlp reads,
+  where they come as HLS) shows "● LIVE" with a Record row per quality.
+  ODM records the playlist yt-dlp finds with its own recorder, from the
+  click until you stop it, and asks yt-dlp for a fresh playlist when the
+  old address expires. The plan for TikTok (FLV) and Instagram/Facebook
+  (live DASH) is in [docs/ROADMAP.md](docs/ROADMAP.md), phase 6.
 - yt-dlp and ffmpeg need no installing. The first time one is needed, ODM
   asks whether it may download them (about 20 MB): yt-dlp from its own
   releases, and a small ffmpeg built for ODM that only copies streams

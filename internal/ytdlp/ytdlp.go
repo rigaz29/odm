@@ -177,10 +177,39 @@ func failure(ctx context.Context, err error, stderr string) error {
 
 // Video is what yt-dlp found at a page.
 type Video struct {
-	Title    string   `json:"title"`
-	Duration float64  `json:"duration"` // seconds, 0 when unknown
-	Live     bool     `json:"is_live"`
-	Formats  []Format `json:"formats"`
+	Title    string  `json:"title"`
+	Duration float64 `json:"duration"` // seconds, 0 when unknown
+	Live     bool    `json:"is_live"`
+	// LiveStatus is "is_live", "is_upcoming", "was_live", "post_live" or
+	// "not_live" ("" from extractors that do not say).
+	LiveStatus string   `json:"live_status"`
+	Formats    []Format `json:"formats"`
+}
+
+// IsLive reports a broadcast that is on now.
+func (v *Video) IsLive() bool { return v.Live || v.LiveStatus == "is_live" }
+
+// LiveManifest is the HLS playlist of a live video and the headers to
+// fetch it with: the master playlist when yt-dlp names one (every
+// quality, for ODM to pick from), else the best quality's own playlist.
+func (v *Video) LiveManifest() (string, map[string]string, bool) {
+	var best *Format
+	for i := range v.Formats {
+		f := &v.Formats[i]
+		if !strings.HasPrefix(f.Protocol, "m3u8") {
+			continue
+		}
+		if f.ManifestURL != "" {
+			return f.ManifestURL, f.Headers, true
+		}
+		if f.URL != "" && (best == nil || f.Height > best.Height || (f.Height == best.Height && f.TBR > best.TBR)) {
+			best = f
+		}
+	}
+	if best == nil {
+		return "", nil, false
+	}
+	return best.URL, best.Headers, true
 }
 
 // Format is one of the video's encodings as yt-dlp lists it.
@@ -200,6 +229,11 @@ type Format struct {
 	DynamicRange string  `json:"dynamic_range"`
 	LangPref     float64 `json:"language_preference"`
 	DRM          any     `json:"has_drm"` // true, false or "maybe"
+	// URL is the format's own address and ManifestURL the playlist it
+	// was listed in (HLS and DASH); Headers are what to fetch them with.
+	URL         string            `json:"url"`
+	ManifestURL string            `json:"manifest_url"`
+	Headers     map[string]string `json:"http_headers"`
 }
 
 // Probe asks yt-dlp what the page offers.

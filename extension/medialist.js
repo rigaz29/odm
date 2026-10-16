@@ -98,13 +98,17 @@
       if (!r) {
         out.push({ text: `${name} · reading qualities…`, at: it.at });
       } else if (listing(r)) {
-        out.push({ text: name, heading: true, at: it.at });
-        for (const q of r.stream.qualities) out.push({ text: qualityLabel(q), item: { ...it, quality: q.label }, sub: true });
+        const live = r.stream.live;
+        out.push({ text: live ? `● LIVE · ${name}` : name, heading: true, at: it.at });
+        for (const q of r.stream.qualities) {
+          out.push({ text: (live ? "Record · " : "") + qualityLabel(q), item: { ...it, quality: q.label }, sub: true });
+        }
         if (r.stream.note) out.push({ text: r.stream.note, sub: true });
       } else if (r.ok && r.stream) {
         if (anyListing) continue;
         const q = r.stream.qualities[0];
-        out.push({ text: `${name} · one quality${q && q.estimate ? " · ~" + fmtSize(q.estimate) : ""}`, item: it, at: it.at });
+        const what = r.stream.live ? "● Record live" : `one quality${q && q.estimate ? " · ~" + fmtSize(q.estimate) : ""}`;
+        out.push({ text: `${name} · ${what}`, item: it, at: it.at });
       } else if (r.refused) {
         out.push({ text: `${name} · ${r.error}`, at: it.at });
       } else {
@@ -121,6 +125,7 @@
   function siteEntries(it, r) {
     const name = mediaLabel(it);
     if (!r) return [{ text: `${name} · reading qualities…`, at: it.at }];
+    if (r.ok && r.site && r.site.live) return liveEntries(it, r.site, name);
     if (r.ok && r.site) {
       const out = [{ text: name, heading: true, at: it.at }];
       for (const q of r.site.qualities) {
@@ -134,6 +139,33 @@
     return [{ text: `${name} · best quality`, item: it, at: it.at }];
   }
 
+  // liveEntries are a broadcast's rows: ODM records the HLS playlist yt-dlp
+  // found (site.manifest, fetched with site.headers) and keeps the page to
+  // ask yt-dlp again when the playlist's address expires.
+  function liveEntries(it, site, name) {
+    const live = {
+      kind: "stream", url: site.manifest, headers: site.headers || {}, page: it.url,
+      title: it.title, mime: "application/vnd.apple.mpegurl", format: "HLS", at: it.at,
+    };
+    const out = [{ text: `● LIVE · ${name}`, heading: true, at: it.at }];
+    const s = site.stream;
+    if (s && !s.single && s.qualities && s.qualities.length) {
+      for (const q of s.qualities) out.push({ text: `Record · ${qualityLabel(q)}`, item: { ...live, quality: q.label }, sub: true });
+    } else {
+      out.push({ text: "Record · best quality", item: live, sub: true });
+    }
+    out.push({ text: "Records until you stop it in ODM", sub: true });
+    return out;
+  }
+
+  // anyLive reports whether ODM said one of the items is a broadcast.
+  function anyLive(items, infos) {
+    return items.some((it) => {
+      const r = infos ? infos.get(it.url) : undefined;
+      return !!(r && r.ok && ((r.site && r.site.live) || (r.stream && r.stream.live)));
+    });
+  }
+
   // "12s ago", "3 min ago"; "" without a time.
   function ago(at, now) {
     if (!at) return "";
@@ -143,7 +175,7 @@
     return `${Math.round(s / 3600)} h ago`;
   }
 
-  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, sitePage, siteTitle, ago };
+  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, anyLive, sitePage, siteTitle, ago };
   // Always set: in a content script, a page element with id="module"
   // makes the global "module" look defined.
   root.odmMediaList = api;

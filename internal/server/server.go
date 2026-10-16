@@ -166,6 +166,9 @@ type addRequest struct {
 	// Quality is the label of one of the stream's qualities, as
 	// POST /api/probe/stream lists them. Empty: the best.
 	Quality string `json:"quality"`
+	// Page is the video site's page a live stream's playlist was found
+	// on by yt-dlp, which is asked again when the playlist expires.
+	Page string `json:"page"`
 	// Site makes URL a video site's page (YouTube…) that yt-dlp
 	// downloads; Format is yt-dlp's format selector, as
 	// POST /api/probe/site lists them (empty: its best), and Estimate the
@@ -212,6 +215,9 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.Stream = &engine.StreamJob{Kind: k, Manifest: req.URL}
 		opts.StreamQuality = req.Quality
+		if p := strings.TrimSpace(req.Page); strings.HasPrefix(p, "http://") || strings.HasPrefix(p, "https://") {
+			opts.Stream.Page = p
+		}
 	}
 	if req.Site {
 		if opts.Stream != nil {
@@ -255,6 +261,7 @@ func (s *Server) pinQuality(ctx context.Context, opts *engine.AddOptions, label 
 	}
 	if q := c.Quality(label); q >= 0 {
 		if job, err := c.Job(opts.URL, q, 0); err == nil {
+			job.Page = opts.Stream.Page
 			opts.Stream = &job
 		}
 	}
@@ -265,6 +272,7 @@ func (s *Server) pinQuality(ctx context.Context, opts *engine.AddOptions, label 
 type streamInfo struct {
 	Kind      string          `json:"kind"`
 	Single    bool            `json:"single,omitempty"`
+	Live      bool            `json:"live,omitempty"`
 	Note      string          `json:"note,omitempty"`
 	Qualities []streamQuality `json:"qualities"`
 }
@@ -304,7 +312,11 @@ func (s *Server) handleProbeStream(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
-	out := streamInfo{Kind: string(c.Kind), Single: c.Single, Note: c.Note, Qualities: []streamQuality{}}
+	writeJSON(w, http.StatusOK, newStreamInfo(c))
+}
+
+func newStreamInfo(c *engine.StreamChoices) streamInfo {
+	out := streamInfo{Kind: string(c.Kind), Single: c.Single, Live: c.Live, Note: c.Note, Qualities: []streamQuality{}}
 	for _, q := range c.Qualities {
 		sq := streamQuality{Label: q.Label, Estimate: q.Estimate}
 		for _, a := range q.Audios {
@@ -312,7 +324,7 @@ func (s *Server) handleProbeStream(w http.ResponseWriter, r *http.Request) {
 		}
 		out.Qualities = append(out.Qualities, sq)
 	}
-	writeJSON(w, http.StatusOK, out)
+	return out
 }
 
 // handleProbeSite asks yt-dlp what a video site's page offers, for the
@@ -344,6 +356,16 @@ func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
 		return
 	case err != nil:
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	if c.Live {
+		// A broadcast: ODM records its HLS playlist itself, and lists the
+		// playlist's qualities as for any stream ("stream", when it reads).
+		out := map[string]any{"title": c.Title, "live": true, "manifest": c.Manifest, "headers": c.Headers}
+		if sc, err := s.mgr.ProbeStream(ctx, c.Manifest, c.Headers); err == nil {
+			out["stream"] = newStreamInfo(sc)
+		}
+		writeJSON(w, http.StatusOK, out)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"title": c.Title, "qualities": c.Qualities})

@@ -12,7 +12,7 @@
   let host = null;
   let ui = null;
   // medialist.js runs first in the same content-script world.
-  const { fmtSize, menuEntries, sitePage, siteTitle } = self.odmMediaList;
+  const { fmtSize, menuEntries, anyLive, sitePage, siteTitle } = self.odmMediaList;
   // ODM's replies about the streams and site pages (their qualities), by
   // URL; asked once each, again when the reply was a failure that may pass.
   const infos = new Map();
@@ -153,6 +153,7 @@
   }
 
   function label() {
+    if (anyLive(allItems(), infos)) return "● Record live";
     const files = items.filter((i) => i.kind === "file");
     const best = files.sort((a, b) => b.size - a.size)[0];
     if (!best) return "Download this video";

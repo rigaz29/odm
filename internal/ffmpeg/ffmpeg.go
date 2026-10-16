@@ -107,8 +107,36 @@ func mergeArgs(video, audio, tmp, format string) []string {
 // Merge joins video and audio into out. The inputs are left in place; the
 // caller removes them once it no longer needs them for a retry.
 func Merge(ctx context.Context, bin, video, audio, out string) error {
+	return run(ctx, bin, out, func(tmp string) []string {
+		return mergeArgs(video, audio, tmp, muxer(out))
+	})
+}
+
+func remuxArgs(in, tmp, format string) []string {
+	return []string{
+		"-hide_banner", "-loglevel", "error", "-nostdin", "-y",
+		"-i", in,
+		// Video and audio only: MP4 has no place for the ID3 data streams
+		// some MPEG-TS recordings carry.
+		"-map", "0:v?", "-map", "0:a?",
+		"-c", "copy",
+		"-f", format, tmp,
+	}
+}
+
+// Remux copies the video and audio of in into out, in the container named
+// by format ("mp4", "matroska"), without re-encoding. An MPEG-TS recording
+// becomes MP4 so: ffmpeg rewraps its AAC (aac_adtstoasc) and smooths the
+// timestamp jumps a TS stream may have. in is left in place.
+func Remux(ctx context.Context, bin, in, out, format string) error {
+	return run(ctx, bin, out, func(tmp string) []string { return remuxArgs(in, tmp, format) })
+}
+
+// run runs ffmpeg with the arguments args gives for a temporary output,
+// and renames that to out when ffmpeg succeeds.
+func run(ctx context.Context, bin, out string, args func(tmp string) []string) error {
 	tmp := out + ".merging"
-	cmd := exec.CommandContext(ctx, bin, mergeArgs(video, audio, tmp, muxer(out))...)
+	cmd := exec.CommandContext(ctx, bin, args(tmp)...)
 	hide(cmd)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr

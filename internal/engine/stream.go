@@ -85,6 +85,10 @@ type StreamJob struct {
 	// Estimate is the expected size in bytes (bandwidth × duration), shown
 	// until enough segments are done to extrapolate; 0 when unknown.
 	Estimate int64 `json:"estimate,omitempty"`
+	// Page is the video site's page yt-dlp found Manifest on (a live
+	// broadcast). yt-dlp is asked again for a fresh Manifest when its
+	// signed address expires.
+	Page string `json:"page,omitempty"`
 }
 
 // ffmpegSetting is the configured ffmpeg path (Settings.FFmpegPath). Like
@@ -163,6 +167,8 @@ func (d *Download) runStream(ctx context.Context) {
 		return // being removed: nothing to finish or report
 	}
 	if err == nil {
+		// A stopped recording's ctx is done; only removing it cancels this.
+		d.remuxTS(d.assemblyContext())
 		err = d.finish()
 	}
 	if live && err != nil && !errors.Is(err, context.Canceled) && !errors.Is(err, errRemoved) {
@@ -1163,6 +1169,41 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 }
 
 /* ---------- assembly ---------- */
+
+// remuxTS turns an MPEG-TS result (a recording or a stream in one track)
+// into MP4, which more players, phones and editors open, copying the
+// streams without re-encoding; Matroska when they do not fit MP4. Without
+// ffmpeg, or when both fail, the TS file stays: it plays, and nothing is
+// lost. The name follows the container.
+func (d *Download) remuxTS(ctx context.Context) {
+	d.mu.Lock()
+	dir, name := d.Dir, d.FileName
+	d.mu.Unlock()
+	if !strings.EqualFold(filepath.Ext(name), ".ts") {
+		return
+	}
+	bin, err := locateFFmpeg(ctx)
+	if err != nil {
+		return
+	}
+	src := filepath.Join(dir, name) + ".odmpart"
+	base := strings.TrimSuffix(name, filepath.Ext(name))
+	for _, to := range []struct{ ext, format string }{{".mp4", "mp4"}, {".mkv", "matroska"}} {
+		dst := filepath.Join(dir, base+to.ext) + ".odmpart"
+		if err := ffmpeg.Remux(ctx, bin, src, dst, to.format); err != nil {
+			os.Remove(dst)
+			if ctx.Err() != nil {
+				return
+			}
+			continue
+		}
+		os.Remove(src)
+		d.mu.Lock()
+		d.FileName = base + to.ext
+		d.mu.Unlock()
+		return
+	}
+}
 
 // assembleStream concatenates the pieces into the .odmpart, joining two
 // tracks with ffmpeg.

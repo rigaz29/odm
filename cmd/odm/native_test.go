@@ -191,3 +191,14 @@ func TestRelaySiteDownload(t *testing.T) {
 		t.Fatalf("headers went with a site page: %v", got["headers"])
 	}
 }
+
+func TestRelayLivePage(t *testing.T) {
+	got, _ := relayed(t, native.Message{Kind: "stream", URL: "https://cdn.example/master.m3u8", Page: "https://www.youtube.com/watch?v=live",
+		Headers: map[string]string{"X-Live": "1"}})
+	if got["page"] != "https://www.youtube.com/watch?v=live" {
+		t.Fatalf("posted %v", got)
+	}
+	if h, _ := got["headers"].(map[string]any); h["X-Live"] != "1" {
+		t.Fatalf("headers %v", got["headers"])
+	}
+}

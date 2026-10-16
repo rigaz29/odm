@@ -292,10 +292,15 @@ function grab(item, referrer, title) {
     });
   }
   return handOff({
-    url: item.url, referrer, title,
+    // A broadcast's own title, without the site's name the tab's has.
+    url: item.url, referrer, title: item.title || title,
     mime: item.mime || "", size: item.size || 0,
     kind: item.kind === "stream" ? "stream" : "file",
     quality: item.quality || "",
+    // A broadcast found by yt-dlp: the headers its playlist needs, and the
+    // page to ask yt-dlp again when the playlist expires.
+    headers: item.headers || undefined,
+    page: item.page || "",
   });
 }
 

@@ -125,3 +125,42 @@ test("menuEntries lists a site video's qualities from yt-dlp", () => {
     [["YouTube video · live streams on video sites are not supported", false]]);
   assert.deepEqual(say({ ok: false, error: "ODM is not running" }), [["YouTube video · best quality", true]]);
 });
+
+test("menuEntries offers to record a broadcast yt-dlp found on a page", () => {
+  const page = { kind: "site", site: "YouTube", url: "https://www.youtube.com/watch?v=live1234567", title: "Launch" };
+  const reply = { ok: true, site: {
+    title: "Launch", live: true, manifest: "https://manifest.example/master.m3u8", headers: { "User-Agent": "yt" },
+    stream: { kind: "hls", live: true, qualities: [{ label: "1080p · 4.5 Mbps · H.264, AAC" }, { label: "720p · 2.0 Mbps · H.264, AAC" }] },
+  } };
+  const got = ml.menuEntries([page], new Map([[page.url, reply]]));
+  assert.deepEqual(got.map((e) => [e.text, !!e.item]), [
+    ["● LIVE · YouTube video", false],
+    ["Record · 1080p · 4.5 Mbps · H.264, AAC", true],
+    ["Record · 720p · 2.0 Mbps · H.264, AAC", true],
+    ["Records until you stop it in ODM", false],
+  ]);
+  const it = got[1].item;
+  assert.deepEqual([it.kind, it.url, it.page, it.quality, it.headers["User-Agent"], it.mime],
+    ["stream", "https://manifest.example/master.m3u8", page.url, "1080p · 4.5 Mbps · H.264, AAC", "yt", "application/vnd.apple.mpegurl"]);
+  assert.ok(ml.anyLive([page], new Map([[page.url, reply]])));
+
+  // Without the playlist's qualities (ODM could not read it), one row.
+  const bare = { ok: true, site: { live: true, manifest: "https://m/x.m3u8" } };
+  const rows = ml.menuEntries([page], new Map([[page.url, bare]]));
+  assert.equal(rows[1].text, "Record · best quality");
+  assert.equal(rows[1].item.quality, undefined);
+});
+
+test("menuEntries marks a live stream the page's player loaded", () => {
+  const s = { url: "https://cdn/live.m3u8", kind: "stream", format: "HLS" };
+  const listed = { ok: true, stream: { kind: "hls", live: true, note: "Live stream: ODM records it from now until you stop the download.",
+    qualities: [{ label: "720p · 2.0 Mbps" }] } };
+  assert.deepEqual(ml.menuEntries([s], new Map([[s.url, listed]])).map((e) => e.text), [
+    "● LIVE · HLS stream",
+    "Record · 720p · 2.0 Mbps",
+    "Live stream: ODM records it from now until you stop the download.",
+  ]);
+  const one = { ok: true, stream: { kind: "hls", live: true, single: true, qualities: [{ label: "As found (one quality)" }] } };
+  assert.deepEqual(ml.menuEntries([s], new Map([[s.url, one]])).map((e) => e.text), ["HLS stream · ● Record live"]);
+  assert.ok(!ml.anyLive([s], new Map()));
+});

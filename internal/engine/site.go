@@ -83,6 +83,12 @@ func ytdlpConfigured() string {
 type SiteChoices struct {
 	Title     string
 	Qualities []ytdlp.Quality
+	// Live is a broadcast on now. ODM records it itself from Manifest, its
+	// HLS playlist, fetched with Headers; Qualities is then empty (the
+	// playlist lists them, see ProbeStream).
+	Live     bool
+	Manifest string
+	Headers  map[string]string
 }
 
 // Quality returns the index of the quality labelled label, -1 for none.
@@ -107,14 +113,62 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	if err != nil {
 		return nil, err
 	}
-	if v.Live {
-		return nil, refusal("live streams on video sites are not supported")
+	switch {
+	case v.IsLive():
+		m, h, ok := v.LiveManifest()
+		if !ok {
+			return nil, refusal("this live stream is not HLS, which is what ODM records so far")
+		}
+		return &SiteChoices{Title: v.Title, Live: true, Manifest: m, Headers: h}, nil
+	case v.LiveStatus == "is_upcoming":
+		return nil, refusal("this live stream has not started yet")
 	}
 	c := &SiteChoices{Title: v.Title, Qualities: v.Qualities()}
 	if len(c.Qualities) == 0 {
 		return nil, refusal("yt-dlp found nothing ODM can download on this page")
 	}
 	return c, nil
+}
+
+// resolveSiteLive asks yt-dlp again for the HLS playlist of the broadcast
+// on page: a recording's playlist address is signed and expires, YouTube's
+// after some hours.
+func resolveSiteLive(ctx context.Context, page string) (string, map[string]string, error) {
+	bin, err := locateYtDlp(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+	v, err := ytdlp.Probe(ctx, bin, page)
+	if err != nil {
+		return "", nil, err
+	}
+	if !v.IsLive() {
+		return "", nil, refusal("the broadcast is over")
+	}
+	m, h, ok := v.LiveManifest()
+	if !ok {
+		return "", nil, refusal("the broadcast is no longer offered as HLS")
+	}
+	return m, h, nil
+}
+
+// useSiteManifest switches a recording to a fresh playlist address from
+// yt-dlp and the headers it gave with it.
+func (d *Download) useSiteManifest(manifest string, headers map[string]string) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.Stream != nil {
+		d.Stream.Manifest = manifest
+	}
+	d.URL, d.FinalURL = manifest, ""
+	next := make(map[string]string, len(d.Headers)+len(headers))
+	for k, v := range d.Headers {
+		next[k] = v
+	}
+	for k, v := range headers {
+		next[k] = v
+	}
+	d.Headers = next
 }
 
 // runSite is Start for a video page.

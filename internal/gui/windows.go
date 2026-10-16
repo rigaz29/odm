@@ -66,6 +66,11 @@ func (w *appWindows) openComplete(id string) {
 	w.open("complete-"+id, "Download complete", "complete", url.Values{"id": {id}}, 540, 330, true)
 }
 
+// openOptions opens the Options window, or brings it forward, on tab.
+func (w *appWindows) openOptions(tab string) {
+	w.open("options", "ODM Options", "options", url.Values{"tab": {tab}}, 820, 640, false)
+}
+
 // pickFolder asks for a folder with Windows' own dialog, starting in
 // current. The dialog wants backslashes, and reports a folder that is not
 // there as an error of its own, so such a start is left out.
@@ -82,4 +87,20 @@ func (w *appWindows) pickFolder(current string) string {
 		return ""
 	}
 	return dir
+}
+
+// pickFile asks for a program, starting in the folder of current.
+func (w *appWindows) pickFile(current string) string {
+	d := w.app.Dialog.OpenFile().CanChooseFiles(true).CanChooseDirectories(false)
+	if current = strings.TrimSpace(current); current != "" {
+		dir := filepath.Dir(filepath.Clean(filepath.FromSlash(current)))
+		if fi, err := os.Stat(dir); err == nil && fi.IsDir() {
+			d.SetDirectory(dir)
+		}
+	}
+	file, err := d.PromptForSingleSelection()
+	if err != nil {
+		return ""
+	}
+	return file
 }

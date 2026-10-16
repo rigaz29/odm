@@ -1,6 +1,7 @@
 // How every window looks: the language and the theme ODM's settings name,
 // the system's light or dark when they say "system". Each window (main, New
-// Download, progress…) is its own page and asks for itself.
+// Download, progress…) is its own page and asks for itself, and takes a new
+// look the Options save at once.
 
 import { useEffect, useState } from "react";
 import { api } from "./api";
@@ -14,14 +15,19 @@ export function useAppearance(): Appearance | null {
   const [systemDark, setSystemDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
 
   useEffect(() => {
-    void api.appearance().then((a) => {
+    const take = (a: Appearance) => {
       setLanguage(a.language);
       setAppearance(a);
-    });
+    };
+    void api.appearance().then(take);
+    const off = api.onAppearance(take); // the Options changed it
     const mq = matchMedia("(prefers-color-scheme: dark)");
     const on = (e: MediaQueryListEvent) => setSystemDark(e.matches);
     mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
+    return () => {
+      off();
+      mq.removeEventListener("change", on);
+    };
   }, []);
 
   const dark = appearance?.theme === "dark" || (appearance?.theme !== "light" && systemDark);

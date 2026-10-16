@@ -135,6 +135,49 @@ export class Appearance {
 }
 
 /**
+ * BrowserStatus is the browser integration as the Options window shows it.
+ */
+export class BrowserStatus {
+    /**
+     * State is "ok" (every browser uses this ODM), "partial" or "none".
+     */
+    "state": string;
+
+    /**
+     * in the page's language
+     */
+    "summary": string;
+
+    /**
+     * any browser registered, here or elsewhere
+     */
+    "registered": boolean;
+
+    /** Creates a new BrowserStatus instance. */
+    constructor($$source: Partial<BrowserStatus> = {}) {
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("summary" in $$source)) {
+            this["summary"] = "";
+        }
+        if (!("registered" in $$source)) {
+            this["registered"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new BrowserStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): BrowserStatus {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new BrowserStatus($$parsedSource as Partial<BrowserStatus>);
+    }
+}
+
+/**
  * Card is what checking an address found, in the card under the form.
  * Title and Detail are English texts the page translates; Name is a file
  * name or a video's title, shown as it is; Error is the engine's reason.
@@ -213,6 +256,39 @@ export class Card {
     static createFrom($$source: any = {}): Card {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new Card($$parsedSource as Partial<Card>);
+    }
+}
+
+/**
+ * CategoryOption is one category: its name, its extensions (space
+ * separated; none for Other) and its own folder ("" for the default).
+ */
+export class CategoryOption {
+    "name": string;
+    "exts": string;
+    "folder": string;
+
+    /** Creates a new CategoryOption instance. */
+    constructor($$source: Partial<CategoryOption> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("exts" in $$source)) {
+            this["exts"] = "";
+        }
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CategoryOption instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CategoryOption {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CategoryOption($$parsedSource as Partial<CategoryOption>);
     }
 }
 
@@ -453,6 +529,34 @@ export class Detail {
 }
 
 /**
+ * HostConnections caps the connections to one server.
+ */
+export class HostConnections {
+    "host": string;
+    "connections": number;
+
+    /** Creates a new HostConnections instance. */
+    constructor($$source: Partial<HostConnections> = {}) {
+        if (!("host" in $$source)) {
+            this["host"] = "";
+        }
+        if (!("connections" in $$source)) {
+            this["connections"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new HostConnections instance from a string or object.
+     */
+    static createFrom($$source: any = {}): HostConnections {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new HostConnections($$parsedSource as Partial<HostConnections>);
+    }
+}
+
+/**
  * Item is one download as the page shows it: engine.Info without the
  * per-connection detail the list has no use for.
  */
@@ -590,6 +694,280 @@ export class Item {
 }
 
 /**
+ * OptionsError names the field SaveOptions refused, for the page to show.
+ */
+export class OptionsError {
+    "tab": string;
+    "field": string;
+
+    /** Creates a new OptionsError instance. */
+    constructor($$source: Partial<OptionsError> = {}) {
+        if (!("tab" in $$source)) {
+            this["tab"] = "";
+        }
+        if (!("field" in $$source)) {
+            this["field"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OptionsError instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OptionsError {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new OptionsError($$parsedSource as Partial<OptionsError>);
+    }
+}
+
+/**
+ * OptionsForm is the Options window's form.
+ */
+export class OptionsForm {
+    /**
+     * General
+     * launch ODM when Windows starts
+     */
+    "startup": boolean;
+    "closeToTray": boolean;
+    "clipboard": boolean;
+    "updateCheck": boolean;
+
+    /**
+     * space separated
+     */
+    "excludeSites": string;
+
+    /**
+     * "system", "light", "dark"
+     */
+    "theme": string;
+
+    /**
+     * "system", "en", "id"
+     */
+    "language": string;
+
+    /**
+     * File types the clipboard monitor and the grabber take, space
+     * separated, upper case.
+     */
+    "fileTypes": string;
+
+    /**
+     * Save to
+     */
+    "dir": string;
+    "categoryFolders": boolean;
+    "rememberDir": boolean;
+    "categories": CategoryOption[];
+
+    /**
+     * Downloads
+     */
+    "startDialog": boolean;
+    "progressDialog": boolean;
+    "completeDialog": boolean;
+    "notifications": boolean;
+    "sounds": boolean;
+    "duplicateAgain": boolean;
+    "userAgent": string;
+
+    /**
+     * Programs
+     */
+    "ffmpegPath": string;
+    "ytdlpPath": string;
+
+    /**
+     * download and update them automatically
+     */
+    "toolUpdates": boolean;
+
+    /**
+     * Connection
+     */
+    "connections": number;
+    "concurrent": number;
+    "limitOn": boolean;
+    "limitKB": number;
+    "hosts": HostConnections[];
+
+    /**
+     * download no more than CapMB every CapHours
+     */
+    "capOn": boolean;
+    "capMB": number;
+    "capHours": number;
+    "capWarning": boolean;
+
+    /**
+     * Proxy: "none", "system", "http" or "socks5"
+     */
+    "proxyMode": string;
+    "proxyHost": string;
+    "proxyPort": number;
+    "proxyUser": string;
+    "proxyPass": string;
+
+    /**
+     * Site logins
+     */
+    "logins": SiteLogin[];
+
+    /**
+     * What this system offers, not saved: a sound to play, and ODM's own
+     * copies of yt-dlp and ffmpeg.
+     */
+    "canSound": boolean;
+    "canTools": boolean;
+
+    /** Creates a new OptionsForm instance. */
+    constructor($$source: Partial<OptionsForm> = {}) {
+        if (!("startup" in $$source)) {
+            this["startup"] = false;
+        }
+        if (!("closeToTray" in $$source)) {
+            this["closeToTray"] = false;
+        }
+        if (!("clipboard" in $$source)) {
+            this["clipboard"] = false;
+        }
+        if (!("updateCheck" in $$source)) {
+            this["updateCheck"] = false;
+        }
+        if (!("excludeSites" in $$source)) {
+            this["excludeSites"] = "";
+        }
+        if (!("theme" in $$source)) {
+            this["theme"] = "";
+        }
+        if (!("language" in $$source)) {
+            this["language"] = "";
+        }
+        if (!("fileTypes" in $$source)) {
+            this["fileTypes"] = "";
+        }
+        if (!("dir" in $$source)) {
+            this["dir"] = "";
+        }
+        if (!("categoryFolders" in $$source)) {
+            this["categoryFolders"] = false;
+        }
+        if (!("rememberDir" in $$source)) {
+            this["rememberDir"] = false;
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("startDialog" in $$source)) {
+            this["startDialog"] = false;
+        }
+        if (!("progressDialog" in $$source)) {
+            this["progressDialog"] = false;
+        }
+        if (!("completeDialog" in $$source)) {
+            this["completeDialog"] = false;
+        }
+        if (!("notifications" in $$source)) {
+            this["notifications"] = false;
+        }
+        if (!("sounds" in $$source)) {
+            this["sounds"] = false;
+        }
+        if (!("duplicateAgain" in $$source)) {
+            this["duplicateAgain"] = false;
+        }
+        if (!("userAgent" in $$source)) {
+            this["userAgent"] = "";
+        }
+        if (!("ffmpegPath" in $$source)) {
+            this["ffmpegPath"] = "";
+        }
+        if (!("ytdlpPath" in $$source)) {
+            this["ytdlpPath"] = "";
+        }
+        if (!("toolUpdates" in $$source)) {
+            this["toolUpdates"] = false;
+        }
+        if (!("connections" in $$source)) {
+            this["connections"] = 0;
+        }
+        if (!("concurrent" in $$source)) {
+            this["concurrent"] = 0;
+        }
+        if (!("limitOn" in $$source)) {
+            this["limitOn"] = false;
+        }
+        if (!("limitKB" in $$source)) {
+            this["limitKB"] = 0;
+        }
+        if (!("hosts" in $$source)) {
+            this["hosts"] = [];
+        }
+        if (!("capOn" in $$source)) {
+            this["capOn"] = false;
+        }
+        if (!("capMB" in $$source)) {
+            this["capMB"] = 0;
+        }
+        if (!("capHours" in $$source)) {
+            this["capHours"] = 0;
+        }
+        if (!("capWarning" in $$source)) {
+            this["capWarning"] = false;
+        }
+        if (!("proxyMode" in $$source)) {
+            this["proxyMode"] = "";
+        }
+        if (!("proxyHost" in $$source)) {
+            this["proxyHost"] = "";
+        }
+        if (!("proxyPort" in $$source)) {
+            this["proxyPort"] = 0;
+        }
+        if (!("proxyUser" in $$source)) {
+            this["proxyUser"] = "";
+        }
+        if (!("proxyPass" in $$source)) {
+            this["proxyPass"] = "";
+        }
+        if (!("logins" in $$source)) {
+            this["logins"] = [];
+        }
+        if (!("canSound" in $$source)) {
+            this["canSound"] = false;
+        }
+        if (!("canTools" in $$source)) {
+            this["canTools"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new OptionsForm instance from a string or object.
+     */
+    static createFrom($$source: any = {}): OptionsForm {
+        const $$createField11_0 = $$createType8;
+        const $$createField26_0 = $$createType10;
+        const $$createField36_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField11_0($$parsedSource["categories"]);
+        }
+        if ("hosts" in $$parsedSource) {
+            $$parsedSource["hosts"] = $$createField26_0($$parsedSource["hosts"]);
+        }
+        if ("logins" in $$parsedSource) {
+            $$parsedSource["logins"] = $$createField36_0($$parsedSource["logins"]);
+        }
+        return new OptionsForm($$parsedSource as Partial<OptionsForm>);
+    }
+}
+
+/**
  * ProbeResult is the answer for one address.
  */
 export class ProbeResult {
@@ -658,8 +1036,8 @@ export class ProbeResult {
      * Creates a new ProbeResult instance from a string or object.
      */
     static createFrom($$source: any = {}): ProbeResult {
-        const $$createField1_0 = $$createType7;
-        const $$createField6_0 = $$createType9;
+        const $$createField1_0 = $$createType13;
+        const $$createField6_0 = $$createType15;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("card" in $$parsedSource) {
             $$parsedSource["card"] = $$createField1_0($$parsedSource["card"]);
@@ -709,6 +1087,90 @@ export class Quality {
             $$parsedSource["audios"] = $$createField2_0($$parsedSource["audios"]);
         }
         return new Quality($$parsedSource as Partial<Quality>);
+    }
+}
+
+/**
+ * SaveResult is how saving the options went.
+ */
+export class SaveResult {
+    /**
+     * Refused names a field the form must fix first; nothing was saved.
+     */
+    "refused": OptionsError | null;
+
+    /**
+     * Appearance is the new look when the theme or language changed:
+     * every window takes it at once.
+     */
+    "appearance": Appearance | null;
+
+    /**
+     * StartupError says why launching at start-up could not change.
+     */
+    "startupError": string;
+
+    /** Creates a new SaveResult instance. */
+    constructor($$source: Partial<SaveResult> = {}) {
+        if (!("refused" in $$source)) {
+            this["refused"] = null;
+        }
+        if (!("appearance" in $$source)) {
+            this["appearance"] = null;
+        }
+        if (!("startupError" in $$source)) {
+            this["startupError"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SaveResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SaveResult {
+        const $$createField0_0 = $$createType17;
+        const $$createField1_0 = $$createType19;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("refused" in $$parsedSource) {
+            $$parsedSource["refused"] = $$createField0_0($$parsedSource["refused"]);
+        }
+        if ("appearance" in $$parsedSource) {
+            $$parsedSource["appearance"] = $$createField1_0($$parsedSource["appearance"]);
+        }
+        return new SaveResult($$parsedSource as Partial<SaveResult>);
+    }
+}
+
+/**
+ * SiteLogin is a user name and password for a site.
+ */
+export class SiteLogin {
+    "host": string;
+    "user": string;
+    "pass": string;
+
+    /** Creates a new SiteLogin instance. */
+    constructor($$source: Partial<SiteLogin> = {}) {
+        if (!("host" in $$source)) {
+            this["host"] = "";
+        }
+        if (!("user" in $$source)) {
+            this["user"] = "";
+        }
+        if (!("pass" in $$source)) {
+            this["pass"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SiteLogin instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SiteLogin {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SiteLogin($$parsedSource as Partial<SiteLogin>);
     }
 }
 
@@ -769,7 +1231,7 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField0_0 = $$createType10;
+        const $$createField0_0 = $$createType20;
         const $$createField1_0 = $$createType0;
         const $$createField2_0 = $$createType0;
         const $$createField3_0 = $$createType0;
@@ -791,6 +1253,46 @@ export class Snapshot {
             $$parsedSource["speeds"] = $$createField6_0($$parsedSource["speeds"]);
         }
         return new Snapshot($$parsedSource as Partial<Snapshot>);
+    }
+}
+
+/**
+ * ToolStatus is what a typed path to ffmpeg or yt-dlp leads to.
+ */
+export class ToolStatus {
+    /**
+     * State is "found", "missing" (none found anywhere), "nothere" (none
+     * at the typed path) or "broken" (found but it did not run).
+     */
+    "state": string;
+    "path": string;
+    "version": string;
+    "error": string;
+
+    /** Creates a new ToolStatus instance. */
+    constructor($$source: Partial<ToolStatus> = {}) {
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+        if (!("error" in $$source)) {
+            this["error"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ToolStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ToolStatus {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ToolStatus($$parsedSource as Partial<ToolStatus>);
     }
 }
 
@@ -865,7 +1367,7 @@ export class ZipListing {
      * Creates a new ZipListing instance from a string or object.
      */
     static createFrom($$source: any = {}): ZipListing {
-        const $$createField0_0 = $$createType12;
+        const $$createField0_0 = $$createType22;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("entries" in $$parsedSource) {
             $$parsedSource["entries"] = $$createField0_0($$parsedSource["entries"]);
@@ -882,9 +1384,19 @@ const $$createType3 = Chunk.createFrom;
 const $$createType4 = $Create.Array($$createType3);
 const $$createType5 = $Create.Array($Create.Any);
 const $$createType6 = $Create.Array($Create.Any);
-const $$createType7 = Card.createFrom;
-const $$createType8 = Quality.createFrom;
-const $$createType9 = $Create.Array($$createType8);
-const $$createType10 = $Create.Array($$createType1);
-const $$createType11 = ZipEntry.createFrom;
+const $$createType7 = CategoryOption.createFrom;
+const $$createType8 = $Create.Array($$createType7);
+const $$createType9 = HostConnections.createFrom;
+const $$createType10 = $Create.Array($$createType9);
+const $$createType11 = SiteLogin.createFrom;
 const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = Card.createFrom;
+const $$createType14 = Quality.createFrom;
+const $$createType15 = $Create.Array($$createType14);
+const $$createType16 = OptionsError.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);
+const $$createType18 = Appearance.createFrom;
+const $$createType19 = $Create.Nullable($$createType18);
+const $$createType20 = $Create.Array($$createType1);
+const $$createType21 = ZipEntry.createFrom;
+const $$createType22 = $Create.Array($$createType21);

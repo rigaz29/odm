@@ -10,6 +10,7 @@ import (
 
 	"odm/internal/engine"
 	"odm/internal/osutil"
+	"odm/internal/tools"
 )
 
 // Item is one download as the page shows it: engine.Info without the
@@ -99,8 +100,10 @@ type Service struct {
 	probes   map[string]*probed
 	statuses map[string]engine.Status
 
-	// windows opens ODM's other windows; nil in tests.
+	// windows opens ODM's other windows; nil in tests. keeper keeps
+	// yt-dlp and ffmpeg; nil in builds without it. Both under mu.
 	windows windowOpener
+	keeper  *tools.Keeper
 }
 
 // NewService makes the page's Service for mgr.
@@ -387,7 +390,7 @@ func (s *Service) ShowInFolder(id string) error {
 
 // Appearance returns how the page should look: the language and the theme.
 func (s *Service) Appearance() Appearance {
-	return currentAppearance()
+	return appearanceFor(s.mgr.Settings())
 }
 
 type serviceError string

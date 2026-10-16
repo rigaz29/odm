@@ -35,6 +35,15 @@ export function Appearance(): $CancellablePromise<$models.Appearance> {
 }
 
 /**
+ * BrowserStatus reports which browsers hand downloads to this ODM.
+ */
+export function BrowserStatus(): $CancellablePromise<$models.BrowserStatus> {
+    return $Call.ByID(1977410598).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
+/**
  * ClearCompleted takes the finished downloads off the list and returns
  * how many there were.
  */
@@ -48,8 +57,29 @@ export function ClearCompleted(): $CancellablePromise<number> {
  */
 export function Create(r: $models.CreateRequest): $CancellablePromise<$models.CreateResult> {
     return $Call.ByID(899203712, r).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
+}
+
+export function DefaultCategories(): $CancellablePromise<$models.CategoryOption[]> {
+    return $Call.ByID(1749390265).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
+ * DefaultFileTypes and DefaultCategories are what the Default buttons put
+ * back.
+ */
+export function DefaultFileTypes(): $CancellablePromise<string> {
+    return $Call.ByID(3146635244);
+}
+
+/**
+ * The default User-Agent, for the field's placeholder.
+ */
+export function DefaultUserAgent(): $CancellablePromise<string> {
+    return $Call.ByID(2370791555);
 }
 
 /**
@@ -57,7 +87,7 @@ export function Create(r: $models.CreateRequest): $CancellablePromise<$models.Cr
  */
 export function Detail(id: string): $CancellablePromise<$models.Detail> {
     return $Call.ByID(1107382821, id).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType6($result);
     });
 }
 
@@ -92,10 +122,26 @@ export function OpenFile(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * OpenOptions opens the Options window on tab ("" for the first).
+ */
+export function OpenOptions(tab: string): $CancellablePromise<void> {
+    return $Call.ByID(3084858922, tab);
+}
+
+/**
  * OpenProgress opens (or brings forward) the download id's progress window.
  */
 export function OpenProgress(id: string): $CancellablePromise<void> {
     return $Call.ByID(844258943, id);
+}
+
+/**
+ * Options returns the settings for the Options window.
+ */
+export function Options(): $CancellablePromise<$models.OptionsForm> {
+    return $Call.ByID(582199402).then(($result: any) => {
+        return $$createType7($result);
+    });
 }
 
 /**
@@ -113,6 +159,14 @@ export function PauseAll(): $CancellablePromise<void> {
 }
 
 /**
+ * PickFile asks for a program file (ffmpeg, yt-dlp), starting where
+ * current is; "" when cancelled.
+ */
+export function PickFile(current: string): $CancellablePromise<string> {
+    return $Call.ByID(4198937899, current);
+}
+
+/**
  * PickFolder asks for a folder, starting at current; "" when cancelled.
  */
 export function PickFolder(current: string): $CancellablePromise<string> {
@@ -124,7 +178,7 @@ export function PickFolder(current: string): $CancellablePromise<string> {
  */
 export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> {
     return $Call.ByID(1597545184, token).then(($result: any) => {
-        return $$createType4($result);
+        return $$createType8($result);
     });
 }
 
@@ -135,7 +189,7 @@ export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> 
  */
 export function Probe(address: string, token: string): $CancellablePromise<$models.ProbeResult> {
     return $Call.ByID(3587570774, address, token).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType9($result);
     });
 }
 
@@ -145,6 +199,17 @@ export function Probe(address: string, token: string): $CancellablePromise<$mode
  */
 export function Readdress(id: string, address: string): $CancellablePromise<void> {
     return $Call.ByID(2490811587, id, address);
+}
+
+/**
+ * RegisterBrowsers points every browser at this ODM; UnregisterBrowsers
+ * takes ODM out of them, and ODM stops registering itself at start until
+ * registered again. A browser that could not be changed is in the error.
+ */
+export function RegisterBrowsers(): $CancellablePromise<$models.BrowserStatus> {
+    return $Call.ByID(2733191932).then(($result: any) => {
+        return $$createType2($result);
+    });
 }
 
 /**
@@ -167,6 +232,17 @@ export function Resume(ids: string[]): $CancellablePromise<void> {
  */
 export function ResumeAll(): $CancellablePromise<void> {
     return $Call.ByID(2080170178);
+}
+
+/**
+ * SaveOptions applies the Options window's form. It returns what the page
+ * should tell: the field it refused (nothing is saved then), the new look,
+ * or a problem launching at start-up (the rest is saved).
+ */
+export function SaveOptions(o: $models.OptionsForm): $CancellablePromise<$models.SaveResult> {
+    return $Call.ByID(2725850569, o).then(($result: any) => {
+        return $$createType10($result);
+    });
 }
 
 /**
@@ -207,7 +283,7 @@ export function ShowInFolder(id: string): $CancellablePromise<void> {
  */
 export function Snapshot(): $CancellablePromise<$models.Snapshot> {
     return $Call.ByID(2559731168).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType11($result);
     });
 }
 
@@ -231,20 +307,49 @@ export function StopQueue(name: string): $CancellablePromise<void> {
 }
 
 /**
+ * ToolStatus checks the program tool ("ffmpeg" or "yt-dlp") at typed, or
+ * where ODM looks for it when typed is empty, and runs it for its version.
+ */
+export function ToolStatus(tool: string, typed: string): $CancellablePromise<$models.ToolStatus> {
+    return $Call.ByID(1580169712, tool, typed).then(($result: any) => {
+        return $$createType12($result);
+    });
+}
+
+export function UnregisterBrowsers(): $CancellablePromise<$models.BrowserStatus> {
+    return $Call.ByID(2029667495).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
+/**
+ * UpdateTools downloads the newest yt-dlp and ffmpeg now.
+ */
+export function UpdateTools(): $CancellablePromise<void> {
+    return $Call.ByID(577071980);
+}
+
+/**
  * ZipPreview lists a ZIP archive's contents, reading only its end.
  */
 export function ZipPreview(address: string, token: string): $CancellablePromise<$models.ZipListing> {
     return $Call.ByID(1010280861, address, token).then(($result: any) => {
-        return $$createType7($result);
+        return $$createType13($result);
     });
 }
 
 // Private type creation functions
 const $$createType0 = $models.AddDefaults.createFrom;
 const $$createType1 = $models.Appearance.createFrom;
-const $$createType2 = $models.CreateResult.createFrom;
-const $$createType3 = $models.Detail.createFrom;
-const $$createType4 = $models.AddPrefill.createFrom;
-const $$createType5 = $models.ProbeResult.createFrom;
-const $$createType6 = $models.Snapshot.createFrom;
-const $$createType7 = $models.ZipListing.createFrom;
+const $$createType2 = $models.BrowserStatus.createFrom;
+const $$createType3 = $models.CreateResult.createFrom;
+const $$createType4 = $models.CategoryOption.createFrom;
+const $$createType5 = $Create.Array($$createType4);
+const $$createType6 = $models.Detail.createFrom;
+const $$createType7 = $models.OptionsForm.createFrom;
+const $$createType8 = $models.AddPrefill.createFrom;
+const $$createType9 = $models.ProbeResult.createFrom;
+const $$createType10 = $models.SaveResult.createFrom;
+const $$createType11 = $models.Snapshot.createFrom;
+const $$createType12 = $models.ToolStatus.createFrom;
+const $$createType13 = $models.ZipListing.createFrom;

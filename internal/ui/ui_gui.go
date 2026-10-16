@@ -24,5 +24,5 @@ type Options struct {
 
 // Run starts the new UI and blocks until ODM quits or ctx ends.
 func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
-	return gui.Run(ctx, mgr, gui.Options{Show: opts.Show, Prompt: opts.Prompt, Hidden: opts.Hidden})
+	return gui.Run(ctx, mgr, gui.Options{Show: opts.Show, Prompt: opts.Prompt, Hidden: opts.Hidden, Tools: opts.Tools})
 }

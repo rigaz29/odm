@@ -313,7 +313,7 @@ export function App() {
     ["finished", t("Finished")],
     ["failed", t("Failed")],
   ];
-  const later = t("Comes with the new Options and Scheduler windows");
+  const later = t("Comes with the new Scheduler window");
   const limiterLabel = limit > 0 ? tf("Speed limiter (%s/s)", humanBytes(limit)) : t("Speed limiter");
   const goTo = (f: Filter) => () => {
     setFilter(f);
@@ -343,6 +343,7 @@ export function App() {
       icon: Gauge,
       run: toggleLimiter,
     },
+    { id: "options", group: actions, label: t("Options…"), english: "Options settings preferences", icon: Settings, run: () => void api.openOptions("") },
     { id: "sidebar", group: actions, label: sidebar ? t("Hide sidebar") : t("Show sidebar"), english: sidebar ? "Hide sidebar" : "Show sidebar", icon: PanelLeft, run: () => setSidebar(!sidebar) },
     { id: "go-all", group: show, label: t("All downloads"), english: "All downloads", icon: Inbox, run: goTo({ kind: "all" }) },
     { id: "go-running", group: show, label: t("Running"), english: "Running", icon: Zap, run: goTo({ kind: "running" }) },
@@ -457,12 +458,10 @@ export function App() {
                 sidebar={sidebar}
                 onSidebar={setSidebar}
               />
-              <Tooltip label={`${t("Options")} · ${later}`}>
-                <span>
-                  <Button variant="ghost" size="icon" disabled aria-label={t("Options")}>
-                    <Settings />
-                  </Button>
-                </span>
+              <Tooltip label={t("Options…")}>
+                <Button variant="ghost" size="icon" onClick={() => void api.openOptions("")} aria-label={t("Options…")}>
+                  <Settings />
+                </Button>
               </Tooltip>
             </div>
           </div>

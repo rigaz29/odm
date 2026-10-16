@@ -20,7 +20,9 @@ type windowOpener interface {
 	openProgress(id string)
 	closeProgress(id string)
 	openComplete(id string)
+	openOptions(tab string)
 	pickFolder(current string) string
+	pickFile(current string) string
 }
 
 // opener is the app's windowOpener, nil before the window exists and in
@@ -113,6 +115,16 @@ func (s *Service) PickFolder(current string) string {
 		return ""
 	}
 	return w.pickFolder(current)
+}
+
+// PickFile asks for a program file (ffmpeg, yt-dlp), starting where
+// current is; "" when cancelled.
+func (s *Service) PickFile(current string) string {
+	w := s.opener()
+	if w == nil {
+		return ""
+	}
+	return w.pickFile(current)
 }
 
 // Readdress points the unfinished download id at a new address of the same

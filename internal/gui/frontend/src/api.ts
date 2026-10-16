@@ -8,11 +8,16 @@ import {
   type AddDefaults,
   type AddPrefill,
   Appearance,
+  type BrowserStatus,
+  type CategoryOption,
   type CreateRequest,
   type CreateResult,
   type Detail,
+  type OptionsForm,
   type ProbeResult,
+  type SaveResult,
   Snapshot,
+  type ToolStatus,
   type ZipListing,
 } from "./bindings/odm/internal/gui/models";
 import * as Service from "./bindings/odm/internal/gui/service";
@@ -23,6 +28,8 @@ export interface Api {
   // onSnapshot calls cb with each new snapshot; it returns the unsubscribe.
   onSnapshot(cb: (s: Snapshot) => void): () => void;
   appearance(): Promise<Appearance>;
+  // onAppearance calls cb when the Options change the look.
+  onAppearance(cb: (a: Appearance) => void): () => void;
   resume(ids: string[]): Promise<void>;
   pause(ids: string[]): Promise<void>;
   pauseAll(): Promise<void>;
@@ -56,6 +63,20 @@ export interface Api {
   openProgress(id: string): Promise<void>;
   readdress(id: string, address: string): Promise<void>;
 
+  // The Options window (options.go).
+  options(): Promise<OptionsForm>;
+  saveOptions(o: OptionsForm): Promise<SaveResult>;
+  defaultFileTypes(): Promise<string>;
+  defaultCategories(): Promise<CategoryOption[]>;
+  defaultUserAgent(): Promise<string>;
+  browserStatus(): Promise<BrowserStatus>;
+  registerBrowsers(): Promise<BrowserStatus>;
+  unregisterBrowsers(): Promise<BrowserStatus>;
+  toolStatus(tool: string, typed: string): Promise<ToolStatus>;
+  updateTools(): Promise<void>;
+  openOptions(tab: string): Promise<void>;
+  pickFile(current: string): Promise<string>;
+
   // This window: its title and size, and closing it.
   setTitle(title: string): void;
   setSize(width: number, height: number): void;
@@ -63,6 +84,7 @@ export interface Api {
 }
 
 const SNAPSHOT_EVENT = "odm:snapshot";
+const APPEARANCE_EVENT = "odm:appearance";
 
 export const inODM = location.hostname === "wails.localhost";
 
@@ -70,6 +92,7 @@ const wailsApi: Api = {
   snapshot: () => Service.Snapshot(),
   onSnapshot: (cb) => Events.On(SNAPSHOT_EVENT, (e) => cb(Snapshot.createFrom(e.data))),
   appearance: () => Service.Appearance(),
+  onAppearance: (cb) => Events.On(APPEARANCE_EVENT, (e) => cb(Appearance.createFrom(e.data))),
   resume: (ids) => Service.Resume(ids),
   pause: (ids) => Service.Pause(ids),
   pauseAll: () => Service.PauseAll(),
@@ -98,6 +121,18 @@ const wailsApi: Api = {
   setCompleteDialog: (on) => Service.SetCompleteDialog(on),
   openProgress: (id) => Service.OpenProgress(id),
   readdress: (id, address) => Service.Readdress(id, address),
+  options: () => Service.Options(),
+  saveOptions: (o) => Service.SaveOptions(o),
+  defaultFileTypes: () => Service.DefaultFileTypes(),
+  defaultCategories: () => Service.DefaultCategories(),
+  defaultUserAgent: () => Service.DefaultUserAgent(),
+  browserStatus: () => Service.BrowserStatus(),
+  registerBrowsers: () => Service.RegisterBrowsers(),
+  unregisterBrowsers: () => Service.UnregisterBrowsers(),
+  toolStatus: (tool, typed) => Service.ToolStatus(tool, typed),
+  updateTools: () => Service.UpdateTools(),
+  openOptions: (tab) => Service.OpenOptions(tab),
+  pickFile: (current) => Service.PickFile(current),
   setTitle: (title) => {
     document.title = title;
     void Window.SetTitle(title);

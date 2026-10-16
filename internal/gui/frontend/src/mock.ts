@@ -10,14 +10,22 @@ import {
   AddDefaults,
   AddPrefill,
   Appearance,
+  BrowserStatus,
   Card,
+  CategoryOption,
   Chunk,
   CreateResult,
   Detail,
+  HostConnections,
   Item,
+  OptionsError,
+  OptionsForm,
   ProbeResult,
   Quality,
+  SaveResult,
+  SiteLogin,
   Snapshot,
+  ToolStatus,
   ZipEntry,
   ZipListing,
 } from "./bindings/odm/internal/gui/models";
@@ -93,6 +101,26 @@ export function mockApi(): Api {
   const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
   const limits = new Map<string, number>();
+  const defaultCategories = [
+    { name: "Video", exts: "3gp avi flv m4v mkv mov mp4 mpeg mpg webm wmv", folder: "" },
+    { name: "Audio", exts: "aac flac m4a mp3 ogg opus wav wma", folder: "" },
+    { name: "Documents", exts: "csv doc docx epub odt pdf ppt pptx rtf txt xls xlsx", folder: "" },
+    { name: "Programs", exts: "apk appx bat deb dmg exe msi pkg rpm sh", folder: "" },
+    { name: "Compressed", exts: "7z bz2 gz rar tar xz zip zst", folder: "" },
+    { name: "Images", exts: "bmp gif heic ico jpeg jpg png svg tiff webp", folder: "" },
+    { name: "Disk Images", exts: "img iso vhd", folder: "" },
+    { name: "Other", exts: "", folder: "" },
+  ];
+  let options = new OptionsForm({
+    startup: true, closeToTray: true, clipboard: false, updateCheck: true, excludeSites: "*.update.microsoft.com",
+    theme: q.get("theme") || "system", language: "system", fileTypes: "3GP 7Z AAC AVI EXE ISO MKV MP3 MP4 PDF RAR ZIP",
+    dir: String.raw`C:\Users\me\Downloads`, categoryFolders: true, rememberDir: true, categories: defaultCategories.map((c) => new CategoryOption(c)),
+    startDialog: true, progressDialog: true, completeDialog: true, notifications: true, sounds: false, duplicateAgain: false, userAgent: "",
+    ffmpegPath: "", ytdlpPath: "", toolUpdates: true, connections: 8, concurrent: 3, limitOn: false, limitKB: 512,
+    hosts: [new HostConnections({ host: "cdn.example.com", connections: 2 })], capOn: false, capMB: 200, capHours: 5, capWarning: true,
+    proxyMode: "system", proxyHost: "", proxyPort: 8080, proxyUser: "", proxyPass: "",
+    logins: [new SiteLogin({ host: "files.example.com", user: "rigaz", pass: "rahasia" })], canSound: true, canTools: true,
+  });
   const openWhenDone = new Set<string>();
   let completeDialog = true;
   const base = new Map<string, number>(); // each download's speed before the jitter
@@ -292,6 +320,29 @@ export function mockApi(): Api {
       if (d) d.url = address;
       push();
     },
+    onAppearance: () => () => {},
+    options: async () => new OptionsForm({ ...options, categories: options.categories.map((c) => new CategoryOption(c)) }),
+    saveOptions: async (o) => {
+      if ((o.proxyMode === "http" || o.proxyMode === "socks5") && !o.proxyHost.trim()) return new SaveResult({ refused: new OptionsError({ tab: "proxy", field: "proxyHost" }) });
+      options = o;
+      return new SaveResult({});
+    },
+    defaultFileTypes: async () => "3GP 7Z AAC AVI EXE ISO MKV MP3 MP4 PDF RAR ZIP",
+    defaultCategories: async () => defaultCategories.map((c) => new CategoryOption(c)),
+    defaultUserAgent: async () => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0 Safari/537.36",
+    browserStatus: async () => new BrowserStatus({ state: "partial", summary: "Terdaftar untuk Chrome, Edge. Belum terdaftar untuk: Firefox.", registered: true }),
+    registerBrowsers: async () => new BrowserStatus({ state: "ok", summary: "Terdaftar untuk Chrome, Edge, Firefox.", registered: true }),
+    unregisterBrowsers: async () => new BrowserStatus({ state: "none", summary: "Belum terdaftar: Chrome, Edge, Firefox.", registered: false }),
+    toolStatus: async (tool, typed) => {
+      await new Promise((r) => setTimeout(r, 300));
+      if (typed.trim()) return new ToolStatus({ state: "nothere" });
+      return tool === "ffmpeg"
+        ? new ToolStatus({ state: "found", path: String.raw`C:\Users\me\AppData\Roaming\odm\tools\ffmpeg.exe`, version: "ffmpeg version n8.1" })
+        : new ToolStatus({ state: "found", path: String.raw`C:\Users\me\AppData\Roaming\odm\tools\yt-dlp.exe`, version: "2026.08.19" });
+    },
+    updateTools: async () => void (await new Promise((r) => setTimeout(r, 900))),
+    openOptions: async (tab) => void window.open(`?view=options&tab=${tab}`, "_blank", "width=820,height=640"),
+    pickFile: async () => String.raw`C:\Tools\ffmpeg.exe`,
     setTitle: (title) => void (document.title = title),
     setSize: () => {},
     closeWindow: () => window.close(),

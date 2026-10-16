@@ -158,7 +158,9 @@ func (w *stubWindows) closeProgress(id string) {
 	w.note("close " + id)
 }
 func (w *stubWindows) openComplete(id string)           { w.note("complete " + id) }
+func (w *stubWindows) openOptions(tab string)           { w.note("options " + tab) }
 func (w *stubWindows) pickFolder(current string) string { return current + `\picked` }
+func (w *stubWindows) pickFile(current string) string   { return current + `.exe` }
 func (w *stubWindows) got() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

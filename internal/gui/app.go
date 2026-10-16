@@ -15,6 +15,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"odm/internal/engine"
+	"odm/internal/tools"
 )
 
 // dist is the built page (npm run build in frontend/).
@@ -33,6 +34,8 @@ type Options struct {
 	// Hidden would start in the tray, which stage 4 brings: the window
 	// shows anyway.
 	Hidden bool
+	// Tools keeps ODM's copies of yt-dlp and ffmpeg; nil for none.
+	Tools *tools.Keeper
 }
 
 // The window's colours before the page has painted, the page's own
@@ -77,7 +80,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	svc.emit = func(name string, data any) { app.Event.Emit(name, data) }
 	svc.mu.Unlock()
 
-	look := currentAppearance()
+	look := svc.Appearance()
 	background := lightBackground
 	if darkWindow(look.Theme) {
 		background = darkBackground
@@ -102,6 +105,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	windows := &appWindows{app: app, background: background, theme: windowTheme(look.Theme)}
 	svc.mu.Lock()
 	svc.windows = windows
+	svc.keeper = opts.Tools
 	svc.mu.Unlock()
 	// The other windows close with the main one: until ODM has a tray
 	// (stage 4), closing the main window quits.

@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"odm/internal/engine"
 )
 
 // Appearance is how the page should look.
@@ -15,15 +17,21 @@ type Appearance struct {
 	Theme string `json:"theme"`
 }
 
-// currentAppearance reads the choices the Fyne UI keeps (Options → General:
-// language and theme, in Fyne's preferences) so both UIs look alike. Stage
-// 3 moves these choices to ODM's own settings.
-func currentAppearance() Appearance {
-	prefs := fynePreferences()
-	return Appearance{
-		Language: resolveLanguage(prefs["appearance.language"], systemLanguage()),
-		Theme:    resolveTheme(prefs["appearance.theme"]),
+// appearanceFor is the look the settings choose (the new UI's Options),
+// else the one the Fyne UI keeps in its preferences, so a first start of
+// the new UI looks as the Fyne UI did.
+func appearanceFor(st engine.Settings) Appearance {
+	lang, theme := st.Language, st.Theme
+	if lang == "" || theme == "" {
+		prefs := fynePreferences()
+		if lang == "" {
+			lang = prefs["appearance.language"]
+		}
+		if theme == "" {
+			theme = prefs["appearance.theme"]
+		}
 	}
+	return Appearance{Language: resolveLanguage(lang, systemLanguage()), Theme: resolveTheme(theme)}
 }
 
 // fynePreferences reads the Fyne UI's preferences file, nil when there is

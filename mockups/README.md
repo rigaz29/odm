@@ -6,6 +6,14 @@ sama di ketiganya: 14 unduhan dengan semua status (mengunduh, merekam live,
 dijeda, antre, gagal, selesai), teks bahasa Indonesia, mode gelap dan
 terang. Ini hanya tampilan dengan data tiruan, belum terhubung ke engine.
 
+**Pilihan (2026-10-16): A ditambah sentuhan D**, halaman `ad.html`,
+tangkapan `screenshots/ad-dark.jpg` dan `ad-light.jpg`.
+- Dari A: tata letak, palet zinc, tabel berkotak centang, badge, Inter.
+- Dari D: aksen gradien ungu-sian (tombol utama, progres aktif, penanda
+  menu aktif, grafik kecepatan), kartu "Sedang berjalan" dengan bilah per
+  koneksi dan grafik kecepatan (bergaya A: berbingkai, tanpa efek kaca),
+  ikon file berwarna per kategori, cahaya aurora tipis di bagian atas.
+
 Gaya yang dipilih akan dipasang di kerangka yang sudah teruji di Tahap 0
 (Wails v3 + WebView2, engine di proses yang sama, daftar virtual 60 fps,
 exe sekitar 15 MB tanpa CGO). Yang diganti hanya komponen dan tema.

@@ -14,6 +14,7 @@ export default defineConfig({
         a: resolve(__dirname, "a.html"),
         b: resolve(__dirname, "b.html"),
         d: resolve(__dirname, "d.html"),
+        ad: resolve(__dirname, "ad.html"),
       },
     },
     chunkSizeWarningLimit: 3000,

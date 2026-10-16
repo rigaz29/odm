@@ -7,6 +7,7 @@ export {
 };
 
 export {
+    About,
     AddDefaults,
     AddPrefill,
     Appearance,
@@ -17,16 +18,24 @@ export {
     CreateRequest,
     CreateResult,
     Detail,
+    GrabProgress,
+    GrabRequest,
     HostConnections,
     Item,
+    Limits,
     OptionsError,
     OptionsForm,
     ProbeResult,
     Quality,
+    QueueState,
     SaveResult,
+    Schedule,
+    SchedulerData,
+    SchedulerRefusal,
     SiteLogin,
     Snapshot,
     ToolStatus,
+    UpdateInfo,
     ZipEntry,
     ZipListing
 } from "./models.js";

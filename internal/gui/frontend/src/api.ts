@@ -5,6 +5,7 @@
 
 import { Clipboard, Events, Window } from "@wailsio/runtime";
 import {
+  type About,
   type AddDefaults,
   type AddPrefill,
   Appearance,
@@ -13,6 +14,13 @@ import {
   type CreateRequest,
   type CreateResult,
   type Detail,
+  type GrabProgress,
+  type GrabRequest,
+  type Limits,
+  type Schedule,
+  type SchedulerData,
+  type SchedulerRefusal,
+  type UpdateInfo,
   type OptionsForm,
   type ProbeResult,
   type SaveResult,
@@ -77,6 +85,24 @@ export interface Api {
   openOptions(tab: string): Promise<void>;
   pickFile(current: string): Promise<string>;
 
+  // The Scheduler (scheduler.go) and the rest of the menus (extras.go).
+  scheduler(): Promise<SchedulerData>;
+  saveScheduler(schedules: Record<string, Schedule>, limits: Limits): Promise<SchedulerRefusal | null>;
+  addQueue(name: string): Promise<void>;
+  removeQueue(name: string): Promise<void>;
+  openScheduler(newQueue: boolean): Promise<void>;
+  exportList(): Promise<string>;
+  importList(): Promise<number>;
+  checkUpdate(): Promise<UpdateInfo>;
+  // onUpdate calls cb with a newer release the start-up check found.
+  onUpdate(cb: (u: UpdateInfo) => void): () => void;
+  about(): Promise<About>;
+  openURL(address: string): Promise<void>;
+  grab(r: GrabRequest): Promise<GrabProgress>;
+  onGrab(cb: (p: GrabProgress) => void): () => void;
+  stopGrab(): Promise<void>;
+  runFinish(action: string): Promise<void>;
+
   // This window: its title and size, and closing it.
   setTitle(title: string): void;
   setSize(width: number, height: number): void;
@@ -85,6 +111,8 @@ export interface Api {
 
 const SNAPSHOT_EVENT = "odm:snapshot";
 const APPEARANCE_EVENT = "odm:appearance";
+const UPDATE_EVENT = "odm:update";
+const GRAB_EVENT = "odm:grab";
 
 export const inODM = location.hostname === "wails.localhost";
 
@@ -133,6 +161,21 @@ const wailsApi: Api = {
   updateTools: () => Service.UpdateTools(),
   openOptions: (tab) => Service.OpenOptions(tab),
   pickFile: (current) => Service.PickFile(current),
+  scheduler: () => Service.Scheduler(),
+  saveScheduler: (schedules, limits) => Service.SaveScheduler(schedules, limits),
+  addQueue: (name) => Service.AddQueue(name),
+  removeQueue: (name) => Service.RemoveQueue(name),
+  openScheduler: (newQueue) => Service.OpenScheduler(newQueue),
+  exportList: () => Service.ExportList(),
+  importList: () => Service.ImportList(),
+  checkUpdate: () => Service.CheckUpdate(),
+  onUpdate: (cb) => Events.On(UPDATE_EVENT, (e) => cb(e.data as UpdateInfo)),
+  about: () => Service.About(),
+  openURL: (address) => Service.OpenURL(address),
+  grab: (r) => Service.Grab(r),
+  onGrab: (cb) => Events.On(GRAB_EVENT, (e) => cb(e.data as GrabProgress)),
+  stopGrab: () => Service.StopGrab(),
+  runFinish: (action) => Service.RunFinish(action),
   setTitle: (title) => {
     document.title = title;
     void Window.SetTitle(title);

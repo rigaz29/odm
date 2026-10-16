@@ -7,6 +7,7 @@
 
 import type { Api } from "./api";
 import {
+  About,
   AddDefaults,
   AddPrefill,
   Appearance,
@@ -16,6 +17,13 @@ import {
   Chunk,
   CreateResult,
   Detail,
+  GrabProgress,
+  Limits,
+  QueueState,
+  Schedule,
+  SchedulerData,
+  SchedulerRefusal,
+  UpdateInfo,
   HostConnections,
   Item,
   OptionsError,
@@ -101,6 +109,16 @@ export function mockApi(): Api {
   const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
   const limits = new Map<string, number>();
+  const newSchedule = () => ({
+    sync: false, onStartup: false, startEnabled: false, startAt: "23:00", once: false, onceDate: "2026-10-17", days: [true, true, true, true, true, true, true],
+    repeatEnabled: false, repeatMinutes: 60, stopEnabled: false, stopAt: "07:30", retriesEnabled: false, retries: 10,
+    openEnabled: false, openPath: "", finish: "", parallel: 1,
+  });
+  const schedules: Record<string, Schedule> = {
+    "Malam hari": new Schedule({ ...newSchedule(), startEnabled: true, startAt: "23:30", stopEnabled: true, finish: "shutdown", parallel: 2 }),
+  };
+  let limitsState = new Limits({ on: false, mb: 200, hours: 5, warning: true });
+  const grabSubs = new Set<(p: GrabProgress) => void>();
   const defaultCategories = [
     { name: "Video", exts: "3gp avi flv m4v mkv mov mp4 mpeg mpg webm wmv", folder: "" },
     { name: "Audio", exts: "aac flac m4a mp3 ogg opus wav wma", folder: "" },
@@ -343,6 +361,55 @@ export function mockApi(): Api {
     updateTools: async () => void (await new Promise((r) => setTimeout(r, 900))),
     openOptions: async (tab) => void window.open(`?view=options&tab=${tab}`, "_blank", "width=820,height=640"),
     pickFile: async () => String.raw`C:\Tools\ffmpeg.exe`,
+    scheduler: async () =>
+      new SchedulerData({
+        queues: queues.map((n) => new QueueState({ name: n, running: running.includes(n), repeating: false })),
+        schedules: Object.fromEntries(queues.map((n) => [n, new Schedule(schedules[n] ?? newSchedule())])),
+        limits: new Limits(limitsState),
+      }),
+    saveScheduler: async (s, l) => {
+      for (const [q, sc] of Object.entries(s)) {
+        if (sc.startEnabled && !/^([01]\d|2[0-3]):[0-5]\d$/.test(sc.startAt)) return new SchedulerRefusal({ queue: q, field: "start", value: sc.startAt });
+        if (sc.stopEnabled && !/^([01]\d|2[0-3]):[0-5]\d$/.test(sc.stopAt)) return new SchedulerRefusal({ queue: q, field: "stop", value: sc.stopAt });
+        if (sc.repeatEnabled && sc.repeatMinutes < 1) return new SchedulerRefusal({ queue: q, field: "repeat" });
+      }
+      Object.assign(schedules, s);
+      limitsState = l;
+      return null;
+    },
+    addQueue: async (name) => {
+      if (!name.trim()) throw new Error("enter a name");
+      if (queues.some((q) => q.toLowerCase() === name.trim().toLowerCase())) throw new Error("that queue already exists");
+      queues.push(name.trim());
+      push();
+    },
+    removeQueue: async (name) => {
+      const i = queues.indexOf(name);
+      if (i <= 0) throw new Error("no such queue");
+      queues.splice(i, 1);
+      for (const d of items) if (d.queue === name) d.queue = "Main";
+      push();
+    },
+    openScheduler: async (newQueue) => void window.open(`?view=scheduler${newQueue ? "&new=1" : ""}`, "_blank", "width=860,height=640"),
+    exportList: async () => String.raw`C:\Users\me\Documents\odm-downloads.json`,
+    importList: async () => 3,
+    checkUpdate: async () => new UpdateInfo({ current: "0.4.2", latest: "v0.5.0", newer: true, url: "https://github.com/rigaz29/odm/releases/tag/v0.5.0", notes: "## ODM 0.5.0\n\n- UI baru untuk Windows (pratinjau)\n- Rekam siaran live YouTube dari ujung siaran\n- Perbaikan Unduh Nanti yang hilang setelah restart" }),
+    onUpdate: () => () => {},
+    about: async () => new About({ name: "Ochi Download Manager", version: "0.4.2", repo: "troke12/odm", runtime: "go1.27.2 · windows/amd64" }),
+    openURL: async (address) => void window.open(address, "_blank"),
+    grab: async () => {
+      for (let i = 1; i <= 4; i++) {
+        await new Promise((r) => setTimeout(r, 300));
+        grabSubs.forEach((cb) => cb(new GrabProgress({ pages: i, files: i * 3 })));
+      }
+      return new GrabProgress({ pages: 4, files: 12 });
+    },
+    onGrab: (cb) => {
+      grabSubs.add(cb);
+      return () => grabSubs.delete(cb);
+    },
+    stopGrab: async () => {},
+    runFinish: async () => {},
     setTitle: (title) => void (document.title = title),
     setSize: () => {},
     closeWindow: () => window.close(),

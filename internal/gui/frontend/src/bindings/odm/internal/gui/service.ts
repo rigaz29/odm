@@ -16,13 +16,27 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 // @ts-ignore: Unused imports
 import * as $models from "./models.js";
 
+export function About(): $CancellablePromise<$models.About> {
+    return $Call.ByID(591121641).then(($result: any) => {
+        return $$createType0($result);
+    });
+}
+
 /**
  * AddDefaults returns what a new form starts with.
  */
 export function AddDefaults(): $CancellablePromise<$models.AddDefaults> {
     return $Call.ByID(3192362257).then(($result: any) => {
-        return $$createType0($result);
+        return $$createType1($result);
     });
+}
+
+/**
+ * AddQueue makes a new queue; RemoveQueue deletes one, its downloads
+ * moving to the main queue, which cannot be deleted.
+ */
+export function AddQueue(name: string): $CancellablePromise<void> {
+    return $Call.ByID(1772172454, name);
 }
 
 /**
@@ -30,7 +44,7 @@ export function AddDefaults(): $CancellablePromise<$models.AddDefaults> {
  */
 export function Appearance(): $CancellablePromise<$models.Appearance> {
     return $Call.ByID(3343968734).then(($result: any) => {
-        return $$createType1($result);
+        return $$createType2($result);
     });
 }
 
@@ -39,7 +53,16 @@ export function Appearance(): $CancellablePromise<$models.Appearance> {
  */
 export function BrowserStatus(): $CancellablePromise<$models.BrowserStatus> {
     return $Call.ByID(1977410598).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
+    });
+}
+
+/**
+ * CheckUpdate asks GitHub for the newest release.
+ */
+export function CheckUpdate(): $CancellablePromise<$models.UpdateInfo> {
+    return $Call.ByID(1470203837).then(($result: any) => {
+        return $$createType4($result);
     });
 }
 
@@ -57,13 +80,13 @@ export function ClearCompleted(): $CancellablePromise<number> {
  */
 export function Create(r: $models.CreateRequest): $CancellablePromise<$models.CreateResult> {
     return $Call.ByID(899203712, r).then(($result: any) => {
-        return $$createType3($result);
+        return $$createType5($result);
     });
 }
 
 export function DefaultCategories(): $CancellablePromise<$models.CategoryOption[]> {
     return $Call.ByID(1749390265).then(($result: any) => {
-        return $$createType5($result);
+        return $$createType7($result);
     });
 }
 
@@ -87,7 +110,7 @@ export function DefaultUserAgent(): $CancellablePromise<string> {
  */
 export function Detail(id: string): $CancellablePromise<$models.Detail> {
     return $Call.ByID(1107382821, id).then(($result: any) => {
-        return $$createType6($result);
+        return $$createType8($result);
     });
 }
 
@@ -96,6 +119,32 @@ export function Detail(id: string): $CancellablePromise<$models.Detail> {
  */
 export function DropPrefill(token: string): $CancellablePromise<void> {
     return $Call.ByID(2201999727, token);
+}
+
+/**
+ * ExportList saves the list to a file the person names; it returns the
+ * file, "" when cancelled.
+ */
+export function ExportList(): $CancellablePromise<string> {
+    return $Call.ByID(3386198558);
+}
+
+/**
+ * Grab explores a site from a start page and adds the files it links to
+ * (the types in Options → File types). One crawl runs at a time.
+ */
+export function Grab(r: $models.GrabRequest): $CancellablePromise<$models.GrabProgress> {
+    return $Call.ByID(1995665318, r).then(($result: any) => {
+        return $$createType9($result);
+    });
+}
+
+/**
+ * ImportList adds the downloads of a list exported before; it returns how
+ * many, -1 when cancelled.
+ */
+export function ImportList(): $CancellablePromise<number> {
+    return $Call.ByID(50361253);
 }
 
 /**
@@ -136,11 +185,26 @@ export function OpenProgress(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * OpenScheduler opens the Scheduler window; with newQueue it asks for a
+ * new queue's name at once.
+ */
+export function OpenScheduler(newQueue: boolean): $CancellablePromise<void> {
+    return $Call.ByID(4122339953, newQueue);
+}
+
+/**
+ * OpenURL opens a web address in the browser.
+ */
+export function OpenURL(address: string): $CancellablePromise<void> {
+    return $Call.ByID(3214794189, address);
+}
+
+/**
  * Options returns the settings for the Options window.
  */
 export function Options(): $CancellablePromise<$models.OptionsForm> {
     return $Call.ByID(582199402).then(($result: any) => {
-        return $$createType7($result);
+        return $$createType10($result);
     });
 }
 
@@ -178,7 +242,7 @@ export function PickFolder(current: string): $CancellablePromise<string> {
  */
 export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> {
     return $Call.ByID(1597545184, token).then(($result: any) => {
-        return $$createType8($result);
+        return $$createType11($result);
     });
 }
 
@@ -189,7 +253,7 @@ export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> 
  */
 export function Probe(address: string, token: string): $CancellablePromise<$models.ProbeResult> {
     return $Call.ByID(3587570774, address, token).then(($result: any) => {
-        return $$createType9($result);
+        return $$createType12($result);
     });
 }
 
@@ -208,7 +272,7 @@ export function Readdress(id: string, address: string): $CancellablePromise<void
  */
 export function RegisterBrowsers(): $CancellablePromise<$models.BrowserStatus> {
     return $Call.ByID(2733191932).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
 }
 
@@ -218,6 +282,10 @@ export function RegisterBrowsers(): $CancellablePromise<$models.BrowserStatus> {
  */
 export function Remove(ids: string[], withFiles: boolean): $CancellablePromise<void> {
     return $Call.ByID(2454442852, ids, withFiles);
+}
+
+export function RemoveQueue(name: string): $CancellablePromise<void> {
+    return $Call.ByID(965801707, name);
 }
 
 /**
@@ -235,13 +303,42 @@ export function ResumeAll(): $CancellablePromise<void> {
 }
 
 /**
+ * RunFinish carries out a finish action the countdown let through: sleep
+ * and hibernate keep ODM running for after the computer wakes; shut down
+ * and exit close ODM.
+ */
+export function RunFinish(action: string): $CancellablePromise<void> {
+    return $Call.ByID(1941928478, action);
+}
+
+/**
  * SaveOptions applies the Options window's form. It returns what the page
  * should tell: the field it refused (nothing is saved then), the new look,
  * or a problem launching at start-up (the rest is saved).
  */
 export function SaveOptions(o: $models.OptionsForm): $CancellablePromise<$models.SaveResult> {
     return $Call.ByID(2725850569, o).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType13($result);
+    });
+}
+
+/**
+ * SaveScheduler saves every queue's schedule and the download limits. A
+ * start or stop time that is not HH:MM, or a repeat without minutes, is
+ * refused with the queue it is in, and nothing is saved.
+ */
+export function SaveScheduler(schedules: { [_ in string]?: $models.Schedule }, limits: $models.Limits): $CancellablePromise<$models.SchedulerRefusal | null> {
+    return $Call.ByID(908211766, schedules, limits).then(($result: any) => {
+        return $$createType15($result);
+    });
+}
+
+/**
+ * Scheduler returns the queues, their schedules and the download limits.
+ */
+export function Scheduler(): $CancellablePromise<$models.SchedulerData> {
+    return $Call.ByID(1768662449).then(($result: any) => {
+        return $$createType16($result);
     });
 }
 
@@ -283,7 +380,7 @@ export function ShowInFolder(id: string): $CancellablePromise<void> {
  */
 export function Snapshot(): $CancellablePromise<$models.Snapshot> {
     return $Call.ByID(2559731168).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType17($result);
     });
 }
 
@@ -302,6 +399,13 @@ export function StopAll(): $CancellablePromise<void> {
     return $Call.ByID(20496231);
 }
 
+/**
+ * StopGrab ends the crawl running now; what it found so far stays.
+ */
+export function StopGrab(): $CancellablePromise<void> {
+    return $Call.ByID(3508996942);
+}
+
 export function StopQueue(name: string): $CancellablePromise<void> {
     return $Call.ByID(1916889395, name);
 }
@@ -312,13 +416,13 @@ export function StopQueue(name: string): $CancellablePromise<void> {
  */
 export function ToolStatus(tool: string, typed: string): $CancellablePromise<$models.ToolStatus> {
     return $Call.ByID(1580169712, tool, typed).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType18($result);
     });
 }
 
 export function UnregisterBrowsers(): $CancellablePromise<$models.BrowserStatus> {
     return $Call.ByID(2029667495).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType3($result);
     });
 }
 
@@ -334,22 +438,28 @@ export function UpdateTools(): $CancellablePromise<void> {
  */
 export function ZipPreview(address: string, token: string): $CancellablePromise<$models.ZipListing> {
     return $Call.ByID(1010280861, address, token).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType19($result);
     });
 }
 
 // Private type creation functions
-const $$createType0 = $models.AddDefaults.createFrom;
-const $$createType1 = $models.Appearance.createFrom;
-const $$createType2 = $models.BrowserStatus.createFrom;
-const $$createType3 = $models.CreateResult.createFrom;
-const $$createType4 = $models.CategoryOption.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = $models.Detail.createFrom;
-const $$createType7 = $models.OptionsForm.createFrom;
-const $$createType8 = $models.AddPrefill.createFrom;
-const $$createType9 = $models.ProbeResult.createFrom;
-const $$createType10 = $models.SaveResult.createFrom;
-const $$createType11 = $models.Snapshot.createFrom;
-const $$createType12 = $models.ToolStatus.createFrom;
-const $$createType13 = $models.ZipListing.createFrom;
+const $$createType0 = $models.About.createFrom;
+const $$createType1 = $models.AddDefaults.createFrom;
+const $$createType2 = $models.Appearance.createFrom;
+const $$createType3 = $models.BrowserStatus.createFrom;
+const $$createType4 = $models.UpdateInfo.createFrom;
+const $$createType5 = $models.CreateResult.createFrom;
+const $$createType6 = $models.CategoryOption.createFrom;
+const $$createType7 = $Create.Array($$createType6);
+const $$createType8 = $models.Detail.createFrom;
+const $$createType9 = $models.GrabProgress.createFrom;
+const $$createType10 = $models.OptionsForm.createFrom;
+const $$createType11 = $models.AddPrefill.createFrom;
+const $$createType12 = $models.ProbeResult.createFrom;
+const $$createType13 = $models.SaveResult.createFrom;
+const $$createType14 = $models.SchedulerRefusal.createFrom;
+const $$createType15 = $Create.Nullable($$createType14);
+const $$createType16 = $models.SchedulerData.createFrom;
+const $$createType17 = $models.Snapshot.createFrom;
+const $$createType18 = $models.ToolStatus.createFrom;
+const $$createType19 = $models.ZipListing.createFrom;

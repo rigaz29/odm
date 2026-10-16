@@ -6,6 +6,46 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * About is what the About dialog says.
+ */
+export class About {
+    "name": string;
+    "version": string;
+    "repo": string;
+
+    /**
+     * Go version, system and architecture
+     */
+    "runtime": string;
+
+    /** Creates a new About instance. */
+    constructor($$source: Partial<About> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+        if (!("repo" in $$source)) {
+            this["repo"] = "";
+        }
+        if (!("runtime" in $$source)) {
+            this["runtime"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new About instance from a string or object.
+     */
+    static createFrom($$source: any = {}): About {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new About($$parsedSource as Partial<About>);
+    }
+}
+
+/**
  * AddDefaults are what an empty New Download form starts with.
  */
 export class AddDefaults {
@@ -529,6 +569,79 @@ export class Detail {
 }
 
 /**
+ * GrabProgress is how far a crawl got: sent as GrabEvent while it runs,
+ * and returned when it is done.
+ */
+export class GrabProgress {
+    "pages": number;
+    "files": number;
+
+    /** Creates a new GrabProgress instance. */
+    constructor($$source: Partial<GrabProgress> = {}) {
+        if (!("pages" in $$source)) {
+            this["pages"] = 0;
+        }
+        if (!("files" in $$source)) {
+            this["files"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GrabProgress instance from a string or object.
+     */
+    static createFrom($$source: any = {}): GrabProgress {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GrabProgress($$parsedSource as Partial<GrabProgress>);
+    }
+}
+
+/**
+ * GrabRequest is the Site Grabber's form.
+ */
+export class GrabRequest {
+    "url": string;
+    "depth": number;
+    "maxPages": number;
+    "maxFiles": number;
+    "sameHost": boolean;
+    "start": boolean;
+
+    /** Creates a new GrabRequest instance. */
+    constructor($$source: Partial<GrabRequest> = {}) {
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("depth" in $$source)) {
+            this["depth"] = 0;
+        }
+        if (!("maxPages" in $$source)) {
+            this["maxPages"] = 0;
+        }
+        if (!("maxFiles" in $$source)) {
+            this["maxFiles"] = 0;
+        }
+        if (!("sameHost" in $$source)) {
+            this["sameHost"] = false;
+        }
+        if (!("start" in $$source)) {
+            this["start"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new GrabRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): GrabRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new GrabRequest($$parsedSource as Partial<GrabRequest>);
+    }
+}
+
+/**
  * HostConnections caps the connections to one server.
  */
 export class HostConnections {
@@ -690,6 +803,42 @@ export class Item {
             $$parsedSource["speeds"] = $$createField21_0($$parsedSource["speeds"]);
         }
         return new Item($$parsedSource as Partial<Item>);
+    }
+}
+
+/**
+ * Limits caps how much is downloaded every so many hours.
+ */
+export class Limits {
+    "on": boolean;
+    "mb": number;
+    "hours": number;
+    "warning": boolean;
+
+    /** Creates a new Limits instance. */
+    constructor($$source: Partial<Limits> = {}) {
+        if (!("on" in $$source)) {
+            this["on"] = false;
+        }
+        if (!("mb" in $$source)) {
+            this["mb"] = 0;
+        }
+        if (!("hours" in $$source)) {
+            this["hours"] = 0;
+        }
+        if (!("warning" in $$source)) {
+            this["warning"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Limits instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Limits {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Limits($$parsedSource as Partial<Limits>);
     }
 }
 
@@ -1091,6 +1240,42 @@ export class Quality {
 }
 
 /**
+ * QueueState is a queue as the Scheduler lists it.
+ */
+export class QueueState {
+    "name": string;
+    "running": boolean;
+
+    /**
+     * waiting to start again: Stop ends it
+     */
+    "repeating": boolean;
+
+    /** Creates a new QueueState instance. */
+    constructor($$source: Partial<QueueState> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("running" in $$source)) {
+            this["running"] = false;
+        }
+        if (!("repeating" in $$source)) {
+            this["repeating"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new QueueState instance from a string or object.
+     */
+    static createFrom($$source: any = {}): QueueState {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new QueueState($$parsedSource as Partial<QueueState>);
+    }
+}
+
+/**
  * SaveResult is how saving the options went.
  */
 export class SaveResult {
@@ -1139,6 +1324,199 @@ export class SaveResult {
             $$parsedSource["appearance"] = $$createField1_0($$parsedSource["appearance"]);
         }
         return new SaveResult($$parsedSource as Partial<SaveResult>);
+    }
+}
+
+/**
+ * Schedule is one queue's schedule as the window edits it.
+ */
+export class Schedule {
+    /**
+     * Sync checks finished files and downloads them again when they
+     * changed on the server.
+     */
+    "sync": boolean;
+    "onStartup": boolean;
+
+    /**
+     * Start at StartAt ("HH:MM"): once on OnceDate ("YYYY-MM-DD") when
+     * Once, else on the Days ticked, Sunday first.
+     */
+    "startEnabled": boolean;
+    "startAt": string;
+    "once": boolean;
+    "onceDate": string;
+    "days": boolean[];
+
+    /**
+     * RepeatMinutes starts the queue again that long after it last
+     * started, until it is stopped.
+     */
+    "repeatEnabled": boolean;
+    "repeatMinutes": number;
+    "stopEnabled": boolean;
+    "stopAt": string;
+    "retriesEnabled": boolean;
+    "retries": number;
+
+    /**
+     * When the queue has finished: open OpenPath, and Finish ("", "exit",
+     * "sleep", "hibernate" or "shutdown").
+     */
+    "openEnabled": boolean;
+    "openPath": string;
+    "finish": string;
+
+    /**
+     * Parallel is how many of its files download at once.
+     */
+    "parallel": number;
+
+    /** Creates a new Schedule instance. */
+    constructor($$source: Partial<Schedule> = {}) {
+        if (!("sync" in $$source)) {
+            this["sync"] = false;
+        }
+        if (!("onStartup" in $$source)) {
+            this["onStartup"] = false;
+        }
+        if (!("startEnabled" in $$source)) {
+            this["startEnabled"] = false;
+        }
+        if (!("startAt" in $$source)) {
+            this["startAt"] = "";
+        }
+        if (!("once" in $$source)) {
+            this["once"] = false;
+        }
+        if (!("onceDate" in $$source)) {
+            this["onceDate"] = "";
+        }
+        if (!("days" in $$source)) {
+            this["days"] = [];
+        }
+        if (!("repeatEnabled" in $$source)) {
+            this["repeatEnabled"] = false;
+        }
+        if (!("repeatMinutes" in $$source)) {
+            this["repeatMinutes"] = 0;
+        }
+        if (!("stopEnabled" in $$source)) {
+            this["stopEnabled"] = false;
+        }
+        if (!("stopAt" in $$source)) {
+            this["stopAt"] = "";
+        }
+        if (!("retriesEnabled" in $$source)) {
+            this["retriesEnabled"] = false;
+        }
+        if (!("retries" in $$source)) {
+            this["retries"] = 0;
+        }
+        if (!("openEnabled" in $$source)) {
+            this["openEnabled"] = false;
+        }
+        if (!("openPath" in $$source)) {
+            this["openPath"] = "";
+        }
+        if (!("finish" in $$source)) {
+            this["finish"] = "";
+        }
+        if (!("parallel" in $$source)) {
+            this["parallel"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Schedule instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Schedule {
+        const $$createField6_0 = $$createType20;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("days" in $$parsedSource) {
+            $$parsedSource["days"] = $$createField6_0($$parsedSource["days"]);
+        }
+        return new Schedule($$parsedSource as Partial<Schedule>);
+    }
+}
+
+/**
+ * SchedulerData is everything the Scheduler window edits.
+ */
+export class SchedulerData {
+    "queues": QueueState[];
+    "schedules": { [_ in string]?: Schedule };
+    "limits": Limits;
+
+    /** Creates a new SchedulerData instance. */
+    constructor($$source: Partial<SchedulerData> = {}) {
+        if (!("queues" in $$source)) {
+            this["queues"] = [];
+        }
+        if (!("schedules" in $$source)) {
+            this["schedules"] = {};
+        }
+        if (!("limits" in $$source)) {
+            this["limits"] = (new Limits());
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SchedulerData instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SchedulerData {
+        const $$createField0_0 = $$createType22;
+        const $$createField1_0 = $$createType24;
+        const $$createField2_0 = $$createType25;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("queues" in $$parsedSource) {
+            $$parsedSource["queues"] = $$createField0_0($$parsedSource["queues"]);
+        }
+        if ("schedules" in $$parsedSource) {
+            $$parsedSource["schedules"] = $$createField1_0($$parsedSource["schedules"]);
+        }
+        if ("limits" in $$parsedSource) {
+            $$parsedSource["limits"] = $$createField2_0($$parsedSource["limits"]);
+        }
+        return new SchedulerData($$parsedSource as Partial<SchedulerData>);
+    }
+}
+
+/**
+ * SchedulerRefusal names the queue and the value Apply could not take:
+ * Field is "start" or "stop" (Value is not a time) or "repeat" (no
+ * minutes).
+ */
+export class SchedulerRefusal {
+    "queue": string;
+    "field": string;
+    "value": string;
+
+    /** Creates a new SchedulerRefusal instance. */
+    constructor($$source: Partial<SchedulerRefusal> = {}) {
+        if (!("queue" in $$source)) {
+            this["queue"] = "";
+        }
+        if (!("field" in $$source)) {
+            this["field"] = "";
+        }
+        if (!("value" in $$source)) {
+            this["value"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SchedulerRefusal instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SchedulerRefusal {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SchedulerRefusal($$parsedSource as Partial<SchedulerRefusal>);
     }
 }
 
@@ -1231,7 +1609,7 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField0_0 = $$createType20;
+        const $$createField0_0 = $$createType26;
         const $$createField1_0 = $$createType0;
         const $$createField2_0 = $$createType0;
         const $$createField3_0 = $$createType0;
@@ -1293,6 +1671,46 @@ export class ToolStatus {
     static createFrom($$source: any = {}): ToolStatus {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new ToolStatus($$parsedSource as Partial<ToolStatus>);
+    }
+}
+
+/**
+ * UpdateInfo is the newest release, against this ODM's version.
+ */
+export class UpdateInfo {
+    "current": string;
+    "latest": string;
+    "newer": boolean;
+    "url": string;
+    "notes": string;
+
+    /** Creates a new UpdateInfo instance. */
+    constructor($$source: Partial<UpdateInfo> = {}) {
+        if (!("current" in $$source)) {
+            this["current"] = "";
+        }
+        if (!("latest" in $$source)) {
+            this["latest"] = "";
+        }
+        if (!("newer" in $$source)) {
+            this["newer"] = false;
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("notes" in $$source)) {
+            this["notes"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new UpdateInfo instance from a string or object.
+     */
+    static createFrom($$source: any = {}): UpdateInfo {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new UpdateInfo($$parsedSource as Partial<UpdateInfo>);
     }
 }
 
@@ -1367,7 +1785,7 @@ export class ZipListing {
      * Creates a new ZipListing instance from a string or object.
      */
     static createFrom($$source: any = {}): ZipListing {
-        const $$createField0_0 = $$createType22;
+        const $$createField0_0 = $$createType28;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("entries" in $$parsedSource) {
             $$parsedSource["entries"] = $$createField0_0($$parsedSource["entries"]);
@@ -1397,6 +1815,12 @@ const $$createType16 = OptionsError.createFrom;
 const $$createType17 = $Create.Nullable($$createType16);
 const $$createType18 = Appearance.createFrom;
 const $$createType19 = $Create.Nullable($$createType18);
-const $$createType20 = $Create.Array($$createType1);
-const $$createType21 = ZipEntry.createFrom;
+const $$createType20 = $Create.Array($Create.Any);
+const $$createType21 = QueueState.createFrom;
 const $$createType22 = $Create.Array($$createType21);
+const $$createType23 = Schedule.createFrom;
+const $$createType24 = $Create.Map($Create.Any, $$createType23);
+const $$createType25 = Limits.createFrom;
+const $$createType26 = $Create.Array($$createType1);
+const $$createType27 = ZipEntry.createFrom;
+const $$createType28 = $Create.Array($$createType27);

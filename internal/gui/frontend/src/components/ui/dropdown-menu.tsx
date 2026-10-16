@@ -14,7 +14,13 @@ export const DropdownMenuSub = DropdownMenuPrimitive.Sub;
 export function DropdownMenuContent({ className, sideOffset = 4, ...props }: React.ComponentPropsWithoutRef<typeof DropdownMenuPrimitive.Content>) {
   return (
     <DropdownMenuPrimitive.Portal>
-      <DropdownMenuPrimitive.Content sideOffset={sideOffset} className={cn(menuContent, className)} {...props} />
+      <DropdownMenuPrimitive.Content
+        sideOffset={sideOffset}
+        collisionPadding={8}
+        // A long menu scrolls rather than run off the window.
+        className={cn(menuContent, "max-h-[var(--radix-dropdown-menu-content-available-height)] overflow-y-auto", className)}
+        {...props}
+      />
     </DropdownMenuPrimitive.Portal>
   );
 }

@@ -106,7 +106,12 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	svc.mu.Lock()
 	svc.windows = windows
 	svc.keeper = opts.Tools
+	svc.quit = app.Quit
 	svc.mu.Unlock()
+	// The UI carries out the scheduler's requests while it runs, so a
+	// shutdown can be cancelled from a countdown instead of happening blind.
+	mgr.SetActionHandler(svc.handleAction)
+	go svc.checkAtStart(ctx)
 	// The other windows close with the main one: until ODM has a tray
 	// (stage 4), closing the main window quits.
 	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { app.Quit() })

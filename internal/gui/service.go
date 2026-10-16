@@ -104,6 +104,8 @@ type Service struct {
 	// yt-dlp and ffmpeg; nil in builds without it. Both under mu.
 	windows windowOpener
 	keeper  *tools.Keeper
+	// quit closes ODM, for a finish action; nil in tests.
+	quit func()
 }
 
 // NewService makes the page's Service for mgr.

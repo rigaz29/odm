@@ -1,7 +1,24 @@
-// The toolbar's "more" menu: what the Fyne UI's Downloads and View menus
-// do that needs no window of its own.
+// The toolbar's "more" menu: the rest of the Fyne UI's Downloads, View and
+// Help menus.
 
-import { Ban, CirclePause, CirclePlay, Columns3, Eraser, Gauge, MoreHorizontal, PanelLeft } from "lucide-react";
+import {
+  Ban,
+  CircleHelp,
+  CirclePause,
+  CirclePlay,
+  Columns3,
+  Eraser,
+  FileDown,
+  FileUp,
+  Gauge,
+  Globe,
+  Info,
+  Keyboard,
+  ListPlus,
+  MoreHorizontal,
+  PanelLeft,
+  RefreshCw,
+} from "lucide-react";
 import type { ColumnState } from "../columns";
 import { t } from "../i18n";
 import { ColumnItems } from "./ColumnItems";
@@ -28,7 +45,17 @@ export function MoreMenu(props: {
   onColumns: (s: ColumnState) => void;
   sidebar: boolean;
   onSidebar: (shown: boolean) => void;
+  on: {
+    newQueue(): void;
+    grab(): void;
+    exportList(): void;
+    importList(): void;
+    shortcuts(): void;
+    checkUpdate(): void;
+    about(): void;
+  };
 }) {
+  const { on } = props;
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
@@ -36,7 +63,14 @@ export function MoreMenu(props: {
           <MoreHorizontal />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="end" className="min-w-60">
+      <DropdownMenuContent align="end" className="min-w-64">
+        <DropdownMenuItem onSelect={on.newQueue}>
+          <ListPlus /> {t("New queue…")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={on.grab}>
+          <Globe /> {t("Grab site…")}
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={props.onResumeAll}>
           <CirclePlay /> {t("Resume all")}
         </DropdownMenuItem>
@@ -53,18 +87,47 @@ export function MoreMenu(props: {
         <DropdownMenuCheckboxItem checked={props.limiter.on} onCheckedChange={props.limiter.onToggle}>
           <Gauge /> {props.limiter.label}
         </DropdownMenuCheckboxItem>
-        <DropdownMenuSeparator />
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
-            <Columns3 /> {t("Columns")}
+            <PanelLeft /> {t("View")}
           </DropdownMenuSubTrigger>
           <DropdownMenuSubContent>
-            <ColumnItems menu="dropdown" columns={props.columns} onColumns={props.onColumns} />
+            <DropdownMenuCheckboxItem checked={props.sidebar} onCheckedChange={(v) => props.onSidebar(v === true)}>
+              <PanelLeft /> {t("Show sidebar")}
+            </DropdownMenuCheckboxItem>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Columns3 /> {t("Columns")}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent>
+                <ColumnItems menu="dropdown" columns={props.columns} onColumns={props.onColumns} />
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
           </DropdownMenuSubContent>
         </DropdownMenuSub>
-        <DropdownMenuCheckboxItem checked={props.sidebar} onCheckedChange={(v) => props.onSidebar(v === true)}>
-          <PanelLeft /> {t("Show sidebar")}
-        </DropdownMenuCheckboxItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={on.exportList}>
+          <FileUp /> {t("Export download list…")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={on.importList}>
+          <FileDown /> {t("Import download list…")}
+        </DropdownMenuItem>
+        <DropdownMenuSub>
+          <DropdownMenuSubTrigger>
+            <CircleHelp /> {t("Help")}
+          </DropdownMenuSubTrigger>
+          <DropdownMenuSubContent>
+            <DropdownMenuItem onSelect={on.shortcuts}>
+              <Keyboard /> {t("Keyboard shortcuts")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={on.checkUpdate}>
+              <RefreshCw /> {t("Check for updates…")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={on.about}>
+              <Info /> {t("About ODM")}
+            </DropdownMenuItem>
+          </DropdownMenuSubContent>
+        </DropdownMenuSub>
       </DropdownMenuContent>
     </DropdownMenu>
   );

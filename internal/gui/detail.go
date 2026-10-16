@@ -2,6 +2,7 @@ package gui
 
 import (
 	"context"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -21,8 +22,14 @@ type windowOpener interface {
 	closeProgress(id string)
 	openComplete(id string)
 	openOptions(tab string)
+	openScheduler(newQueue bool)
+	// openNotice shows the scheduler's notices: the download limit
+	// reached, or the countdown before a finish action.
+	openNotice(q url.Values)
 	pickFolder(current string) string
 	pickFile(current string) string
+	pickOpen(filterName, pattern string) string
+	pickSave(name string) string
 }
 
 // opener is the app's windowOpener, nil before the window exists and in

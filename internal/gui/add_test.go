@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -143,8 +144,9 @@ func TestPrefillCarriesTheBrowsersHeaders(t *testing.T) {
 
 // stubWindows records what the service asked to open.
 type stubWindows struct {
-	mu   sync.Mutex
-	asks []string
+	mu         sync.Mutex
+	asks       []string
+	open, save string // what the file dialogs answer
 }
 
 func (w *stubWindows) note(s string) {
@@ -157,10 +159,14 @@ func (w *stubWindows) openProgress(id string) { w.note("progress " + id) }
 func (w *stubWindows) closeProgress(id string) {
 	w.note("close " + id)
 }
-func (w *stubWindows) openComplete(id string)           { w.note("complete " + id) }
-func (w *stubWindows) openOptions(tab string)           { w.note("options " + tab) }
-func (w *stubWindows) pickFolder(current string) string { return current + `\picked` }
-func (w *stubWindows) pickFile(current string) string   { return current + `.exe` }
+func (w *stubWindows) openComplete(id string)               { w.note("complete " + id) }
+func (w *stubWindows) openOptions(tab string)               { w.note("options " + tab) }
+func (w *stubWindows) openScheduler(newQueue bool)          { w.note("scheduler") }
+func (w *stubWindows) openNotice(q url.Values)              { w.note("notice " + q.Encode()) }
+func (w *stubWindows) pickOpen(name, pattern string) string { return w.open }
+func (w *stubWindows) pickSave(name string) string          { return w.save }
+func (w *stubWindows) pickFolder(current string) string     { return current + `\picked` }
+func (w *stubWindows) pickFile(current string) string       { return current + `.exe` }
 func (w *stubWindows) got() string {
 	w.mu.Lock()
 	defer w.mu.Unlock()

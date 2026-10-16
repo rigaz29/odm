@@ -11,12 +11,16 @@ import {
   Clock,
   Eraser,
   Gauge,
+  Globe,
   Inbox,
+  Info,
+  Keyboard,
   ListOrdered,
   PanelLeft,
   Pause,
   Play,
   Plus,
+  RefreshCw,
   Settings,
   Square,
   Trash2,
@@ -24,11 +28,12 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, inODM } from "./api";
-import type { Item, Snapshot } from "./bindings/odm/internal/gui/models";
+import type { Item, Snapshot, UpdateInfo } from "./bindings/odm/internal/gui/models";
 import { type ColumnId, type ColumnState, type Sort, nextSort, readColumns, readSort } from "./columns";
 import { AddForm } from "./components/AddForm";
 import { type Confirm, ConfirmDialog } from "./components/ConfirmDialog";
 import { DownloadTable, type TableHandle } from "./components/DownloadTable";
+import { AboutDialog, GrabberDialog, MessageDialog, ShortcutsDialog, UpdateDialog } from "./components/MenuDialogs";
 import { MoreMenu } from "./components/MoreMenu";
 import { RowMenu } from "./components/RowMenu";
 import { RunningCards } from "./components/RunningCards";
@@ -113,6 +118,9 @@ export function App() {
   const [cardsOpen, setCardsOpen] = useState(() => load("odm.cards.open", true));
   const [adding, setAdding] = useState<string | null>(null); // the dialog's address, null when closed
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [dialog, setDialog] = useState<"grab" | "about" | "shortcuts" | null>(null);
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [message, setMessage] = useState<{ title: string; text: string } | null>(null);
   const [readdress, setReaddress] = useState<{ item: Item; url: string; error: string; busy: boolean } | null>(null);
   const [limiterOpen, setLimiterOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -133,7 +141,12 @@ export function App() {
 
   useEffect(() => {
     void api.snapshot().then(setSnap);
-    return api.onSnapshot(setSnap);
+    const offSnap = api.onSnapshot(setSnap);
+    const offUpdate = api.onUpdate(setUpdate); // found by the check at start-up
+    return () => {
+      offSnap();
+      offUpdate();
+    };
   }, []);
 
   useEffect(() => {
@@ -313,7 +326,29 @@ export function App() {
     ["finished", t("Finished")],
     ["failed", t("Failed")],
   ];
-  const later = t("Comes with the new Scheduler window");
+  // The "more" menu's entries that open a window or a dialog.
+  const menu = {
+    scheduler: () => void api.openScheduler(false),
+    newQueue: () => void api.openScheduler(true),
+    grab: () => setDialog("grab"),
+    exportList: () =>
+      void api.exportList().then(
+        (path) => path && setMessage({ title: t("Export download list…"), text: tf("The list was saved to %s.", path) }),
+        (e) => setMessage({ title: t("Export download list…"), text: String((e as Error)?.message ?? e) }),
+      ),
+    importList: () =>
+      void api.importList().then(
+        (n) => n >= 0 && setMessage({ title: t("Import download list…"), text: n === 1 ? t("1 download was added.") : tf("%d downloads were added.", n) }),
+        (e) => setMessage({ title: t("Import download list…"), text: String((e as Error)?.message ?? e) }),
+      ),
+    shortcuts: () => setDialog("shortcuts"),
+    checkUpdate: () =>
+      void api.checkUpdate().then(
+        (u) => (u.newer ? setUpdate(u) : setMessage({ title: t("Check for updates"), text: tf("You are running the latest version (%s).", u.current) })),
+        (e) => setMessage({ title: t("Check for updates"), text: tf("Could not check for updates: %s", String((e as Error)?.message ?? e)) }),
+      ),
+    about: () => setDialog("about"),
+  };
   const limiterLabel = limit > 0 ? tf("Speed limiter (%s/s)", humanBytes(limit)) : t("Speed limiter");
   const goTo = (f: Filter) => () => {
     setFilter(f);
@@ -343,6 +378,12 @@ export function App() {
       icon: Gauge,
       run: toggleLimiter,
     },
+    { id: "scheduler", group: actions, label: t("Scheduler…"), english: "Scheduler schedule queues", icon: CalendarClock, run: menu.scheduler },
+    { id: "new-queue", group: actions, label: t("New queue…"), english: "New queue", icon: ListOrdered, run: menu.newQueue },
+    { id: "grab", group: actions, label: t("Grab site…"), english: "Grab site grabber crawl", icon: Globe, run: menu.grab },
+    { id: "shortcuts", group: actions, label: t("Keyboard shortcuts"), english: "Keyboard shortcuts keys", icon: Keyboard, run: menu.shortcuts },
+    { id: "update", group: actions, label: t("Check for updates…"), english: "Check for updates", icon: RefreshCw, run: menu.checkUpdate },
+    { id: "about", group: actions, label: t("About ODM"), english: "About ODM version", icon: Info, run: menu.about },
     { id: "options", group: actions, label: t("Options…"), english: "Options settings preferences", icon: Settings, run: () => void api.openOptions("") },
     { id: "sidebar", group: actions, label: sidebar ? t("Hide sidebar") : t("Show sidebar"), english: sidebar ? "Hide sidebar" : "Show sidebar", icon: PanelLeft, run: () => setSidebar(!sidebar) },
     { id: "go-all", group: show, label: t("All downloads"), english: "All downloads", icon: Inbox, run: goTo({ kind: "all" }) },
@@ -440,13 +481,9 @@ export function App() {
               <Button variant="ghost" onClick={() => (queueRunning ? api.stopQueue(queue) : api.startQueue(queue))}>
                 {queueRunning ? <Square /> : <ListOrdered />} {queueRunning ? t("Stop queue") : t("Start queue")}
               </Button>
-              <Tooltip label={`${t("Scheduler")} · ${later}`}>
-                <span>
-                  <Button variant="ghost" disabled>
-                    <CalendarClock /> {t("Scheduler")}
-                  </Button>
-                </span>
-              </Tooltip>
+              <Button variant="ghost" onClick={menu.scheduler}>
+                <CalendarClock /> {t("Scheduler")}
+              </Button>
               <MoreMenu
                 onResumeAll={() => void api.resumeAll()}
                 onPauseAll={() => void api.pauseAll()}
@@ -457,6 +494,7 @@ export function App() {
                 onColumns={setColumns}
                 sidebar={sidebar}
                 onSidebar={setSidebar}
+                on={menu}
               />
               <Tooltip label={t("Options…")}>
                 <Button variant="ghost" size="icon" onClick={() => void api.openOptions("")} aria-label={t("Options…")}>
@@ -570,6 +608,11 @@ export function App() {
         )}
       </Dialog>
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
+      <GrabberDialog open={dialog === "grab"} onClose={() => setDialog(null)} />
+      <AboutDialog open={dialog === "about"} onClose={() => setDialog(null)} />
+      <ShortcutsDialog open={dialog === "shortcuts"} onClose={() => setDialog(null)} />
+      <UpdateDialog update={update} onClose={() => setUpdate(null)} />
+      <MessageDialog message={message} onClose={() => setMessage(null)} />
     </div>
   );
 }

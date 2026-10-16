@@ -71,6 +71,40 @@ func (w *appWindows) openOptions(tab string) {
 	w.open("options", "ODM Options", "options", url.Values{"tab": {tab}}, 820, 640, false)
 }
 
+// openScheduler opens the Scheduler, asking for a new queue's name first
+// with newQueue.
+func (w *appWindows) openScheduler(newQueue bool) {
+	q := url.Values{}
+	if newQueue {
+		q.Set("new", "1")
+	}
+	w.open("scheduler", "Scheduler", "scheduler", q, 860, 640, false)
+}
+
+// openNotice shows a scheduler notice above other windows: ODM may be
+// out of sight when a queue finishes.
+func (w *appWindows) openNotice(q url.Values) {
+	w.open("notice-"+q.Get("kind"), "ODM", "notice", q, 480, 240, true)
+}
+
+// pickOpen asks for a file to read, of the type pattern names.
+func (w *appWindows) pickOpen(filterName, pattern string) string {
+	file, err := w.app.Dialog.OpenFile().CanChooseFiles(true).AddFilter(filterName, pattern).PromptForSingleSelection()
+	if err != nil {
+		return ""
+	}
+	return file
+}
+
+// pickSave asks where to save a file, offering name.
+func (w *appWindows) pickSave(name string) string {
+	file, err := w.app.Dialog.SaveFile().SetFilename(name).PromptForSingleSelection()
+	if err != nil {
+		return ""
+	}
+	return file
+}
+
 // pickFolder asks for a folder with Windows' own dialog, starting in
 // current. The dialog wants backslashes, and reports a folder that is not
 // there as an error of its own, so such a start is left out.

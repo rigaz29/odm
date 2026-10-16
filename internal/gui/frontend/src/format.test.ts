@@ -17,6 +17,7 @@ import {
   statusKind,
   statusLabel,
   step,
+  withExt,
 } from "./format";
 import { setLanguage } from "./i18n";
 
@@ -88,6 +89,10 @@ describe("filters", () => {
     expect(matchesSearch(d, "holiday zip")).toBe(false);
     expect(looksLikeURL(" https://x.example/a.iso ")).toBe(true);
     expect(looksLikeURL("ubuntu iso")).toBe(false);
+    expect(withExt("Talk.webm", "mp4")).toBe("Talk.mp4");
+    expect(withExt("Talk 1.5", "m4a")).toBe("Talk 1.5.m4a");
+    expect(withExt("", "mp4")).toBe("");
+    expect(withExt("Talk.mp4", "")).toBe("Talk");
   });
 });
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"slices"
-	"strings"
 	"sync"
 	"time"
 
@@ -90,12 +89,25 @@ type Service struct {
 	total  []int64              // all downloads together
 	since  map[string]time.Time // when each running download started
 	now    func() time.Time     // the clock, replaceable in tests
+
+	// The New Download window's browser hand-offs (by token) and what
+	// checking addresses found (add.go), and each download's last status
+	// (noticeFinished).
+	amu      sync.Mutex
+	seq      int
+	prefills map[string]engine.AddOptions
+	probes   map[string]*probed
+	statuses map[string]engine.Status
+
+	// windows opens ODM's other windows; nil in tests.
+	windows windowOpener
 }
 
 // NewService makes the page's Service for mgr.
 func NewService(mgr *engine.Manager) *Service {
 	return &Service{mgr: mgr, wake: make(chan struct{}, 1),
-		speeds: map[string][]int64{}, since: map[string]time.Time{}, now: time.Now}
+		speeds: map[string][]int64{}, since: map[string]time.Time{}, now: time.Now,
+		prefills: map[string]engine.AddOptions{}, probes: map[string]*probed{}}
 }
 
 // Snapshot returns what the main window shows now.
@@ -104,22 +116,7 @@ func (s *Service) Snapshot() Snapshot {
 	items := make([]Item, len(list))
 	s.hmu.Lock()
 	for i, d := range list {
-		items[i] = Item{
-			ID: d.ID, URL: d.URL, FileName: d.FileName, FilePath: d.FilePath,
-			Status: string(d.Status), Error: d.Error,
-			Total: d.Total, Done: d.Done, Progress: d.Progress,
-			Category: d.Category, Queue: d.Queue, Order: d.Order, Description: d.Description,
-			Live: d.Live, Site: d.Site, Stream: d.Stream, Verifying: d.Verifying,
-			CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
-		}
-		// The engine keeps a paused download's last speed; only a
-		// running one has a speed to show.
-		if d.Status == engine.StatusDownloading {
-			items[i].Speed = d.Speed
-			items[i].Conns = connProgress(d.Chunks)
-			items[i].Speeds = slices.Clone(s.speeds[d.ID])
-			items[i].ActiveSince = s.since[d.ID]
-		}
+		items[i] = s.itemLocked(d)
 	}
 	total := slices.Clone(s.total)
 	s.hmu.Unlock()
@@ -165,6 +162,36 @@ func connProgress(chunks []engine.ChunkInfo) []float64 {
 		out[b] = sum / float64(hi-lo)
 	}
 	return out
+}
+
+// itemOf is d as the page lists it, without a running download's history.
+func itemOf(d engine.Info) Item {
+	it := Item{
+		ID: d.ID, URL: d.URL, FileName: d.FileName, FilePath: d.FilePath,
+		Status: string(d.Status), Error: d.Error,
+		Total: d.Total, Done: d.Done, Progress: d.Progress,
+		Category: d.Category, Queue: d.Queue, Order: d.Order, Description: d.Description,
+		Live: d.Live, Site: d.Site, Stream: d.Stream, Verifying: d.Verifying,
+		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
+	}
+	// The engine keeps a paused download's last speed; only a running one
+	// has a speed to show.
+	if d.Status == engine.StatusDownloading {
+		it.Speed = d.Speed
+		it.Conns = connProgress(d.Chunks)
+	}
+	return it
+}
+
+// itemLocked is itemOf with a running download's speed over the last
+// minute and when it started. The caller holds s.hmu.
+func (s *Service) itemLocked(d engine.Info) Item {
+	it := itemOf(d)
+	if d.Status == engine.StatusDownloading {
+		it.Speeds = slices.Clone(s.speeds[d.ID])
+		it.ActiveSince = s.since[d.ID]
+	}
+	return it
 }
 
 // sample records every running download's speed and the total, and when
@@ -217,6 +244,7 @@ func (s *Service) watch(ctx context.Context, interval time.Duration) {
 	for {
 		if now := s.now(); now.Sub(sampled) >= time.Second {
 			s.sample()
+			s.noticeFinished(s.mgr.List())
 			sampled = now
 		}
 		s.send()
@@ -341,18 +369,6 @@ func (s *Service) StopQueue(name string) {
 	s.poke()
 }
 
-// AddURL adds a download of address and starts it. Stage 3 brings the New
-// Download window with its probe, folder and queue choices.
-func (s *Service) AddURL(address string) (Item, error) {
-	address = strings.TrimSpace(address)
-	if !strings.HasPrefix(address, "http://") && !strings.HasPrefix(address, "https://") {
-		return Item{}, errNotHTTP
-	}
-	d := s.mgr.Create(engine.AddOptions{URL: address, Start: true})
-	s.poke()
-	return Item{ID: d.ID, FileName: d.FileName, Status: string(d.Status)}, nil
-}
-
 // OpenFile opens a finished download with its program; ShowInFolder
 // shows it in Explorer.
 func (s *Service) OpenFile(id string) error {
@@ -379,6 +395,6 @@ type serviceError string
 func (e serviceError) Error() string { return string(e) }
 
 const (
-	errNotHTTP    serviceError = "an http or https address is needed"
+	errNoAddress  serviceError = "no address"
 	errNoDownload serviceError = "no such download"
 )

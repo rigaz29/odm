@@ -24,9 +24,9 @@ import {
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, inODM } from "./api";
-import type { Appearance, Item, Snapshot } from "./bindings/odm/internal/gui/models";
+import type { Item, Snapshot } from "./bindings/odm/internal/gui/models";
 import { type ColumnId, type ColumnState, type Sort, nextSort, readColumns, readSort } from "./columns";
-import { AddUrlDialog } from "./components/AddUrlDialog";
+import { AddForm } from "./components/AddForm";
 import { type Confirm, ConfirmDialog } from "./components/ConfirmDialog";
 import { DownloadTable, type TableHandle } from "./components/DownloadTable";
 import { MoreMenu } from "./components/MoreMenu";
@@ -37,6 +37,8 @@ import { SpeedLimiter } from "./components/SpeedLimiter";
 import { TitleBar } from "./components/TitleBar";
 import { categoryIcon } from "./components/bits";
 import { Button } from "./components/ui/button";
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./components/ui/dialog";
+import { Input } from "./components/ui/input";
 import { Tooltip } from "./components/ui/tooltip";
 import {
   type Filter,
@@ -55,7 +57,7 @@ import {
   statusKind,
   step,
 } from "./format";
-import { setLanguage, t, tf } from "./i18n";
+import { t, tf } from "./i18n";
 import { cn } from "./lib/utils";
 import type { Command } from "./palette";
 
@@ -98,9 +100,7 @@ const resumableStatus = (d: Item) => d.status === "paused" || d.status === "erro
 const pausableStatus = (d: Item) => d.status === "downloading" || d.status === "queued";
 
 export function App() {
-  const [appearance, setAppearance] = useState<Appearance | null>(null);
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [systemDark, setSystemDark] = useState(() => matchMedia("(prefers-color-scheme: dark)").matches);
   const [filter, setFilter] = useState<Filter>({ kind: "all" });
   const [tab, setTab] = useState<Tab>("all");
   const [query, setQuery] = useState("");
@@ -113,8 +113,8 @@ export function App() {
   const [cardsOpen, setCardsOpen] = useState(() => load("odm.cards.open", true));
   const [adding, setAdding] = useState<string | null>(null); // the dialog's address, null when closed
   const [confirm, setConfirm] = useState<Confirm | null>(null);
+  const [readdress, setReaddress] = useState<{ item: Item; url: string; error: string; busy: boolean } | null>(null);
   const [limiterOpen, setLimiterOpen] = useState(false);
-  const [reveal, setReveal] = useState<string | null>(null); // a row to scroll to once listed
   const searchRef = useRef<HTMLInputElement>(null);
   const table = useRef<TableHandle>(null);
 
@@ -132,19 +132,8 @@ export function App() {
   };
 
   useEffect(() => {
-    void api.appearance().then((a) => {
-      setLanguage(a.language);
-      setAppearance(a);
-    });
     void api.snapshot().then(setSnap);
     return api.onSnapshot(setSnap);
-  }, []);
-
-  useEffect(() => {
-    const mq = matchMedia("(prefers-color-scheme: dark)");
-    const on = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mq.addEventListener("change", on);
-    return () => mq.removeEventListener("change", on);
   }, []);
 
   useEffect(() => {
@@ -162,11 +151,6 @@ export function App() {
     window.addEventListener("keydown", on);
     return () => window.removeEventListener("keydown", on);
   }, []);
-
-  const dark = appearance?.theme === "dark" || (appearance?.theme !== "light" && systemDark);
-  useEffect(() => {
-    document.documentElement.classList.toggle("dark", dark);
-  }, [dark]);
 
   const items = snap?.items ?? [];
   const queues = snap?.queues ?? [];
@@ -205,15 +189,6 @@ export function App() {
     if ([...selected].some((id) => !present.has(id))) setSelected(new Set([...selected].filter((id) => present.has(id))));
   }, [order, selected]);
 
-  useEffect(() => {
-    if (!reveal) return;
-    const i = order.indexOf(reveal);
-    if (i >= 0) {
-      table.current?.scrollTo(i);
-      setReveal(null);
-    }
-  }, [reveal, order]);
-
   const focusRow = (to: number, shift: boolean) => {
     if (to < 0) return;
     const id = order[to];
@@ -227,21 +202,6 @@ export function App() {
     }
     setLead(id);
     table.current?.scrollTo(to);
-  };
-
-  // showInList selects a download and scrolls to it, showing all downloads
-  // first when the sidebar, the tabs or the search hide it.
-  const showInList = (id: string) => {
-    if (!order.includes(id)) {
-      setFilter({ kind: "all" });
-      setTab("all");
-      setQuery("");
-    }
-    setSelected(new Set([id]));
-    setAnchor(id);
-    setLead(id);
-    setReveal(id);
-    table.current?.focus();
   };
 
   const askRemove = useCallback((list: Item[], withFiles: boolean) => {
@@ -262,8 +222,14 @@ export function App() {
     });
   }, []);
 
+  // open is a double click or Enter: a finished download's file, else its
+  // progress window.
+  const open = (d: Item | undefined) => d && void (d.status === "complete" ? api.openFile(d.id) : api.openProgress(d.id));
+
   const rowActions = {
-    open: () => current?.status === "complete" && void api.openFile(current.id),
+    open: () => open(current),
+    progress: () => current && void api.openProgress(current.id),
+    readdress: () => current && setReaddress({ item: current, url: current.url, error: "", busy: false }),
     folder: () => current && void api.showInFolder(current.id),
     copy: () => chosen.length > 0 && void api.copyText(chosen.map((d) => d.url).join("\n")),
     resume: () => void api.resume(resumable.map((d) => d.id)),
@@ -323,8 +289,6 @@ export function App() {
       setSelected(new Set());
     }
   };
-
-  if (!appearance) return null;
 
   const unfinished = items.filter((d) => d.status !== "complete").length;
   const filterTitle = (f: Filter) =>
@@ -448,7 +412,7 @@ export function App() {
               save("odm.cards.open", !cardsOpen);
             }}
             onShowAll={goTo({ kind: "running" })}
-            onOpen={(d) => showInList(d.id)}
+            onOpen={(d) => void api.openProgress(d.id)}
           />
 
           <div className="flex items-center gap-2 px-6 pb-3">
@@ -519,9 +483,9 @@ export function App() {
               setAnchor(id);
               setLead(id);
             }}
-            onOpen={(d) => d.status === "complete" && void api.openFile(d.id)}
+            onOpen={open}
             onKeyDown={onKeyDown}
-            rowMenu={<RowMenu chosen={chosen} queues={queues} can={{ open: current?.status === "complete", resume: resumable.length > 0, pause: pausable.length > 0 }} on={rowActions} />}
+            rowMenu={<RowMenu chosen={chosen} current={current} queues={queues} can={{ open: current?.status === "complete", resume: resumable.length > 0, pause: pausable.length > 0 }} on={rowActions} />}
             empty={
               <div className="flex flex-col items-center gap-3 text-center">
                 <span className="flex size-12 items-center justify-center rounded-xl border border-border bg-muted">
@@ -562,14 +526,50 @@ export function App() {
         </SpeedLimiter>
       </footer>
 
-      <AddUrlDialog
-        open={adding !== null}
-        initial={adding ?? ""}
-        onClose={() => setAdding(null)}
-        onAdd={async (url) => {
-          await api.addURL(url);
-        }}
-      />
+      <Dialog open={adding !== null} onOpenChange={(o) => !o && setAdding(null)}>
+        <DialogContent className="max-w-2xl" onOpenAutoFocus={(e) => e.preventDefault()}>
+          <div className="space-y-1 pr-6">
+            <DialogTitle>{t("New Download")}</DialogTitle>
+            <DialogDescription>{t("Paste the address of a file, a stream or a video page.")}</DialogDescription>
+          </div>
+          {adding !== null && <AddForm token="" initialURL={adding} onDone={() => setAdding(null)} />}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={readdress !== null} onOpenChange={(o) => !o && setReaddress(null)}>
+        {readdress && (
+          <DialogContent className="max-w-xl">
+            <div className="space-y-1 pr-6">
+              <DialogTitle>{t("Refresh download address")}</DialogTitle>
+              <DialogDescription className="truncate">{displayName(readdress.item)}</DialogDescription>
+            </div>
+            <form
+              className="space-y-3"
+              onSubmit={(e) => {
+                e.preventDefault();
+                const url = readdress.url.trim();
+                if (!url || url === readdress.item.url) return setReaddress(null);
+                setReaddress({ ...readdress, busy: true, error: "" });
+                api.readdress(readdress.item.id, url).then(
+                  () => setReaddress(null),
+                  (err) => setReaddress((r) => r && { ...r, busy: false, error: String((err as Error)?.message ?? err) }),
+                );
+              }}
+            >
+              <Input autoFocus value={readdress.url} onChange={(e) => setReaddress({ ...readdress, url: e.target.value })} spellCheck={false} />
+              <p className="text-xs text-muted-foreground">{t("Paste the new address of the same file. Progress is kept if the server supports resuming.")}</p>
+              {readdress.error && <p className="text-xs text-red-600 dark:text-red-400">{readdress.error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button type="button" onClick={() => setReaddress(null)}>
+                  {t("Cancel")}
+                </Button>
+                <Button type="submit" variant="brand" disabled={readdress.busy}>
+                  {t("Change")}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        )}
+      </Dialog>
       <ConfirmDialog confirm={confirm} onClose={() => setConfirm(null)} />
     </div>
   );

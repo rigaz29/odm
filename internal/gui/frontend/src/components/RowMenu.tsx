@@ -1,8 +1,7 @@
-// The list's context menu, for the selected downloads; the Fyne UI's row
-// menu, without the windows that come in Stage 3 (progress, refreshing
-// the address).
+// The list's context menu, for the selected downloads, as the Fyne UI's
+// row menu.
 
-import { ArrowDown, ArrowUp, Copy, FolderOpen, ListOrdered, Pause, Play, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, Copy, FolderOpen, Link2, ListOrdered, Pause, Play, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import type { Item } from "../bindings/odm/internal/gui/models";
 import { t } from "../i18n";
 import {
@@ -17,6 +16,8 @@ import {
 
 export interface RowActions {
   open(): void;
+  progress(): void;
+  readdress(): void;
   folder(): void;
   copy(): void;
   resume(): void;
@@ -26,13 +27,20 @@ export interface RowActions {
   remove(withFiles: boolean): void;
 }
 
-export function RowMenu({ chosen, queues, can, on }: { chosen: Item[]; queues: string[]; can: { open: boolean; resume: boolean; pause: boolean }; on: RowActions }) {
+export function RowMenu({ chosen, current, queues, can, on }: { chosen: Item[]; current?: Item; queues: string[]; can: { open: boolean; resume: boolean; pause: boolean }; on: RowActions }) {
   const one = chosen.length === 1 && chosen[0].status !== "complete";
+  // Only an unfinished, stopped download takes a new address: the engine
+  // refuses others.
+  const readdress = !!current && !["complete", "downloading", "queued"].includes(current.status);
   return (
     <>
+      <ContextMenuItem disabled={!current || current.status === "complete"} onSelect={on.progress}>
+        <Activity /> {t("Show progress")}
+        {current?.status !== "complete" && <ContextMenuShortcut>Enter</ContextMenuShortcut>}
+      </ContextMenuItem>
       <ContextMenuItem disabled={!can.open} onSelect={on.open}>
         <SquareArrowOutUpRight /> {t("Open file")}
-        <ContextMenuShortcut>Enter</ContextMenuShortcut>
+        {can.open && <ContextMenuShortcut>Enter</ContextMenuShortcut>}
       </ContextMenuItem>
       <ContextMenuItem disabled={chosen.length === 0} onSelect={on.folder}>
         <FolderOpen /> {t("Show in folder")}
@@ -40,6 +48,9 @@ export function RowMenu({ chosen, queues, can, on }: { chosen: Item[]; queues: s
       <ContextMenuItem disabled={chosen.length === 0} onSelect={on.copy}>
         <Copy /> {t("Copy address")}
         <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
+      </ContextMenuItem>
+      <ContextMenuItem disabled={!readdress} onSelect={on.readdress}>
+        <Link2 /> {t("Refresh download address…")}
       </ContextMenuItem>
       <ContextMenuSeparator />
       <ContextMenuItem disabled={!can.resume} onSelect={on.resume}>

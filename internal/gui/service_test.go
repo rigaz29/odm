@@ -91,20 +91,13 @@ func TestWatchSendsChanges(t *testing.T) {
 	}
 }
 
-func TestAddURL(t *testing.T) {
-	svc, mgr := newTestService(t)
-	if _, err := svc.AddURL("ftp://x/y"); err == nil {
-		t.Fatal("a non-http address was added")
-	}
-	it, err := svc.AddURL("  http://127.0.0.1:9/z.iso ")
-	if err != nil || it.ID == "" {
-		t.Fatalf("%+v %v", it, err)
-	}
-	if d, ok := mgr.Get(it.ID); !ok || d.URL != "http://127.0.0.1:9/z.iso" {
-		t.Fatalf("download %+v %v", d, ok)
-	}
+func TestOpenUnknown(t *testing.T) {
+	svc, _ := newTestService(t)
 	if err := svc.OpenFile("nope"); err == nil {
 		t.Fatal("an unknown download was opened")
+	}
+	if err := svc.ShowInFolder("nope"); err == nil {
+		t.Fatal("an unknown download was shown")
 	}
 }
 

@@ -17,11 +17,10 @@ import { Call as $Call, CancellablePromise as $CancellablePromise, Create as $Cr
 import * as $models from "./models.js";
 
 /**
- * AddURL adds a download of address and starts it. Stage 3 brings the New
- * Download window with its probe, folder and queue choices.
+ * AddDefaults returns what a new form starts with.
  */
-export function AddURL(address: string): $CancellablePromise<$models.Item> {
-    return $Call.ByID(2469866280, address).then(($result: any) => {
+export function AddDefaults(): $CancellablePromise<$models.AddDefaults> {
+    return $Call.ByID(3192362257).then(($result: any) => {
         return $$createType0($result);
     });
 }
@@ -41,6 +40,32 @@ export function Appearance(): $CancellablePromise<$models.Appearance> {
  */
 export function ClearCompleted(): $CancellablePromise<number> {
     return $Call.ByID(2825398806);
+}
+
+/**
+ * Create adds the download the form describes, and starts it with Start.
+ * An address already in the list comes back as Duplicate unless Again.
+ */
+export function Create(r: $models.CreateRequest): $CancellablePromise<$models.CreateResult> {
+    return $Call.ByID(899203712, r).then(($result: any) => {
+        return $$createType2($result);
+    });
+}
+
+/**
+ * Detail returns the download id for its progress window.
+ */
+export function Detail(id: string): $CancellablePromise<$models.Detail> {
+    return $Call.ByID(1107382821, id).then(($result: any) => {
+        return $$createType3($result);
+    });
+}
+
+/**
+ * DropPrefill forgets a hand-off once its window closed.
+ */
+export function DropPrefill(token: string): $CancellablePromise<void> {
+    return $Call.ByID(2201999727, token);
 }
 
 /**
@@ -67,6 +92,13 @@ export function OpenFile(id: string): $CancellablePromise<void> {
 }
 
 /**
+ * OpenProgress opens (or brings forward) the download id's progress window.
+ */
+export function OpenProgress(id: string): $CancellablePromise<void> {
+    return $Call.ByID(844258943, id);
+}
+
+/**
  * Pause stops the downloads ids, keeping what they have.
  */
 export function Pause(ids: string[]): $CancellablePromise<void> {
@@ -78,6 +110,41 @@ export function Pause(ids: string[]): $CancellablePromise<void> {
  */
 export function PauseAll(): $CancellablePromise<void> {
     return $Call.ByID(1892458477);
+}
+
+/**
+ * PickFolder asks for a folder, starting at current; "" when cancelled.
+ */
+export function PickFolder(current: string): $CancellablePromise<string> {
+    return $Call.ByID(3899440901, current);
+}
+
+/**
+ * Prefill returns the browser's hand-off for the window token opened.
+ */
+export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> {
+    return $Call.ByID(1597545184, token).then(($result: any) => {
+        return $$createType4($result);
+    });
+}
+
+/**
+ * Probe checks address: a file's size and name, a playlist's qualities, a
+ * video page's qualities through yt-dlp. token is the browser's prefill,
+ * whose headers the check sends and whose quality it selects.
+ */
+export function Probe(address: string, token: string): $CancellablePromise<$models.ProbeResult> {
+    return $Call.ByID(3587570774, address, token).then(($result: any) => {
+        return $$createType5($result);
+    });
+}
+
+/**
+ * Readdress points the unfinished download id at a new address of the same
+ * file, for links that expire.
+ */
+export function Readdress(id: string, address: string): $CancellablePromise<void> {
+    return $Call.ByID(2490811587, id, address);
 }
 
 /**
@@ -103,6 +170,27 @@ export function ResumeAll(): $CancellablePromise<void> {
 }
 
 /**
+ * SetCompleteDialog turns the download complete window on or off.
+ */
+export function SetCompleteDialog(on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2825299743, on);
+}
+
+/**
+ * SetDownloadLimit caps the download id's own speed; 0 lifts the cap.
+ */
+export function SetDownloadLimit(id: string, bytesPerSecond: number): $CancellablePromise<void> {
+    return $Call.ByID(2035846167, id, bytesPerSecond);
+}
+
+/**
+ * SetOpenWhenDone has the download id's file opened once it finishes.
+ */
+export function SetOpenWhenDone(id: string, on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(1198180316, id, on);
+}
+
+/**
  * SetSpeedLimiter turns the speed limit for all downloads on or off. A
  * bytesPerSecond above 0 also sets the limit; 0 keeps the one saved.
  */
@@ -119,7 +207,7 @@ export function ShowInFolder(id: string): $CancellablePromise<void> {
  */
 export function Snapshot(): $CancellablePromise<$models.Snapshot> {
     return $Call.ByID(2559731168).then(($result: any) => {
-        return $$createType2($result);
+        return $$createType6($result);
     });
 }
 
@@ -142,7 +230,21 @@ export function StopQueue(name: string): $CancellablePromise<void> {
     return $Call.ByID(1916889395, name);
 }
 
+/**
+ * ZipPreview lists a ZIP archive's contents, reading only its end.
+ */
+export function ZipPreview(address: string, token: string): $CancellablePromise<$models.ZipListing> {
+    return $Call.ByID(1010280861, address, token).then(($result: any) => {
+        return $$createType7($result);
+    });
+}
+
 // Private type creation functions
-const $$createType0 = $models.Item.createFrom;
+const $$createType0 = $models.AddDefaults.createFrom;
 const $$createType1 = $models.Appearance.createFrom;
-const $$createType2 = $models.Snapshot.createFrom;
+const $$createType2 = $models.CreateResult.createFrom;
+const $$createType3 = $models.Detail.createFrom;
+const $$createType4 = $models.AddPrefill.createFrom;
+const $$createType5 = $models.ProbeResult.createFrom;
+const $$createType6 = $models.Snapshot.createFrom;
+const $$createType7 = $models.ZipListing.createFrom;

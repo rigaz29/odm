@@ -7,7 +7,18 @@ export {
 };
 
 export {
+    AddDefaults,
+    AddPrefill,
     Appearance,
+    Card,
+    Chunk,
+    CreateRequest,
+    CreateResult,
+    Detail,
     Item,
-    Snapshot
+    ProbeResult,
+    Quality,
+    Snapshot,
+    ZipEntry,
+    ZipListing
 } from "./models.js";

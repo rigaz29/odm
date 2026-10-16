@@ -18,7 +18,7 @@ function Card({ d, onOpen }: { d: Item; onOpen: () => void }) {
     <div
       role="button"
       tabIndex={0}
-      title={t("Show in the list")}
+      title={t("Show progress")}
       onClick={onOpen}
       onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
       className="flex min-w-0 cursor-default flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5 shadow-xs outline-none transition-colors hover:border-ring/40 focus-visible:ring-2 focus-visible:ring-ring/50"

@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 
 	"odm/internal/engine"
 )
@@ -26,8 +27,8 @@ type Options struct {
 	// Show receives a value whenever another ODM launch asks this one to
 	// bring its window forward.
 	Show <-chan struct{}
-	// Prompt receives downloads handed over by the browser. Without the
-	// New Download window (stage 3) they are added at once.
+	// Prompt receives downloads handed over by the browser, each shown in
+	// a New Download window.
 	Prompt <-chan engine.AddOptions
 	// Hidden would start in the tray, which stage 4 brings: the window
 	// shows anyway.
@@ -98,12 +99,19 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		},
 	})
 
+	windows := &appWindows{app: app, background: background, theme: windowTheme(look.Theme)}
+	svc.mu.Lock()
+	svc.windows = windows
+	svc.mu.Unlock()
+	// The other windows close with the main one: until ODM has a tray
+	// (stage 4), closing the main window quits.
+	win.OnWindowEvent(events.Common.WindowClosing, func(*application.WindowEvent) { app.Quit() })
+
 	go svc.watch(ctx, 500*time.Millisecond)
 	if opts.Prompt != nil {
 		go func() {
 			for o := range opts.Prompt {
-				mgr.AddAuto(o)
-				svc.poke()
+				windows.openAdd(svc.keepPrefill(o))
 			}
 		}()
 	}

@@ -6,6 +6,100 @@
 import { Create as $Create } from "@wailsio/runtime";
 
 /**
+ * AddDefaults are what an empty New Download form starts with.
+ */
+export class AddDefaults {
+    "folder": string;
+    "connections": number;
+    "categories": string[];
+    "queues": string[];
+    "queue": string;
+
+    /** Creates a new AddDefaults instance. */
+    constructor($$source: Partial<AddDefaults> = {}) {
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+        if (!("connections" in $$source)) {
+            this["connections"] = 0;
+        }
+        if (!("categories" in $$source)) {
+            this["categories"] = [];
+        }
+        if (!("queues" in $$source)) {
+            this["queues"] = [];
+        }
+        if (!("queue" in $$source)) {
+            this["queue"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AddDefaults instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AddDefaults {
+        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("categories" in $$parsedSource) {
+            $$parsedSource["categories"] = $$createField2_0($$parsedSource["categories"]);
+        }
+        if ("queues" in $$parsedSource) {
+            $$parsedSource["queues"] = $$createField3_0($$parsedSource["queues"]);
+        }
+        return new AddDefaults($$parsedSource as Partial<AddDefaults>);
+    }
+}
+
+/**
+ * AddPrefill is a download the browser handed over, for the window it
+ * opens: Site and Stream say the address is a video page or a playlist,
+ * whose qualities the check lists.
+ */
+export class AddPrefill {
+    "url": string;
+    "fileName": string;
+    "category": string;
+    "description": string;
+    "site": boolean;
+    "stream": boolean;
+
+    /** Creates a new AddPrefill instance. */
+    constructor($$source: Partial<AddPrefill> = {}) {
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            this["fileName"] = "";
+        }
+        if (!("category" in $$source)) {
+            this["category"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = false;
+        }
+        if (!("stream" in $$source)) {
+            this["stream"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new AddPrefill instance from a string or object.
+     */
+    static createFrom($$source: any = {}): AddPrefill {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new AddPrefill($$parsedSource as Partial<AddPrefill>);
+    }
+}
+
+/**
  * Appearance is how the page should look.
  */
 export class Appearance {
@@ -37,6 +131,324 @@ export class Appearance {
     static createFrom($$source: any = {}): Appearance {
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         return new Appearance($$parsedSource as Partial<Appearance>);
+    }
+}
+
+/**
+ * Card is what checking an address found, in the card under the form.
+ * Title and Detail are English texts the page translates; Name is a file
+ * name or a video's title, shown as it is; Error is the engine's reason.
+ */
+export class Card {
+    /**
+     * State is "idle", "file", "stream", "site", "warn" or "problem".
+     */
+    "state": string;
+    "title": string;
+    "detail": string;
+    "name": string;
+    "error": string;
+
+    /**
+     * A file: its size (0 unknown), type, server and whether it resumes.
+     */
+    "size": number;
+    "contentType": string;
+    "host": string;
+    "resumable": boolean;
+
+    /**
+     * A stream: "HLS", "DASH" or "HTTP", and the playlist's note. A
+     * video site: its name ("" for one yt-dlp reads but ODM does not know).
+     */
+    "format": string;
+    "note": string;
+    "site": string;
+
+    /** Creates a new Card instance. */
+    constructor($$source: Partial<Card> = {}) {
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("title" in $$source)) {
+            this["title"] = "";
+        }
+        if (!("detail" in $$source)) {
+            this["detail"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("error" in $$source)) {
+            this["error"] = "";
+        }
+        if (!("size" in $$source)) {
+            this["size"] = 0;
+        }
+        if (!("contentType" in $$source)) {
+            this["contentType"] = "";
+        }
+        if (!("host" in $$source)) {
+            this["host"] = "";
+        }
+        if (!("resumable" in $$source)) {
+            this["resumable"] = false;
+        }
+        if (!("format" in $$source)) {
+            this["format"] = "";
+        }
+        if (!("note" in $$source)) {
+            this["note"] = "";
+        }
+        if (!("site" in $$source)) {
+            this["site"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Card instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Card {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Card($$parsedSource as Partial<Card>);
+    }
+}
+
+/**
+ * Chunk is one connection's part of a file.
+ */
+export class Chunk {
+    "start": number;
+    "end": number;
+    "done": number;
+    "state": string;
+
+    /** Creates a new Chunk instance. */
+    constructor($$source: Partial<Chunk> = {}) {
+        if (!("start" in $$source)) {
+            this["start"] = 0;
+        }
+        if (!("end" in $$source)) {
+            this["end"] = 0;
+        }
+        if (!("done" in $$source)) {
+            this["done"] = 0;
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Chunk instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Chunk {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new Chunk($$parsedSource as Partial<Chunk>);
+    }
+}
+
+/**
+ * CreateRequest is the form, sent by Start Download and Download Later.
+ */
+export class CreateRequest {
+    /**
+     * the browser's prefill, "" for none
+     */
+    "token": string;
+    "url": string;
+    "folder": string;
+    "fileName": string;
+    "description": string;
+    "checksum": string;
+    "category": string;
+    "queue": string;
+    "connections": number;
+    "quality": number;
+    "audio": number;
+    "start": boolean;
+
+    /**
+     * Again adds an address already in the list once more.
+     */
+    "again": boolean;
+
+    /** Creates a new CreateRequest instance. */
+    constructor($$source: Partial<CreateRequest> = {}) {
+        if (!("token" in $$source)) {
+            this["token"] = "";
+        }
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            this["fileName"] = "";
+        }
+        if (!("description" in $$source)) {
+            this["description"] = "";
+        }
+        if (!("checksum" in $$source)) {
+            this["checksum"] = "";
+        }
+        if (!("category" in $$source)) {
+            this["category"] = "";
+        }
+        if (!("queue" in $$source)) {
+            this["queue"] = "";
+        }
+        if (!("connections" in $$source)) {
+            this["connections"] = 0;
+        }
+        if (!("quality" in $$source)) {
+            this["quality"] = 0;
+        }
+        if (!("audio" in $$source)) {
+            this["audio"] = 0;
+        }
+        if (!("start" in $$source)) {
+            this["start"] = false;
+        }
+        if (!("again" in $$source)) {
+            this["again"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreateRequest instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreateRequest {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new CreateRequest($$parsedSource as Partial<CreateRequest>);
+    }
+}
+
+/**
+ * CreateResult is the new download, or the one already in the list with
+ * the same address (Duplicate; ID is then "").
+ */
+export class CreateResult {
+    "id": string;
+    "duplicate": Item | null;
+
+    /** Creates a new CreateResult instance. */
+    constructor($$source: Partial<CreateResult> = {}) {
+        if (!("id" in $$source)) {
+            this["id"] = "";
+        }
+        if (!("duplicate" in $$source)) {
+            this["duplicate"] = null;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new CreateResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): CreateResult {
+        const $$createField1_0 = $$createType2;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("duplicate" in $$parsedSource) {
+            $$parsedSource["duplicate"] = $$createField1_0($$parsedSource["duplicate"]);
+        }
+        return new CreateResult($$parsedSource as Partial<CreateResult>);
+    }
+}
+
+/**
+ * Detail is one download as its progress window shows it.
+ */
+export class Detail {
+    "item": Item;
+
+    /**
+     * where the file is saved, "" before it has a name
+     */
+    "path": string;
+    "checksum": string;
+
+    /**
+     * "SHA-256", for a checksum to check
+     */
+    "checksumName": string;
+    "resumable": boolean;
+
+    /**
+     * this download's own, 0 for none
+     */
+    "speedLimit": number;
+    "openWhenDone": boolean;
+    "segments": number;
+    "segmentsDone": number;
+    "chunks": Chunk[];
+
+    /**
+     * CompleteDialog is the setting "Show the download complete dialog".
+     */
+    "completeDialog": boolean;
+
+    /** Creates a new Detail instance. */
+    constructor($$source: Partial<Detail> = {}) {
+        if (!("item" in $$source)) {
+            this["item"] = (new Item());
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("checksum" in $$source)) {
+            this["checksum"] = "";
+        }
+        if (!("checksumName" in $$source)) {
+            this["checksumName"] = "";
+        }
+        if (!("resumable" in $$source)) {
+            this["resumable"] = false;
+        }
+        if (!("speedLimit" in $$source)) {
+            this["speedLimit"] = 0;
+        }
+        if (!("openWhenDone" in $$source)) {
+            this["openWhenDone"] = false;
+        }
+        if (!("segments" in $$source)) {
+            this["segments"] = 0;
+        }
+        if (!("segmentsDone" in $$source)) {
+            this["segmentsDone"] = 0;
+        }
+        if (!("chunks" in $$source)) {
+            this["chunks"] = [];
+        }
+        if (!("completeDialog" in $$source)) {
+            this["completeDialog"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Detail instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Detail {
+        const $$createField0_0 = $$createType1;
+        const $$createField9_0 = $$createType4;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("item" in $$parsedSource) {
+            $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
+        }
+        if ("chunks" in $$parsedSource) {
+            $$parsedSource["chunks"] = $$createField9_0($$parsedSource["chunks"]);
+        }
+        return new Detail($$parsedSource as Partial<Detail>);
     }
 }
 
@@ -164,8 +576,8 @@ export class Item {
      * Creates a new Item instance from a string or object.
      */
     static createFrom($$source: any = {}): Item {
-        const $$createField20_0 = $$createType0;
-        const $$createField21_0 = $$createType1;
+        const $$createField20_0 = $$createType5;
+        const $$createField21_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("conns" in $$parsedSource) {
             $$parsedSource["conns"] = $$createField20_0($$parsedSource["conns"]);
@@ -174,6 +586,129 @@ export class Item {
             $$parsedSource["speeds"] = $$createField21_0($$parsedSource["speeds"]);
         }
         return new Item($$parsedSource as Partial<Item>);
+    }
+}
+
+/**
+ * ProbeResult is the answer for one address.
+ */
+export class ProbeResult {
+    "url": string;
+    "card": Card;
+
+    /**
+     * Kind is "file", "stream" or "site"; "" when the address could not
+     * be checked.
+     */
+    "kind": string;
+
+    /**
+     * FileName and Category are suggestions for empty fields; Video asks
+     * for the Video category (a stream or a video page).
+     */
+    "fileName": string;
+    "category": string;
+    "video": boolean;
+    "qualities": Quality[];
+
+    /**
+     * the one to select
+     */
+    "quality": number;
+
+    /**
+     * Zip offers a preview of the archive's contents.
+     */
+    "zip": boolean;
+
+    /** Creates a new ProbeResult instance. */
+    constructor($$source: Partial<ProbeResult> = {}) {
+        if (!("url" in $$source)) {
+            this["url"] = "";
+        }
+        if (!("card" in $$source)) {
+            this["card"] = (new Card());
+        }
+        if (!("kind" in $$source)) {
+            this["kind"] = "";
+        }
+        if (!("fileName" in $$source)) {
+            this["fileName"] = "";
+        }
+        if (!("category" in $$source)) {
+            this["category"] = "";
+        }
+        if (!("video" in $$source)) {
+            this["video"] = false;
+        }
+        if (!("qualities" in $$source)) {
+            this["qualities"] = [];
+        }
+        if (!("quality" in $$source)) {
+            this["quality"] = 0;
+        }
+        if (!("zip" in $$source)) {
+            this["zip"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ProbeResult instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ProbeResult {
+        const $$createField1_0 = $$createType7;
+        const $$createField6_0 = $$createType9;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("card" in $$parsedSource) {
+            $$parsedSource["card"] = $$createField1_0($$parsedSource["card"]);
+        }
+        if ("qualities" in $$parsedSource) {
+            $$parsedSource["qualities"] = $$createField6_0($$parsedSource["qualities"]);
+        }
+        return new ProbeResult($$parsedSource as Partial<ProbeResult>);
+    }
+}
+
+/**
+ * Quality is one quality the address offers, with its audio tracks (none:
+ * the audio is in the video) and, for a video page, its container.
+ */
+export class Quality {
+    "label": string;
+    "estimate": number;
+    "audios": string[];
+    "ext": string;
+
+    /** Creates a new Quality instance. */
+    constructor($$source: Partial<Quality> = {}) {
+        if (!("label" in $$source)) {
+            this["label"] = "";
+        }
+        if (!("estimate" in $$source)) {
+            this["estimate"] = 0;
+        }
+        if (!("audios" in $$source)) {
+            this["audios"] = [];
+        }
+        if (!("ext" in $$source)) {
+            this["ext"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new Quality instance from a string or object.
+     */
+    static createFrom($$source: any = {}): Quality {
+        const $$createField2_0 = $$createType0;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("audios" in $$parsedSource) {
+            $$parsedSource["audios"] = $$createField2_0($$parsedSource["audios"]);
+        }
+        return new Quality($$parsedSource as Partial<Quality>);
     }
 }
 
@@ -234,11 +769,11 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField0_0 = $$createType3;
-        const $$createField1_0 = $$createType4;
-        const $$createField2_0 = $$createType4;
-        const $$createField3_0 = $$createType4;
-        const $$createField6_0 = $$createType1;
+        const $$createField0_0 = $$createType10;
+        const $$createField1_0 = $$createType0;
+        const $$createField2_0 = $$createType0;
+        const $$createField3_0 = $$createType0;
+        const $$createField6_0 = $$createType6;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -259,9 +794,97 @@ export class Snapshot {
     }
 }
 
+/**
+ * ZipEntry is one file or folder in a ZIP archive.
+ */
+export class ZipEntry {
+    "name": string;
+    "size": number;
+    "modified": string;
+    "dir": boolean;
+    "encrypted": boolean;
+
+    /** Creates a new ZipEntry instance. */
+    constructor($$source: Partial<ZipEntry> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("size" in $$source)) {
+            this["size"] = 0;
+        }
+        if (!("modified" in $$source)) {
+            this["modified"] = "0001-01-01T00:00:00.000Z";
+        }
+        if (!("dir" in $$source)) {
+            this["dir"] = false;
+        }
+        if (!("encrypted" in $$source)) {
+            this["encrypted"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ZipEntry instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ZipEntry {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ZipEntry($$parsedSource as Partial<ZipEntry>);
+    }
+}
+
+/**
+ * ZipListing is what an archive holds and how much was read to list it.
+ */
+export class ZipListing {
+    "entries": ZipEntry[];
+    "files": number;
+    "size": number;
+    "fetched": number;
+
+    /** Creates a new ZipListing instance. */
+    constructor($$source: Partial<ZipListing> = {}) {
+        if (!("entries" in $$source)) {
+            this["entries"] = [];
+        }
+        if (!("files" in $$source)) {
+            this["files"] = 0;
+        }
+        if (!("size" in $$source)) {
+            this["size"] = 0;
+        }
+        if (!("fetched" in $$source)) {
+            this["fetched"] = 0;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ZipListing instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ZipListing {
+        const $$createField0_0 = $$createType12;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("entries" in $$parsedSource) {
+            $$parsedSource["entries"] = $$createField0_0($$parsedSource["entries"]);
+        }
+        return new ZipListing($$parsedSource as Partial<ZipListing>);
+    }
+}
+
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
-const $$createType1 = $Create.Array($Create.Any);
-const $$createType2 = Item.createFrom;
-const $$createType3 = $Create.Array($$createType2);
-const $$createType4 = $Create.Array($Create.Any);
+const $$createType1 = Item.createFrom;
+const $$createType2 = $Create.Nullable($$createType1);
+const $$createType3 = Chunk.createFrom;
+const $$createType4 = $Create.Array($$createType3);
+const $$createType5 = $Create.Array($Create.Any);
+const $$createType6 = $Create.Array($Create.Any);
+const $$createType7 = Card.createFrom;
+const $$createType8 = Quality.createFrom;
+const $$createType9 = $Create.Array($$createType8);
+const $$createType10 = $Create.Array($$createType1);
+const $$createType11 = ZipEntry.createFrom;
+const $$createType12 = $Create.Array($$createType11);

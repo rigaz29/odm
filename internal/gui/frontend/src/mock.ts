@@ -1,10 +1,26 @@
 // A stand-in for ODM in a plain browser: made-up downloads in every state,
 // some of them running, whose progress, connections and speeds move every
 // half second as ODM's snapshots do. ?n=1000 makes a thousand; ?lang=en and
-// ?theme=dark|light set the look.
+// ?theme=dark|light set the look. The New Download form checks made-up
+// addresses: a YouTube page, an .m3u8 playlist, a .zip, "missing", or any
+// other file; ?view=add&token=demo opens it prefilled as the browser would.
 
 import type { Api } from "./api";
-import { Appearance, Item, Snapshot } from "./bindings/odm/internal/gui/models";
+import {
+  AddDefaults,
+  AddPrefill,
+  Appearance,
+  Card,
+  Chunk,
+  CreateResult,
+  Detail,
+  Item,
+  ProbeResult,
+  Quality,
+  Snapshot,
+  ZipEntry,
+  ZipListing,
+} from "./bindings/odm/internal/gui/models";
 
 const categories = ["Video", "Audio", "Documents", "Programs", "Compressed", "Images", "Disk Images", "Other"];
 const GB = 1024 ** 3;
@@ -76,6 +92,9 @@ export function mockApi(): Api {
   const queues = ["Main", "Malam hari"];
   const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
+  const limits = new Map<string, number>();
+  const openWhenDone = new Set<string>();
+  let completeDialog = true;
   const base = new Map<string, number>(); // each download's speed before the jitter
   const subs = new Set<(s: Snapshot) => void>();
   const snap = () =>
@@ -177,15 +196,104 @@ export function mockApi(): Api {
       running = running.filter((r) => r !== name);
       push();
     },
-    addURL: async (address) => {
-      const name = decodeURIComponent(address.split("/").pop() || "download");
-      const d = makeItems(1)[0];
-      Object.assign(d, { id: `n${Date.now()}`, url: address, fileName: name, status: "downloading", done: 0, progress: 0, createdAt: new Date().toISOString() });
-      items = [...items, d];
-      push();
-      return d;
-    },
     openFile: async () => {},
     showInFolder: async () => {},
+
+    addDefaults: async () => new AddDefaults({ folder: String.raw`C:\Users\me\Downloads`, connections: 8, categories, queues, queue: "Main" }),
+    prefill: async (token) =>
+      new AddPrefill(
+        token === "demo"
+          ? { url: "https://releases.ubuntu.com/24.04/ubuntu-24.04.1-desktop-amd64.iso", fileName: "", description: "Dari Chrome" }
+          : token === "video"
+            ? { url: "https://www.youtube.com/watch?v=ISS-live", site: true }
+            : {},
+      ),
+    dropPrefill: async () => {},
+    probe: async (address) => {
+      await new Promise((r) => setTimeout(r, 350));
+      const url = address.trim();
+      const name = decodeURIComponent(url.split("?")[0].split("/").pop() || "");
+      if (!url) return new ProbeResult({ url, card: new Card({ state: "idle", title: "No address yet", detail: "Paste or type one: ODM checks the file's size and type before adding it." }) });
+      if (/youtube\.com|youtu\.be/.test(url)) {
+        return new ProbeResult({
+          url, kind: "site", video: true, fileName: "Siaran NASA — ISS Earth View",
+          card: new Card({ state: "site", name: "Siaran NASA — ISS Earth View", site: "YouTube" }),
+          qualities: [
+            new Quality({ label: "1080p60 · MP4", estimate: 412 * MB, ext: "mp4" }),
+            new Quality({ label: "720p · MP4", estimate: 198 * MB, ext: "mp4" }),
+            new Quality({ label: "Audio · M4A", estimate: 18 * MB, ext: "m4a" }),
+          ],
+        });
+      }
+      if (/\.m3u8/.test(url)) {
+        return new ProbeResult({
+          url, kind: "stream", video: true,
+          card: new Card({ state: "stream", format: "HLS", note: "" }),
+          qualities: [
+            new Quality({ label: "1920×1080 · 5,0 Mbit/s", estimate: 1.2 * GB, audios: ["English", "Deutsch"] }),
+            new Quality({ label: "1280×720 · 0,8 Mbit/s", estimate: 210 * MB, audios: ["English", "Deutsch"] }),
+          ],
+        });
+      }
+      if (/missing/.test(url)) return new ProbeResult({ url, card: new Card({ state: "problem", title: "The file could not be checked", error: "404 Not Found" }) });
+      const zip = /\.zip$/i.test(name);
+      return new ProbeResult({
+        url, kind: "file", fileName: name, category: zip ? "Compressed" : /\.iso$/i.test(name) ? "Disk Images" : "Other", zip,
+        card: new Card({ state: "file", name, size: zip ? 512 * MB : 5.8 * GB, contentType: zip ? "application/zip" : "application/x-iso9660-image", host: new URL(url).hostname, resumable: true }),
+      });
+    },
+    create: async (req) => {
+      const dup = items.find((d) => d.url === req.url.trim());
+      if (dup && !req.again) return new CreateResult({ id: "", duplicate: new Item(dup) });
+      const d = makeItems(1)[0];
+      Object.assign(d, {
+        id: `n${Date.now()}`, url: req.url.trim(), fileName: req.fileName, category: req.category, queue: req.queue, description: req.description,
+        status: req.start ? "downloading" : "paused", done: 0, progress: 0, speed: req.start ? 4 * MB : 0, createdAt: new Date().toISOString(),
+      });
+      items = [...items, d];
+      push();
+      return new CreateResult({ id: d.id });
+    },
+    zipPreview: async () => {
+      await new Promise((r) => setTimeout(r, 400));
+      const at = new Date(2026, 8, 3, 14, 20).toISOString();
+      return new ZipListing({
+        files: 4, size: 1.4 * GB, fetched: 38 * 1024,
+        entries: [
+          new ZipEntry({ name: "lofi-vol3/", dir: true, modified: at }),
+          new ZipEntry({ name: "lofi-vol3/01 - Hujan Sore.flac", size: 41 * MB, modified: at }),
+          new ZipEntry({ name: "lofi-vol3/02 - Kopi Pagi.flac", size: 38 * MB, modified: at }),
+          new ZipEntry({ name: "lofi-vol3/cover.jpg", size: 2.1 * MB, modified: at }),
+          new ZipEntry({ name: "lofi-vol3/bonus.zip", size: 1.3 * GB, modified: at, encrypted: true }),
+        ],
+      });
+    },
+    pickFolder: async (current) => String.raw`${current}\Video`,
+
+    detail: async (id) => {
+      const d = items.find((x) => x.id === id) ?? items[0];
+      const n = d.conns.length || (d.status === "complete" ? 8 : 4);
+      const part = d.total / n;
+      const chunks = d.live || d.stream ? [] : Array.from({ length: n }, (_, k) => {
+        const p = d.status === "complete" ? 1 : (d.conns[k] ?? d.progress / 100);
+        return new Chunk({ start: Math.round(k * part), end: Math.round((k + 1) * part) - 1, done: Math.round(p * part), state: d.status === "downloading" ? (p >= 1 ? "Complete" : "Receiving data…") : "" });
+      });
+      return new Detail({
+        item: new Item(d), path: d.filePath, checksum: "", checksumName: "", resumable: true, speedLimit: limits.get(id) ?? 0,
+        openWhenDone: openWhenDone.has(id), segments: d.live ? 0 : 0, segmentsDone: d.live ? 1270 : 0, chunks, completeDialog,
+      });
+    },
+    setDownloadLimit: async (id, bps) => void limits.set(id, Math.max(0, bps)),
+    setOpenWhenDone: async (id, on) => void (on ? openWhenDone.add(id) : openWhenDone.delete(id)),
+    setCompleteDialog: async (on) => void (completeDialog = on),
+    openProgress: async (id) => void window.open(`?view=progress&id=${id}`, "_blank", "width=580,height=620"),
+    readdress: async (id, address) => {
+      const d = items.find((x) => x.id === id);
+      if (d) d.url = address;
+      push();
+    },
+    setTitle: (title) => void (document.title = title),
+    setSize: () => {},
+    closeWindow: () => window.close(),
   };
 }

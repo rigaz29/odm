@@ -5,7 +5,8 @@
 import type { Item } from "./bindings/odm/internal/gui/models";
 import { language, t, tf } from "./i18n";
 
-function decimal(v: number, digits: number): string {
+// decimalText writes v with digits decimals in the language's way.
+export function decimalText(v: number, digits: number): string {
   return new Intl.NumberFormat(language() === "id" ? "id-ID" : "en-US", {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits,
@@ -24,8 +25,8 @@ export function humanBytes(n: number): string {
     v /= 1024;
     i++;
   }
-  if (i === 0) return `${decimal(v, 0)} ${units[i]}`;
-  return `${decimal(v, v < 10 ? 2 : 1)} ${units[i]}`;
+  if (i === 0) return `${decimalText(v, 0)} ${units[i]}`;
+  return `${decimalText(v, v < 10 ? 2 : 1)} ${units[i]}`;
 }
 
 export function speedText(bps: number): string {
@@ -203,6 +204,14 @@ export function matchesSearch(d: Item, query: string): boolean {
   if (words.length === 0) return true;
   const hay = `${displayName(d)} ${d.url} ${d.description}`.toLowerCase();
   return words.every((w) => hay.includes(w));
+}
+
+// withExt gives a video's name the container of the quality picked,
+// replacing one an earlier pick gave it (internal/ui: withExt).
+export function withExt(name: string, ext: string): string {
+  const m = /\.(mp4|webm|mkv|m4a|mp3|opus|ogg|mov|flv|3gp)$/i.exec(name);
+  const base = m ? name.slice(0, -m[0].length) : name;
+  return base && ext ? `${base}.${ext}` : base;
 }
 
 // looksLikeURL is a pasted address the search box offers to download.

@@ -274,47 +274,48 @@ berubah (TikTok, Instagram) bisa sesekali rusak sampai yt-dlp atau ODM
 diperbarui. Merekam siaran orang lain bisa melanggar hak cipta, ketentuan
 layanan, atau privasi: tanggung jawab pemakai.
 
-## Fase 7: UI Fluent (Windows 11) dengan Wails
+## Fase 7: UI baru (shadcn/ui + sentuhan Aurora) dengan Wails
 
-Tujuan: UI dengan tampilan Windows 11 (Fluent 2, Mica, ikon dan font
-Windows), tetap Go dan satu exe. Opsi C dipilih pada 2026-10-16. Rencana
-lengkap (alasan, arsitektur, build, uji, risiko) ada di
-[FLUENT-UI.md](FLUENT-UI.md).
+Tujuan: jendela yang modern, rapi, dan konsisten, tetap Go dan satu exe.
+Gaya dipilih pengguna pada 2026-10-16: **A (shadcn/ui) ditambah sentuhan D
+(Aurora)**, lihat mockup `mockups/ad.html` di cabang `ui-mockups`. Rencana
+lengkap (riwayat, bahasa desain, arsitektur, build, uji, risiko) ada di
+[GUI.md](GUI.md).
 
-Pilihan teknis: Wails v3 (beta, karena v2 tidak punya banyak jendela dan
-tray) + WebView2 + React 19 + Fluent UI React v9 (punya DataGrid dan Tree)
-+ Vite. UI Fyne tetap menjadi bawaan sampai UI baru setara fiturnya.
+Pilihan teknis: Wails v3 + WebView2 + React 19 + Tailwind 4 + shadcn/ui
+(Radix) + TanStack Table/Virtual + Lucide + Inter. UI Fyne tetap menjadi
+bawaan sampai UI baru setara fiturnya.
 
-- [ ] **Tahap 0** Prototipe jendela utama di cabang `ui-fluent`: daftar
-      dari engine sungguhan, toolbar, kategori, status bar, Mica,
-      gelap/terang. Diukur ukuran exe, memori, dan kelancaran daftar 1.000
-      item; tangkapan layarnya dibandingkan dengan UI Fyne. Pengguna
-      memutuskan lanjut atau tidak. **S** Prototipe selesai (2026-10-16):
-      exe 15,4 MB (Fyne 28,6 MB), build tanpa CGO, scroll 1.023 item 60
-      fps, memori ±365 MB (Fyne 338 MB). Hasil lengkap di FLUENT-UI.md.
-      Menunggu keputusan pengguna.
-- [ ] **Tahap 1** Fondasi: paket bersama `uicore` dan `i18n`, service dan
-      event untuk semua fungsi engine yang dipakai UI, `go.mod` naik ke Go
-      1.25, job CI (Node + Vitest + `-tags fluent`), `scripts/build.sh
-      fluent`, `ODM-Fluent.exe` pratinjau. **S**
-- [ ] **Tahap 2** Jendela utama setara: DataGrid (kolom, lebar, sortir,
-      klik/Ctrl/Shift/Ctrl+A, klik kanan, klik ganda), toolbar, kategori
-      dan antrean, pencarian, status bar, pembatas kecepatan, pintasan,
-      menu. **B**
-- [ ] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas stream,
-      yt-dlp, live), Progres, Opsi (6 tab), Penjadwal, Kategori, Program
-      pendamping, Unduhan selesai, Impor/Ekspor, pratinjau ZIP, perbarui
-      alamat, Tentang, Pintasan. **B**
+- [x] **Tahap 0** Kerangka dan gaya. **S** Prototipe Fluent (cabang
+      `ui-fluent`) membuktikan kerangka Wails: exe 15,4 MB tanpa CGO,
+      scroll 1.023 item 60 fps, memori ±365 MB (Fyne 338 MB). Tampilan
+      Fluent ditolak. Tiga mockup (cabang `ui-mockups`) dibandingkan, dan
+      gaya A+D dipilih.
+- [ ] **Tahap 1** Fondasi: cabang `ui-next`, `internal/fluent` →
+      `internal/gui` (tag `gui`), Tailwind 4 + komponen shadcn/ui + token
+      tema A+D, title bar buatan sendiri dengan wilayah non-client (seret,
+      klik ganda, snap layout), katalog terjemahan bersama `internal/i18n`,
+      service ditambah data koneksi, riwayat kecepatan, dan lama rekaman,
+      jendela utama pertama sesuai mockup dengan data engine, job CI,
+      `scripts/build.sh gui`, `ODM-Next.exe` pratinjau. **S**
+- [ ] **Tahap 2** Jendela utama setara: tabel (sortir, lebar dan kolom
+      tampil/sembunyi diingat, klik/Ctrl/Shift/Ctrl+A, klik kanan, klik
+      ganda, pintasan), kartu "Sedang berjalan" (paling banyak 3, +N
+      lainnya, bisa diciutkan), sidebar dengan jumlah, tab filter, palet
+      Ctrl K, status bar, pembatas kecepatan. **B**
+- [ ] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas
+      stream, yt-dlp, live), Progres (peta koneksi, grafik), Opsi, Penjadwal,
+      Kategori, Program pendamping, Unduhan selesai, Impor/Ekspor,
+      pratinjau ZIP, perbarui alamat, Tentang, Pintasan. **B**
 - [ ] **Tahap 4** Integrasi Windows: tray, notifikasi, `-hidden`, prompt dari
       ekstensi (selalu di atas), mulai bersama Windows, clipboard, cek
       pembaruan, suara. **S**
-- [ ] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, Windows 10
-      (tanpa Mica), terjemahan lengkap, performa dan memori. **S**
-- [ ] **Tahap 6** Alih: UI Fluent menjadi `ODM.exe` bawaan di Windows; Fyne
+- [ ] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, animasi
+      halus, terjemahan lengkap, performa dan memori. **S**
+- [ ] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne
       tetap untuk macOS/Linux. README, CHANGELOG, tangkapan layar. **K**
 
-Nanti: frontend yang sama untuk web UI `-serve`, Wails untuk macOS/Linux,
-title bar buatan sendiri.
+Nanti: halaman yang sama untuk web UI `-serve`, Wails untuk macOS/Linux.
 
 ## Catatan kerja
 

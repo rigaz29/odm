@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"encoding/binary"
 	"image"
 	"image/color"
 	"image/png"
@@ -58,6 +59,33 @@ func appIcon(size int) []byte {
 	}
 	var buf bytes.Buffer
 	_ = png.Encode(&buf, img)
+	return buf.Bytes()
+}
+
+// IconFile is ODM's icon as a Windows .ico, drawn at each size Windows
+// asks for, each one a PNG: the exe's icon (scripts/winres.sh puts it in
+// cmd/odm/rsrc_windows_amd64.syso), which Explorer, the taskbar and the
+// system notifications show.
+func IconFile() []byte {
+	sizes := []int{16, 20, 24, 32, 40, 48, 64, 96, 128, 256}
+	images := make([][]byte, len(sizes))
+	for i, size := range sizes {
+		images[i] = appIcon(size)
+	}
+	var buf bytes.Buffer
+	le := func(v any) { _ = binary.Write(&buf, binary.LittleEndian, v) }
+	le([3]uint16{0, 1, uint16(len(sizes))}) // reserved, type 1 (icon), count
+	offset := 6 + 16*len(sizes)
+	for i, size := range sizes {
+		side := uint8(size) // 256 is written as 0
+		le([4]uint8{side, side, 0, 0})
+		le([2]uint16{1, 32}) // planes, bits per pixel
+		le([2]uint32{uint32(len(images[i])), uint32(offset)})
+		offset += len(images[i])
+	}
+	for _, img := range images {
+		buf.Write(img)
+	}
 	return buf.Bytes()
 }
 

@@ -224,17 +224,37 @@ Tahap 2: aliran kontinu (TikTok)
       ffmpeg ke MP4 (gagal → MKV; tanpa ffmpeg bagian disimpan apa
       adanya). Ekstensi: FLV tanpa ukuran = "● LIVE · FLV stream";
       halaman TikTok (`/@user/live`, `/@user/video/ID`) lewat yt-dlp,
-      dengan urutan HLS → DASH → FLV untuk siaran.
-- [ ] Demuxer FLV di ffmpeg ringan (rilis `ffmpeg-min-n8.1-2`), lalu remux
-      FLV → MP4. **K**
+      dengan urutan HLS → DASH → FLV untuk siaran. Dicek dengan siaran FLV
+      publik Bilibili lewat host native (`kind: "live"`): ~35 detik →
+      Hentikan → MP4 H.264 720p + AAC. Saat diuji tidak ada akun TikTok
+      publik yang sedang live; jalurnya sama, alamatnya dari yt-dlp.
+- [x] Demuxer FLV di ffmpeg ringan (rilis `ffmpeg-min-n8.1-2`), lalu remux
+      FLV → MP4. **K** Ditambah demuxer `flv`, `live_flv` dan `concat`;
+      dicek: dua bagian FLV → satu MP4 6 detik. ODM yang memakai ffmpeg
+      unduhan sendiri memperbaruinya otomatis.
 
 Tahap 3: DASH live (Instagram, Facebook)
 
-- [ ] Perekam DASH live: MPD dinamis, `SegmentTemplate`/`SegmentTimeline`,
-      `availabilityStartTime`, muat ulang manifest. **B**
-- [ ] Cookie login dari browser untuk platform yang mewajibkan login
-      (Instagram selalu). Perlu persetujuan pemakai dulu: belum diputuskan.
-      **S**
+- [x] Perekam DASH live: MPD dinamis, `SegmentTemplate`/`SegmentTimeline`,
+      `availabilityStartTime`, muat ulang manifest. **B** `dashlive.go`
+      memakai loop, state `live.json`, aturan berhenti dan penggabungan
+      yang sama dengan perekam HLS. Segmen dikenali dari waktu mulainya
+      (URL bisa ditandatangani ulang tiap muat), init dari period +
+      Representation. Mulai dari ujung siaran (3 segmen terakhir), muat
+      ulang tiap `minimumUpdatePeriod`, selesai saat MPD jadi statis.
+      `media`: template berbasis nomor dan `r="-1"` dijabarkan memakai jam
+      sampai sekarang (minus satu segmen cadangan), paling jauh 10 menit
+      ke belakang atau sepanjang `timeShiftBufferDepth`. Dicek dengan
+      simulator DASH-IF (`livesim2`, template nomor dan SegmentTimeline):
+      42 detik video + audio, tanpa celah.
+- [x] ~~Cookie login dari browser untuk platform yang mewajibkan login.~~
+      Tidak diperlukan (diputuskan 2026-10-16): Instagram dan Facebook
+      direkam lewat jalur browser. Pemutar yang sudah login memuat MPD
+      bertanda tangan; ekstensi melihatnya dan ODM merekamnya dengan
+      cookie situs untuk alamat itu, seperti unduhan lain. Cookie tidak
+      pernah diberikan ke yt-dlp. Referensi PyInstaLive (login dengan
+      password, API privat) dan tiktok-live-recorder (API pihak ketiga
+      berkunci) tidak dipakai karena alasan itu.
 
 Nanti
 

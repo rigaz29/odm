@@ -2,6 +2,7 @@ package media
 
 import (
 	"bytes"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -516,5 +517,74 @@ func TestReviewRound2(t *testing.T) {
 		if _, err := ParseDASH(mustURL("https://h/m.mpd"), []byte(in)); err == nil {
 			t.Errorf("huge timescale (%s) accepted", name)
 		}
+	}
+}
+
+// A live template counted from the clock: the segments that have ended by
+// now, less one of margin, from the last window (liveWindow, or the
+// time-shift buffer when shorter).
+func TestDASHLiveClock(t *testing.T) {
+	start := time.Date(2026, 10, 16, 12, 0, 0, 0, time.UTC)
+	clock = func() time.Time { return start.Add(61 * time.Second) }
+	t.Cleanup(func() { clock = time.Now })
+	number := `<MPD type="dynamic" availabilityStartTime="2026-10-16T12:00:00Z" timeShiftBufferDepth="PT10S" minimumUpdatePeriod="PT2S">
+		<Period start="PT1S"><AdaptationSet mimeType="video/mp4">
+		<SegmentTemplate media="v/$Number$.m4s" initialization="v/init.mp4" startNumber="5" duration="4000" timescale="2000"/>
+		<Representation id="v"/></AdaptationSet></Period></MPD>`
+	m, err := ParseDASH(mustURL("https://h/live.mpd"), []byte(number))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !m.AvailabilityStart.Equal(start) || m.TimeShift != 10*time.Second || m.UpdatePeriod != 2*time.Second {
+		t.Fatalf("live attributes: %+v", m)
+	}
+	for in, want := range map[string]time.Time{
+		"2026-10-16T14:00:00+0200":    start,
+		"2026-10-16T12:00:00.5Z":      start.Add(500 * time.Millisecond),
+		"2026-10-16T12:00:00":         start,
+		"not a time":                  {},
+		"2026-10-16T12:00:00+02:00:x": {},
+	} {
+		if got := parseDateTime(in); !got.Equal(want) {
+			t.Errorf("parseDateTime(%q) = %v", in, got)
+		}
+	}
+	// 60 s into the period: 30 segments of 2 s have ended (5…34); one of
+	// margin leaves 5…33, and the 10 s buffer the last five of those.
+	segs := m.Periods[0].Representations[0].Segments
+	var got []string
+	for _, s := range segs {
+		got = append(got, strings.TrimPrefix(s.URL, "https://h/v/"))
+	}
+	if strings.Join(got, " ") != "29.m4s 30.m4s 31.m4s 32.m4s 33.m4s" || segs[0].Start != 48*time.Second || segs[0].Duration != 2*time.Second {
+		t.Fatalf("segments %v, first %+v", got, segs[0])
+	}
+
+	// An open timeline entry: repeated up to now the same way.
+	timeline := `<MPD type="dynamic" availabilityStartTime="2026-10-16T12:00:00">
+		<Period><AdaptationSet mimeType="audio/mp4"><SegmentTemplate media="a/$Time$.m4a" timescale="1000" presentationTimeOffset="500">
+		<SegmentTimeline><S t="20500" d="10000" r="-1"/></SegmentTimeline></SegmentTemplate>
+		<Representation id="a"/></AdaptationSet></Period></MPD>`
+	if m, err = ParseDASH(mustURL("https://h/live.mpd"), []byte(timeline)); err != nil {
+		t.Fatal(err)
+	}
+	// 61 s: segments from 20 s have ended at 30, 40, 50, 60 s; one of
+	// margin leaves those starting at 20, 30 and 40 s.
+	got = nil
+	for _, s := range m.Periods[0].Representations[0].Segments {
+		got = append(got, fmt.Sprintf("%s@%v", strings.TrimPrefix(s.URL, "https://h/a/"), s.Start))
+	}
+	if strings.Join(got, " ") != "20500.m4a@20s 30500.m4a@30s 40500.m4a@40s" {
+		t.Fatalf("timeline %v", got)
+	}
+
+	// Long ago: only the last liveWindow.
+	clock = func() time.Time { return start.Add(48 * time.Hour) }
+	long := strings.Replace(number, ` timeShiftBufferDepth="PT10S"`, "", 1)
+	if m, err = ParseDASH(mustURL("https://h/live.mpd"), []byte(long)); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(m.Periods[0].Representations[0].Segments); n != int(liveWindow/(2*time.Second)) {
+		t.Fatalf("%d segments after two days", n)
 	}
 }

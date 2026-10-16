@@ -19,7 +19,8 @@ import (
 // FAKE_LIVE_MANIFEST (its DASH manifest with FAKE_LIVE_KIND=dash, its
 // endless FLV with FAKE_LIVE_KIND=flv). With FAKE_FFMPEG set it stands in
 // for ffmpeg: "copy" copies the input to the output (the parts one after
-// the other, for the concat demuxer), "fail" fails. With both set, a run
+// the other, for the concat demuxer; "merged:<video>|<audio>" for two
+// inputs), "fail" fails. With both set, a run
 // with ffmpeg's -hide_banner is ffmpeg.
 func TestMain(m *testing.M) {
 	switch {
@@ -95,13 +96,24 @@ func fakeFFmpegMain() {
 		os.Exit(1)
 	}
 	in, concat := "", false
+	var inputs []string
 	for i, a := range args {
 		if a == "-i" && i+1 < len(args) {
 			in = args[i+1]
+			inputs = append(inputs, in)
 		}
 		if a == "-f" && i+1 < len(args) && args[i+1] == "concat" {
 			concat = true
 		}
+	}
+	if len(inputs) == 2 {
+		v, verr := os.ReadFile(inputs[0])
+		a, aerr := os.ReadFile(inputs[1])
+		if verr != nil || aerr != nil {
+			os.Exit(1)
+		}
+		os.WriteFile(args[len(args)-1], []byte("merged:"+string(v)+"|"+string(a)), 0o644)
+		os.Exit(0)
 	}
 	data, err := os.ReadFile(in)
 	if err != nil {

@@ -31,6 +31,17 @@ All notable changes to ODM are documented here. The format is based on
   a fresh address when the signed one is refused. The small ffmpeg reads
   FLV and joins parts (`ffmpeg-min-n8.1-2`). `POST /api/downloads` takes
   `"stream": "http-live"`; `POST /api/probe/site` answers `kind`.
+- Live DASH streams are recorded, such as the ones Facebook's and
+  Instagram's players read: the extension sees the manifest the signed-in
+  player loads and its menu shows "● LIVE" with a Record row per quality;
+  a live manifest pasted into New Download works too. ODM reloads the
+  manifest as it asks, takes each new segment once (by when it starts:
+  the addresses are signed anew on every reload), starts at the live edge,
+  and finishes when stopped, when the manifest turns static or when it is
+  gone; video and audio are joined into one MP4. Templates counted from
+  the clock (`availabilityStartTime`) are expanded up to now. No sign-in
+  is handed to any other program: the browser's cookies go with the
+  manifest's requests, as for any download.
 - Stream and recording results in MPEG-TS, video and audio in one track,
   become MP4 when they finish, copied with ffmpeg without re-encoding, or
   Matroska when their streams do not fit MP4; without ffmpeg the TS file

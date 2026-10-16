@@ -67,8 +67,9 @@ type StreamJob struct {
 	// one whose URLs differ only by their signature.
 	Variant  string `json:"variant,omitempty"`
 	AudioKey string `json:"audio_key,omitempty"`
-	// Live marks a live HLS playlist, recorded until stopped (live.go).
-	// It is set when the playlist is first read as live. Recording is set
+	// Live marks a live stream, recorded until stopped: an HLS playlist
+	// (live.go), a DASH manifest (dashlive.go) or one endless response
+	// (livehttp.go). It is set when the playlist is first read as live. Recording is set
 	// once the recording has claimed its file name, so a later run
 	// continues it.
 	Live      bool `json:"live,omitempty"`
@@ -554,7 +555,7 @@ func (d *Download) loadDASH(ctx context.Context, job StreamJob) ([]*streamTrack,
 		return nil, err
 	}
 	if m.Live {
-		return nil, errors.New("live streams are not supported yet")
+		return nil, errLiveStream // recorded instead (dashlive.go)
 	}
 	videoID, audioID := job.VideoRep, job.AudioRep
 	if videoID == "" && audioID == "" {

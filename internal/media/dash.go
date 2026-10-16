@@ -22,11 +22,18 @@ import (
 type DASHManifest struct {
 	// Live is set for type="dynamic" manifests. Their segment lists depend
 	// on the wall clock: a SegmentTimeline is expanded as far as it is
-	// written (a trailing r="-1" counts once), a number-based template is
-	// not expanded at all. Either way the manifest has to be reloaded.
+	// written, a trailing r="-1" and a number-based template up to now,
+	// counted from AvailabilityStart (without it, r="-1" counts once and a
+	// number-based template gives nothing). Either way only the last
+	// liveWindow is expanded, and the manifest has to be reloaded.
 	Live     bool
 	Duration time.Duration
 	Periods  []DASHPeriod
+	// A live manifest's availabilityStartTime (zero when not given), its
+	// timeShiftBufferDepth and minimumUpdatePeriod (0 when not given).
+	AvailabilityStart time.Time
+	TimeShift         time.Duration
+	UpdatePeriod      time.Duration
 }
 
 // DASHPeriod is one consecutive part of the presentation (multi-period
@@ -68,6 +75,10 @@ type DASHSegment struct {
 	URL      string
 	Range    *ByteRange
 	Duration time.Duration // 0 when unknown (SegmentBase, SegmentList without durations)
+	// Start is when the segment begins, counted from its period's start;
+	// set for SegmentTemplate segments, which a live recording tells apart
+	// by it (their URLs may be signed anew on every reload).
+	Start time.Duration
 }
 
 // Expansion limits. A template set once at Period level is inherited by
@@ -83,11 +94,24 @@ const (
 	maxSegments       = 1000000 // whole manifest
 )
 
+// liveWindow is how far back from now a live manifest is expanded where
+// the clock decides (r="-1", a number-based template): a recording starts
+// at the live edge, and one resumed later fills at most this much of the
+// gap. It also keeps a manifest whose availabilityStartTime is long ago
+// from expanding into millions of segments.
+const liveWindow = 10 * time.Minute
+
+// clock is the wall clock live manifests are expanded against.
+var clock = time.Now
+
 type mpdXML struct {
-	Type     string      `xml:"type,attr"`
-	Duration string      `xml:"mediaPresentationDuration,attr"`
-	BaseURLs []string    `xml:"BaseURL"`
-	Periods  []periodXML `xml:"Period"`
+	Type              string      `xml:"type,attr"`
+	Duration          string      `xml:"mediaPresentationDuration,attr"`
+	AvailabilityStart string      `xml:"availabilityStartTime,attr"`
+	TimeShift         string      `xml:"timeShiftBufferDepth,attr"`
+	UpdatePeriod      string      `xml:"minimumUpdatePeriod,attr"`
+	BaseURLs          []string    `xml:"BaseURL"`
+	Periods           []periodXML `xml:"Period"`
 }
 
 type segmentInfo struct {
@@ -198,6 +222,14 @@ func ParseDASH(base *url.URL, data []byte) (*DASHManifest, error) {
 		}
 		out.Duration = d
 	}
+	// Hints for a live recording: one that cannot be read is left out.
+	out.AvailabilityStart = parseDateTime(m.AvailabilityStart)
+	out.TimeShift, _ = parseISODuration(m.TimeShift)
+	out.UpdatePeriod, _ = parseISODuration(m.UpdatePeriod)
+	window := liveWindow
+	if out.TimeShift > 0 && out.TimeShift < window {
+		window = out.TimeShift
+	}
 	mpdBase := withBase(base, m.BaseURLs)
 	budget := maxSegments
 
@@ -250,7 +282,8 @@ func ParseDASH(base *url.URL, data []byte) (*DASHManifest, error) {
 				// Without any BaseURL the base is the MPD's own URL, which
 				// is not media.
 				explicit := hasURL(m.BaseURLs) || hasURL(p.BaseURLs) || hasURL(as.BaseURLs) || hasURL(rx.BaseURLs)
-				x := expander{rep: &rep, base: repBase, explicitBase: explicit, period: period, live: out.Live, budget: &budget}
+				x := expander{rep: &rep, base: repBase, explicitBase: explicit, period: period, live: out.Live,
+					availability: out.AvailabilityStart, window: window, budget: &budget}
 				if err := x.expand(p.segmentInfo, as.segmentInfo, rx.segmentInfo); err != nil {
 					return nil, fmt.Errorf("media: representation %q: %w", rx.ID, err)
 				}
@@ -269,7 +302,18 @@ type expander struct {
 	explicitBase bool // a BaseURL was given at some level
 	period       DASHPeriod
 	live         bool
-	budget       *int // segments left for the whole manifest
+	availability time.Time     // a live manifest's availabilityStartTime
+	window       time.Duration // how far back from now a live one is expanded
+	budget       *int          // segments left for the whole manifest
+}
+
+// sinceStart is how long the period has been running by the clock, for a
+// live manifest with an availabilityStartTime (false without).
+func (x expander) sinceStart() (time.Duration, bool) {
+	if !x.live || x.availability.IsZero() {
+		return 0, false
+	}
+	return clock().Sub(x.availability) - x.period.Start, true
 }
 
 // expand uses the most specific segment description among the levels
@@ -380,6 +424,7 @@ func (x expander) template(t *segTemplateXML) error {
 		}
 		rep.Init = &DASHSegment{URL: resolveURL(base, u)}
 	}
+	pto := atoi64(t.PTO)
 	add := func(num, tm, d int64) error {
 		if err := x.room(); err != nil { // before formatting: a hostile r is cheap to stop
 			return err
@@ -388,7 +433,7 @@ func (x expander) template(t *segTemplateXML) error {
 		if err != nil {
 			return err
 		}
-		return x.add(DASHSegment{URL: resolveURL(base, u), Duration: toDur(d)})
+		return x.add(DASHSegment{URL: resolveURL(base, u), Duration: toDur(d), Start: toDur(tm - pto)})
 	}
 
 	if t.Timeline != nil {
@@ -396,10 +441,10 @@ func (x expander) template(t *segTemplateXML) error {
 		var end int64
 		if period.Duration > 0 {
 			units, ok := toUnits(period.Duration.Seconds(), timescale)
-			if !ok || units > math.MaxInt64-atoi64(t.PTO) {
+			if !ok || units > math.MaxInt64-pto {
 				return errors.New("timescale out of range")
 			}
-			end = atoi64(t.PTO) + units
+			end = pto + units
 		}
 		var tm int64
 		for i, s := range t.Timeline.S {
@@ -417,7 +462,23 @@ func (x expander) template(t *segTemplateXML) error {
 				if i+1 < len(t.Timeline.S) && t.Timeline.S[i+1].T != "" {
 					limit = atoi64(t.Timeline.S[i+1].T)
 				}
+				since, clocked := x.sinceStart()
 				switch {
+				case limit == 0 && clocked:
+					// Until now: the segments that have ended, with one
+					// of margin (see clocked), of the last window only.
+					now, ok := toUnits(max(since, 0).Seconds(), timescale)
+					if !ok || now > math.MaxInt64-pto {
+						return errors.New("timescale out of range")
+					}
+					now += pto
+					r = max((now-tm)/d-2, 0)
+					back, _ := toUnits(x.window.Seconds(), timescale)
+					if skip := min((now-back-tm)/d, r); now-back > tm && skip > 0 {
+						tm += skip * d
+						number += skip
+						r -= skip
+					}
 				case limit == 0 && x.live:
 					r = 0 // "until now": the next reload brings the rest
 				case limit == 0:
@@ -447,7 +508,7 @@ func (x expander) template(t *segTemplateXML) error {
 		return errors.New("SegmentTemplate has neither SegmentTimeline nor duration")
 	}
 	if x.live {
-		return nil // depends on availabilityStartTime and the clock
+		return x.clocked(t, number, dur, toDur, add)
 	}
 	if period.Duration <= 0 {
 		return errors.New("period length unknown, cannot count segments")
@@ -462,6 +523,34 @@ func (x expander) template(t *segTemplateXML) error {
 	}
 	for k := int64(0); k < count; k++ {
 		if err := add(number+k, k*dur, dur); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// clocked expands a live number-based template: segment k (counted from
+// startNumber) spans [k, k+1) segment durations from the period's start
+// and is available once it has ended. One more segment of margin keeps a
+// clock a little ahead of the server's from asking for one not there yet.
+// Without availabilityStartTime nothing can be counted.
+func (x expander) clocked(t *segTemplateXML, number, dur int64, toDur func(int64) time.Duration, add func(num, tm, d int64) error) error {
+	since, ok := x.sinceStart()
+	seg := toDur(dur)
+	if !ok || seg <= 0 {
+		return nil
+	}
+	count := int64(since/seg) - 1
+	if count <= 0 {
+		return nil
+	}
+	from := max(count-int64(x.window/seg), 0)
+	if err := x.reserve(count - from); err != nil {
+		return err
+	}
+	pto := atoi64(t.PTO)
+	for k := from; k < count; k++ {
+		if err := add(number+k, pto+k*dur, dur); err != nil {
 			return err
 		}
 	}
@@ -657,6 +746,19 @@ func first(vals ...string) string {
 		}
 	}
 	return ""
+}
+
+// parseDateTime reads an xs:dateTime (availabilityStartTime); one without
+// a zone is UTC, and a zone without its colon ("+0000", as Facebook
+// writes it) is read too. The zero time when it cannot be read.
+func parseDateTime(s string) time.Time {
+	s = strings.TrimSpace(s)
+	for _, layout := range []string{time.RFC3339Nano, "2006-01-02T15:04:05.999999999Z0700", "2006-01-02T15:04:05.999999999"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t
+		}
+	}
+	return time.Time{}
 }
 
 // parseISODuration reads the xs:duration subset MPDs use: PnDTnHnMnS, with

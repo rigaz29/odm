@@ -100,7 +100,10 @@ the system tray first. Then:
   live pages yt-dlp reads) the menu shows "● LIVE" with a "Record" row per
   quality; a live stream a page's player loads is marked the same way,
   also one sent as a single endless response (TikTok's FLV: "● LIVE · FLV
-  stream"). ODM records from the click until you press Stop in ODM, then
+  stream") and the DASH manifest Facebook's and Instagram's players load
+  once you are signed in there ("● LIVE · DASH stream"; the site's cookies
+  go to ODM with it, as for any download). ODM records from the click
+  until you press Stop in ODM, then
   joins the recording into one MP4. The button reads "● Record live" once
   ODM has answered, after the menu was opened once (at once for an FLV
   stream): ODM is not asked about every page you visit.

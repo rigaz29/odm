@@ -48,7 +48,8 @@ import (
 //     full URL: many CDNs re-sign every URI on each reload.
 //   - Separate audio is joined with ffmpeg, which lines the two tracks up
 //     by their timestamps.
-//   - Live DASH manifests are not recorded.
+//   - A live DASH manifest is recorded by the same loop (dashlive.go);
+//     only reading the manifest differs.
 
 // errLiveStream tells runStream that the playlist is live and has to be
 // recorded rather than downloaded.
@@ -190,6 +191,9 @@ func (d *Download) recordLive(ctx context.Context) error {
 	d.Stream.Live = true
 	job := *d.Stream
 	d.mu.Unlock()
+	if job.Kind == media.KindDASH {
+		return d.recordDASHLive(ctx, job)
+	}
 	urls, err := d.livePlaylists(ctx, job)
 	if err != nil && job.Page != "" && ctx.Err() == nil {
 		// A playlist found by yt-dlp may have expired since (a Resume
@@ -204,25 +208,9 @@ func (d *Download) recordLive(ctx context.Context) error {
 		return err
 	}
 
-	// Whether this download already claimed its file is its own state
-	// (Recording), not whether a live.json exists under its name: another
-	// download may have claimed that name and written one.
-	var st *liveState
-	if job.Recording {
-		st, err = d.loadLiveState()
-		if err != nil && !errors.Is(err, errLiveStateCorrupt) {
-			// Maybe only for now (a file lock, an I/O error): keep the
-			// pieces, so Resume can try again.
-			return err
-		}
-		if st == nil {
-			// The list is missing or damaged: pieces left in the folder
-			// cannot be matched to it, and new ones would reuse their
-			// numbers. Start the folder over under the claimed name.
-			if err := os.RemoveAll(d.workDir()); err != nil {
-				return err
-			}
-		}
+	st, err := d.loadRecording(job)
+	if err != nil {
+		return err
 	}
 	if st == nil {
 		st = &liveState{}
@@ -233,12 +221,50 @@ func (d *Download) recordLive(ctx context.Context) error {
 		return errors.New("the stream changed since this recording started; remove it and add it again")
 	}
 
-	r := &liveRecorder{d: d, st: st, urls: urls, job: job, run: &streamRun{d: d, keys: map[string][]byte{}},
-		initTries: map[string]int{}, regressed: make([]int, len(urls))}
+	r := newLiveRecorder(d, st, job)
+	r.urls = urls
+	return r.record(ctx)
+}
+
+// loadRecording returns the state of a recording that continues, nil for
+// a new one. Whether this download already claimed its file is its own
+// state (Recording), not whether a live.json exists under its name:
+// another download may have claimed that name and written one.
+func (d *Download) loadRecording(job StreamJob) (*liveState, error) {
+	if !job.Recording {
+		return nil, nil
+	}
+	st, err := d.loadLiveState()
+	if err != nil && !errors.Is(err, errLiveStateCorrupt) {
+		// Maybe only for now (a file lock, an I/O error): keep the
+		// pieces, so Resume can try again.
+		return nil, err
+	}
+	if st == nil {
+		// The list is missing or damaged: pieces left in the folder
+		// cannot be matched to it, and new ones would reuse their
+		// numbers. Start the folder over under the claimed name.
+		if err := os.RemoveAll(d.workDir()); err != nil {
+			return nil, err
+		}
+	}
+	return st, nil
+}
+
+func newLiveRecorder(d *Download, st *liveState, job StreamJob) *liveRecorder {
+	r := &liveRecorder{d: d, st: st, job: job, run: &streamRun{d: d, keys: map[string][]byte{}},
+		initTries: map[string]int{}, regressed: make([]int, len(st.Tracks))}
 	// A live segment is gone soon: an expired link is not worth a reload
 	// of the whole playlist, as it is for a finished stream.
 	r.run.refreshed = true
-	prepared := job.Recording
+	return r
+}
+
+// record runs the reload loop until the recording ends, then assembles
+// what it has (see recordLive).
+func (r *liveRecorder) record(ctx context.Context) error {
+	d := r.d
+	prepared := r.job.Recording
 	if prepared {
 		if err := d.openTarget(false); err != nil {
 			return err
@@ -280,7 +306,7 @@ func (d *Download) recordLive(ctx context.Context) error {
 		// are fetched again; they cost one request each.
 		round = append(r.missingInits(round), round...)
 		if len(round) > 0 {
-			if err := d.saveLiveState(st); err != nil {
+			if err := d.saveLiveState(r.st); err != nil {
 				return err
 			}
 			if err := r.fetch(ctx, round); err != nil {
@@ -356,7 +382,8 @@ func isRefusal(err error) bool {
 type liveRecorder struct {
 	d         *Download
 	st        *liveState
-	urls      []string
+	urls      []string // HLS: the media playlists
+	dash      []string // DASH: the Representation per track (dashlive.go)
 	job       StreamJob
 	run       *streamRun
 	lastTaken []pieceJob                    // the latest round's new pieces
@@ -369,6 +396,10 @@ type liveRecorder struct {
 // (expired tokens). It keeps the old ones when that fails or the track
 // count differs.
 func (r *liveRecorder) resolveAgain(ctx context.Context) {
+	if r.dash != nil {
+		r.resolveDASH(ctx)
+		return
+	}
 	if r.job.Video != "" {
 		return // given directly, nothing to re-read
 	}
@@ -413,6 +444,9 @@ func (r *liveRecorder) prepare() error {
 // their new segments. It returns those pieces, whether all playlists have
 // ended, and the longest target duration.
 func (r *liveRecorder) reload(ctx context.Context) ([]pieceJob, bool, time.Duration, error) {
+	if r.dash != nil {
+		return r.reloadDASH(ctx)
+	}
 	r.lastTaken = nil
 	lists := make([]*media.HLSMedia, len(r.urls))
 	ended := true

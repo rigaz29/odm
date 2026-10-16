@@ -86,9 +86,11 @@ queues. It runs as a desktop app, or headless with a JSON API.
   default); separate video and
   audio tracks are joined with [ffmpeg](https://ffmpeg.org/) if it is
   installed (next to ODM, on PATH, or chosen in Options > Downloads, which
-  also shows the ffmpeg version ODM found). A live HLS stream is recorded
-  until you stop the download (Pause or Stop), the broadcast ends, or
-  nothing new arrives for a while; live DASH is not supported. A result in
+  also shows the ffmpeg version ODM found). A live stream (HLS, DASH, or
+  one endless response such as FLV) is recorded until you stop the
+  download (Pause or Stop), the broadcast ends, or nothing new arrives for
+  a while. Facebook and Instagram broadcasts are recorded from the
+  manifest their signed-in player loads. A result in
   MPEG-TS becomes MP4 when it finishes (copied, not re-encoded; Matroska
   when the streams do not fit MP4). DRM-protected video is not supported
   and never will be.
@@ -104,8 +106,7 @@ queues. It runs as a desktop app, or headless with a JSON API.
   click until you stop it, and asks yt-dlp for a fresh address when the
   old one expires. A live stream sent as one endless response (TikTok's
   FLV, which the button also offers when the player loads it) is recorded
-  in parts that ffmpeg joins into one MP4. The plan for Instagram and
-  Facebook (live DASH) is in [docs/ROADMAP.md](docs/ROADMAP.md), phase 6.
+  in parts that ffmpeg joins into one MP4.
 - yt-dlp and ffmpeg need no installing. The first time one is needed, ODM
   asks whether it may download them (about 20 MB): yt-dlp from its own
   releases, and a small ffmpeg built for ODM that only copies streams
@@ -313,7 +314,6 @@ extension/          MV3 browser extension source and native-host manifests
 - A properties dialog for each download.
 - A credentials prompt for HTTP 401 responses from a host with no site login.
 - A virus-scan hook, grabber projects, and translations.
-- Live DASH streams.
 - Signed self-update, and code-signed Windows builds.
 
 ## License

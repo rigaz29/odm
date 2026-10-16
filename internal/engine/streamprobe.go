@@ -287,18 +287,20 @@ func probeDASH(base *url.URL, data []byte) (*StreamChoices, error) {
 	if err != nil {
 		return nil, refusal(err.Error())
 	}
-	if m.Live {
-		return nil, refusal("live DASH streams are not supported; live HLS is recorded")
-	}
 	if len(m.Periods) == 0 {
 		return nil, refusal("the manifest lists no audio or video")
 	}
 	// The first period lists the tracks; later ones (ads, chapters) are
-	// matched by ID or kind when downloading, as in loadDASH.
+	// matched by ID or kind when downloading, as in loadDASH. A live
+	// manifest is recorded from the period on now, its last.
+	period := m.Periods[0]
+	if m.Live {
+		period = m.Periods[len(m.Periods)-1]
+	}
 	var videos, audios []*media.DASHRepresentation
 	lockedAudio, lockedVideo := false, false
-	for i := range m.Periods[0].Representations {
-		r := &m.Periods[0].Representations[i]
+	for i := range period.Representations {
+		r := &period.Representations[i]
 		switch {
 		case r.IsVideo() && r.Protected:
 			lockedVideo = true
@@ -339,6 +341,10 @@ func probeDASH(base *url.URL, data []byte) (*StreamChoices, error) {
 	}
 	if lockedAudio && len(audios) == 0 && len(videos) > 0 {
 		c.Note = "The audio is DRM-protected: only the video can be downloaded."
+	}
+	if m.Live {
+		c.Live = true
+		c.Note = strings.TrimSpace(liveNote + " " + c.Note)
 	}
 	return c, nil
 }

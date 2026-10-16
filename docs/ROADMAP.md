@@ -276,6 +276,19 @@ layanan, atau privasi: tanggung jawab pemakai.
 
 ## Fase 7: UI Fluent (Windows 11) dengan Wails
 
+**Dihentikan (2026-10-16).** Prototipe Tahap 0 (cabang `ui-fluent`)
+membuktikan kerangkanya layak: exe 15,4 MB tanpa CGO, scroll 1.023 item
+60 fps, memori setara Fyne. Tetapi tampilan Fluent dinilai kurang bagus.
+Kerangka itu (Wails v3 + WebView2 + engine di proses yang sama) tetap
+dipakai, dengan gaya desain lain. Tiga mockup jendela utama sedang dinilai
+di cabang `ui-mockups` (folder `mockups/`):
+- A, shadcn/ui;
+- B, Material Design 3;
+- D, desain sendiri "ODM Aurora".
+
+Fase ini ditulis ulang setelah gayanya dipilih. Sisa bagian ini adalah
+rencana Fluent yang dihentikan, disimpan sebagai catatan.
+
 Tujuan: UI dengan tampilan Windows 11 (Fluent 2, Mica, ikon dan font
 Windows), tetap Go dan satu exe. Opsi C dipilih pada 2026-10-16. Rencana
 lengkap (alasan, arsitektur, build, uji, risiko) ada di

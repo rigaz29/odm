@@ -283,7 +283,7 @@ lengkap (riwayat, bahasa desain, arsitektur, build, uji, risiko) ada di
 [GUI.md](GUI.md).
 
 Pilihan teknis: Wails v3 + WebView2 + React 19 + Tailwind 4 + shadcn/ui
-(Radix) + TanStack Table/Virtual + Lucide + Inter. UI Fyne tetap menjadi
+(Radix) + TanStack Virtual + Lucide + Inter. UI Fyne tetap menjadi
 bawaan sampai UI baru setara fiturnya.
 
 - [x] **Tahap 0** Kerangka dan gaya. **S** Prototipe Fluent (cabang
@@ -302,11 +302,23 @@ bawaan sampai UI baru setara fiturnya.
       exe: seret, klik ganda, tombol jendela, dan snap layout. Wilayah
       non-client Wails baru berfungsi dengan `WebView2CompositionHosting`.
       Tes `internal/i18n` memeriksa terjemahan kedua UI.
-- [ ] **Tahap 2** Jendela utama setara: tabel (sortir, lebar dan kolom
+- [x] **Tahap 2** Jendela utama setara: tabel (sortir, lebar dan kolom
       tampil/sembunyi diingat, klik/Ctrl/Shift/Ctrl+A, klik kanan, klik
       ganda, pintasan), kartu "Sedang berjalan" (paling banyak 3, +N
       lainnya, bisa diciutkan), sidebar dengan jumlah, tab filter, palet
-      Ctrl K, status bar, pembatas kecepatan. **B**
+      Ctrl K, status bar, pembatas kecepatan. **B** Hasilnya: kolom
+      Antrean, Terakhir dicoba, dan Keterangan ditambahkan. Lebar kolom,
+      kolom yang tampil, dan urutan tetap tersimpan setelah restart. Saat
+      tabel lebih lebar dari jendela, kolom centang, Nama, dan menu baris
+      tetap terlihat. Menu baris kini punya Salin alamat, Pindah ke
+      antrean, Naikkan/Turunkan, dan Hapus + hapus file (dengan
+      konfirmasi). Menu "Lainnya" berisi aksi untuk semua unduhan,
+      pembatas, kolom, dan sidebar. Palet Ctrl K menjalankan perintah dan
+      menerima alamat yang ditempel. Pembatas kecepatan ada di status bar.
+      Tombol Home/End/PgUp/PgDn dan Ctrl+C juga ditambahkan. Sortir lewat
+      header ternyata tidak pernah berfungsi di TanStack Table (kolom
+      tanpa accessor), jadi kini halaman mengurutkan sendiri dan TanStack
+      Table dilepas.
 - [ ] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas
       stream, yt-dlp, live), Progres (peta koneksi, grafik), Opsi, Penjadwal,
       Kategori, Program pendamping, Unduhan selesai, Impor/Ekspor,

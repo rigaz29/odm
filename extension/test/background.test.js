@@ -124,6 +124,18 @@ test("popupReferrer", () => {
   assert.equal(bg.popupReferrer({ frameId: 5 }, null), "");
 });
 
+test("isNewDownload leaves the history Chromium replays alone", () => {
+  const now = Date.parse("2026-10-16T10:00:00Z");
+  const at = (ms) => ({ startTime: new Date(now - ms).toISOString() });
+  assert.ok(bg.isNewDownload(at(0), now));
+  assert.ok(bg.isNewDownload(at(5000), now)); // the event came a little late
+  assert.ok(!bg.isNewDownload(at(bg.NEW_DOWNLOAD_MS), now));
+  assert.ok(!bg.isNewDownload({ ...at(3 * 24 * 3600 * 1000), state: "complete" }, now)); // last week's
+  assert.ok(!bg.isNewDownload({ ...at(3600 * 1000), state: "in_progress" }, now)); // resumed at start
+  assert.ok(bg.isNewDownload({}, now));
+  assert.ok(bg.isNewDownload({ startTime: "not a time" }, now));
+});
+
 test("pruneBypass keeps only recent Alt-click marks", () => {
   const now = 1_000_000;
   const got = bg.pruneBypass({

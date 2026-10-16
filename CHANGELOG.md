@@ -246,6 +246,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- Restarting the browser no longer sends its whole download history to
+  ODM. Chromium reports every download in its history to extensions as a
+  new one when it loads the history (at start, once the extension has
+  run), so each past download of a listed type opened a New Download
+  window, one after another, and was erased from the browser's download
+  list. The extension now only takes downloads that began in the last 30
+  seconds.
 - The extension in Firefox no longer sends the frame a stream was found in
   as the stream's page: ODM keeps a page to ask yt-dlp for a live
   stream's fresh address, and would have asked it about that frame.

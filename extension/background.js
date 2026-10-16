@@ -23,6 +23,8 @@ const STREAM_INFO_MS = 2 * 60 * 1000;
 // Chromium names a download within milliseconds, unless it asks where to
 // save it: then the name waits for the Save As dialog.
 const NAME_WAIT_MS = 2 * 60 * 1000;
+// How recently a download must have begun for onCreated to take it.
+const NEW_DOWNLOAD_MS = 30 * 1000;
 
 // pruneBypass keeps the Alt-click marks younger than BYPASS_MS. Older ones
 // no longer apply, and dropping them keeps the session map from growing
@@ -58,6 +60,17 @@ function hasType(url, types, filename) {
   const set = new Set(types.map((t) => String(t).toLowerCase().replace(/^\./, "")));
   const fromName = /\.([a-z0-9]{1,8})$/i.exec(filename || "");
   return set.has(urlExt(url)) || (fromName !== null && set.has(fromName[1].toLowerCase()));
+}
+
+// isNewDownload reports whether a download onCreated reports has just
+// begun. Chromium also reports every download in its history that way when
+// it loads the history (at browser start, once the extension has run), so
+// without this each past download would go to ODM again, one New Download
+// window after another, and be erased from the browser's list. A download
+// without a start time counts as new.
+function isNewDownload(item, now) {
+  const started = Date.parse((item && item.startTime) || "");
+  return !Number.isFinite(started) || now - started < NEW_DOWNLOAD_MS;
 }
 
 // settledFilename resolves to the file name the browser gives download id.
@@ -349,6 +362,7 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
   // service worker and a Firefox event page require.
 
   chrome.downloads.onCreated.addListener(async (item) => {
+    if (!isNewDownload(item, Date.now())) return; // from the history
     if (!(await isEnabled())) return;
     const url = item.finalUrl || item.url;
     if (!url || !/^https?:/.test(url)) return;
@@ -487,5 +501,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
+  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
 }

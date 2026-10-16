@@ -67,7 +67,7 @@ Versi dipatok saat Tahap 1, dan dinaikkan hanya dengan sengaja.
 | Mesin tampilan | WebView2 | Sudah ada di Windows 11 dan sebagian besar Windows 10. |
 | Komponen | shadcn/ui (kode komponen disalin ke repo) di atas Radix | Menu, menu klik kanan, dialog, tooltip, tab, dan kotak centang yang aksesibel. Tampilannya bisa diatur penuh. |
 | Gaya | Tailwind CSS 4 | Token tema sebagai variabel CSS, mode gelap lewat kelas. |
-| Daftar | TanStack Table + TanStack Virtual | Sortir, lebar dan visibilitas kolom, dan pilihan; hanya baris yang terlihat yang ada di DOM. |
+| Daftar | TanStack Virtual | Hanya baris yang terlihat yang ada di DOM. Sortir, lebar, dan visibilitas kolom ditangani halaman sendiri (`columns.ts`); TanStack Table dilepas di Tahap 2. |
 | Ikon dan font | Lucide, Inter (dibundel) | Sama seperti mockup. |
 | Build halaman | Vite + TypeScript, React 19 | Ditanam ke exe dengan `go:embed`. |
 

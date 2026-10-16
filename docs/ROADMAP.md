@@ -274,6 +274,45 @@ berubah (TikTok, Instagram) bisa sesekali rusak sampai yt-dlp atau ODM
 diperbarui. Merekam siaran orang lain bisa melanggar hak cipta, ketentuan
 layanan, atau privasi: tanggung jawab pemakai.
 
+## Fase 7: UI Fluent (Windows 11) dengan Wails
+
+Tujuan: UI dengan tampilan Windows 11 (Fluent 2, Mica, ikon dan font
+Windows), tetap Go dan satu exe. Opsi C dipilih pada 2026-10-16. Rencana
+lengkap (alasan, arsitektur, build, uji, risiko) ada di
+[FLUENT-UI.md](FLUENT-UI.md).
+
+Pilihan teknis: Wails v3 (beta, karena v2 tidak punya banyak jendela dan
+tray) + WebView2 + React 19 + Fluent UI React v9 (punya DataGrid dan Tree)
++ Vite. UI Fyne tetap menjadi bawaan sampai UI baru setara fiturnya.
+
+- [ ] **Tahap 0** Prototipe jendela utama di cabang `ui-fluent`: daftar
+      dari engine sungguhan, toolbar, kategori, status bar, Mica,
+      gelap/terang. Diukur ukuran exe, memori, dan kelancaran daftar 1.000
+      item; tangkapan layarnya dibandingkan dengan UI Fyne. Pengguna
+      memutuskan lanjut atau tidak. **S**
+- [ ] **Tahap 1** Fondasi: paket bersama `uicore` dan `i18n`, service dan
+      event untuk semua fungsi engine yang dipakai UI, `go.mod` naik ke Go
+      1.25, job CI (Node + Vitest + `-tags fluent`), `scripts/build.sh
+      fluent`, `ODM-Fluent.exe` pratinjau. **S**
+- [ ] **Tahap 2** Jendela utama setara: DataGrid (kolom, lebar, sortir,
+      klik/Ctrl/Shift/Ctrl+A, klik kanan, klik ganda), toolbar, kategori
+      dan antrean, pencarian, status bar, pembatas kecepatan, pintasan,
+      menu. **B**
+- [ ] **Tahap 3** Dialog dan jendela: Unduhan Baru (probe, kualitas stream,
+      yt-dlp, live), Progres, Opsi (6 tab), Penjadwal, Kategori, Program
+      pendamping, Unduhan selesai, Impor/Ekspor, pratinjau ZIP, perbarui
+      alamat, Tentang, Pintasan. **B**
+- [ ] **Tahap 4** Integrasi Windows: tray, notifikasi, `-hidden`, prompt dari
+      ekstensi (selalu di atas), mulai bersama Windows, clipboard, cek
+      pembaruan, suara. **S**
+- [ ] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, Windows 10
+      (tanpa Mica), terjemahan lengkap, performa dan memori. **S**
+- [ ] **Tahap 6** Alih: UI Fluent menjadi `ODM.exe` bawaan di Windows; Fyne
+      tetap untuk macOS/Linux. README, CHANGELOG, tangkapan layar. **K**
+
+Nanti: frontend yang sama untuk web UI `-serve`, Wails untuk macOS/Linux,
+title bar buatan sendiri.
+
 ## Catatan kerja
 
 - Go portable: `C:\Users\rigaz\AppData\Local\go-sdk\go\bin`, dengan

@@ -164,6 +164,76 @@ setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
       (cek tiap 250 ms) selama yang lain masih bekerja. Uji lokal: 24 MB,
       satu dari 8 koneksi 16 KB/s, 9,1 s → 3,1 s.
 
+## Fase 6: rekam siaran langsung
+
+Tujuan: siaran langsung dari banyak platform (Instagram, TikTok, Facebook,
+YouTube, Twitch, situs TV/berita) bisa direkam dari saat tombol Rekam
+diklik sampai Stop, lalu otomatis digabung menjadi satu file MP4 dengan
+ffmpeg, tanpa encode ulang.
+
+Rancangan (disepakati 2026-10-16):
+
+- Deteksi lewat dua jalur. Pertama, ekstensi melihat playlist atau aliran
+  live yang dimuat pemutar; jalur ini paling tahan terhadap perubahan situs
+  karena memakai apa yang dimuat pemutar yang sudah login. Kedua, yt-dlp
+  memberi alamat siaran (dan header-nya) dari halaman platform yang
+  dikenalnya.
+- ODM sendiri yang merekam, bukan yt-dlp: di Windows yt-dlp hanya berhenti
+  rapi dengan Ctrl+C, yang tidak bisa dikirim dengan andal oleh program
+  GUI; kalau dibunuh, file live bisa tidak tertutup. Perekam ODM
+  (`live.go`) sudah menangani Stop = selesai + gabung, berhenti sendiri
+  saat siaran berakhir atau diam, menyambung setelah ODM ditutup, dan
+  membaca ulang playlist master saat token kedaluwarsa.
+- Hasil akhir MP4 (remux `-c copy`). Codec yang tidak muat di MP4 (jarang)
+  disimpan sebagai MKV; encode ulang tidak dipakai karena ffmpeg ringan
+  ODM tidak punya encoder.
+- Ide dari referensi (N_m3u8DL-RE, nurrony/hlsdownloader,
+  puemos/hls-downloader, Logosww/hls-downloader): pilih kualitas dan trek
+  audio sebelum merekam, gabung ke MP4 setelah selesai
+  (`--mux-after-done`), berhenti saat siaran diam (`--live-idle-timeout`,
+  sudah ada), batas durasi rekaman (`--live-record-limit`), menulis fMP4
+  bertahap selama merekam (Logosww).
+
+Tahap 1: dasar (HLS)
+
+- [ ] Hasil rekaman (dan unduhan HLS) satu jalur MPEG-TS dikemas ulang ke
+      MP4 setelah selesai; gagal → MKV; tanpa ffmpeg → tetap TS. **K**
+- [ ] Siaran live dari halaman yang dibaca yt-dlp (YouTube Live, Twitch,
+      TikTok bila ada HLS): yt-dlp memberi alamat playlist HLS dan
+      header-nya, ODM merekam dengan perekamnya sendiri, dan meminta
+      alamat baru ke yt-dlp saat alamat lama kedaluwarsa (juga saat Resume
+      berjam-jam kemudian). **S**
+- [ ] Ekstensi menandai siaran langsung: tombol "● Record live", judul
+      "LIVE", dan baris kualitas dengan keterangan bahwa perekaman berjalan
+      sampai dihentikan. **K**
+
+Tahap 2: aliran kontinu (TikTok)
+
+- [ ] Perekam aliran HTTP tanpa akhir (FLV, kadang TS) sampai Stop. **S**
+- [ ] Demuxer FLV di ffmpeg ringan (rilis `ffmpeg-min-n8.1-2`), lalu remux
+      FLV → MP4. **K**
+
+Tahap 3: DASH live (Instagram, Facebook)
+
+- [ ] Perekam DASH live: MPD dinamis, `SegmentTemplate`/`SegmentTimeline`,
+      `availabilityStartTime`, muat ulang manifest. **B**
+- [ ] Cookie login dari browser untuk platform yang mewajibkan login
+      (Instagram selalu). Perlu persetujuan pemakai dulu: belum diputuskan.
+      **S**
+
+Nanti
+
+- [ ] Batas durasi rekaman ("berhenti setelah 1 jam"), ide dari
+      `--live-record-limit`. **K**
+- [ ] Menulis MP4 terfragmentasi bertahap selama merekam, agar ruang disk
+      saat penggabungan tidak perlu 2× ukuran rekaman. **S**
+
+Batasan: rekaman mulai dari saat klik (ditambah cadangan yang masih ada di
+playlist), siaran ber-DRM/berbayar tidak didukung, dan platform yang sering
+berubah (TikTok, Instagram) bisa sesekali rusak sampai yt-dlp atau ODM
+diperbarui. Merekam siaran orang lain bisa melanggar hak cipta, ketentuan
+layanan, atau privasi: tanggung jawab pemakai.
+
 ## Catatan kerja
 
 - Go portable: `C:\Users\rigaz\AppData\Local\go-sdk\go\bin`, dengan

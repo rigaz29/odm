@@ -354,10 +354,37 @@ bawaan sampai UI baru setara fiturnya.
       berjalan (misalnya dari browser) kini tetap diberi notifikasi. Diuji
       di exe: `-hidden`, menu tray, tutup ke tray, instans kedua, dan
       notifikasi di pusat notifikasi. Kunci registry toast uji (HKCU) lalu
-      dihapus lagi. Catatan untuk Tahap 5: toast belum berikon karena
-      Wails mengambilnya dari resource ikon exe (ID 3), yang belum ada.
-- [ ] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, animasi
-      halus, terjemahan lengkap, performa dan memori. **S**
+      dihapus lagi. Toast belum berikon karena Wails mengambilnya dari
+      resource ikon exe (ID 3); diselesaikan di Tahap 5.
+- [x] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, animasi
+      halus, terjemahan lengkap, performa dan memori. **S** Hasilnya:
+      - ikon ODM di resource exe (ID 3), sehingga Explorer, taskbar, dan
+        notifikasi Windows berikon; `scripts/winres.sh` membuat ulang
+        `rsrc_windows_amd64.syso` untuk kedua UI;
+      - halaman hanya menerima perubahan daftar, bukan seluruh daftar.
+        Dengan 1.200 unduhan dan 4 berjalan, kiriman turun dari 777 KB
+        ke 4 KB, CPU ODM dari 24% ke 12% satu core, WebView2 dari
+        sekitar 700 MB ke 470 MB. Daftar diam memakan 0,1%. Uji 10 menit
+        tidak menunjukkan kebocoran memori;
+      - Narrator membaca jendela utama: grid dengan jumlah baris penuh,
+        baris yang dipilih, dan baris aktif keyboard, ditambah landmark,
+        judul, dan nama tombol. axe bersih di semua jendela, terang dan
+        gelap;
+      - daftar menjadi satu perhentian Tab (panah, Spasi, Ctrl+A), menu
+        baris lewat tombol Menu atau Shift+F10, cincin fokus keyboard,
+        dan kontras teks redup serta lencana dinaikkan ke 4,5:1;
+      - animasi masuk dan keluar untuk menu, popover, tooltip, palet, dan
+        dialog, yang mati bila Windows meminta gerak dikurangi;
+      - setiap jendela dipas ke work area layar, sehingga tidak terpotong
+        pada skala 150% atau 200%.
+
+      Keputusan: WebView2 jendela utama tidak lagi di-host lewat
+      composition, karena dalam mode itu Wails beta.30 tidak meneruskan
+      UI Automation dan Narrator tidak bisa membaca apa pun. Seret
+      jendela, klik ganda, ubah ukuran, Win+panah, dan seret ke tepi
+      layar tetap berfungsi; snap layout di tombol Maximize (dan Win+Z)
+      dilepas. Terjemahan lengkap dilewati atas permintaan; kunci baru
+      tetap diterjemahkan dan diperiksa tes i18n.
 - [ ] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne
       tetap untuk macOS/Linux. README, CHANGELOG, tangkapan layar. **K**
 

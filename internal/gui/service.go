@@ -16,18 +16,20 @@ import (
 // Item is one download as the page shows it: engine.Info without the
 // per-connection detail the list has no use for.
 type Item struct {
-	ID          string    `json:"id"`
-	URL         string    `json:"url"`
-	FileName    string    `json:"fileName"`
-	FilePath    string    `json:"filePath"`
-	Status      string    `json:"status"`
-	Error       string    `json:"error"`
-	Total       int64     `json:"total"`
-	Done        int64     `json:"done"`
-	Progress    float64   `json:"progress"`
-	Speed       int64     `json:"speed"`
-	Category    string    `json:"category"`
-	Queue       string    `json:"queue"`
+	ID       string  `json:"id"`
+	URL      string  `json:"url"`
+	FileName string  `json:"fileName"`
+	FilePath string  `json:"filePath"`
+	Status   string  `json:"status"`
+	Error    string  `json:"error"`
+	Total    int64   `json:"total"`
+	Done     int64   `json:"done"`
+	Progress float64 `json:"progress"`
+	Speed    int64   `json:"speed"`
+	Category string  `json:"category"`
+	Queue    string  `json:"queue"`
+	// Order is the place in its queue's run order: lower runs first.
+	Order       int       `json:"order"`
 	Description string    `json:"description"`
 	Live        bool      `json:"live"`
 	Site        bool      `json:"site"`
@@ -54,7 +56,10 @@ type Snapshot struct {
 	// Running lists the queues that are started.
 	Running []string `json:"running"`
 	// Limit is the speed limit in force, in bytes per second; 0 for none.
-	Limit int64 `json:"limit"`
+	// SavedLimit is the one the limiter uses when turned on, also while it
+	// is off; 0 when none was ever set.
+	Limit      int64 `json:"limit"`
+	SavedLimit int64 `json:"savedLimit"`
 	// Speeds is the total speed over the last minute, a sample a second.
 	Speeds []int64 `json:"speeds"`
 }
@@ -103,7 +108,7 @@ func (s *Service) Snapshot() Snapshot {
 			ID: d.ID, URL: d.URL, FileName: d.FileName, FilePath: d.FilePath,
 			Status: string(d.Status), Error: d.Error,
 			Total: d.Total, Done: d.Done, Progress: d.Progress,
-			Category: d.Category, Queue: d.Queue, Description: d.Description,
+			Category: d.Category, Queue: d.Queue, Order: d.Order, Description: d.Description,
 			Live: d.Live, Site: d.Site, Stream: d.Stream, Verifying: d.Verifying,
 			CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 		}
@@ -125,9 +130,10 @@ func (s *Service) Snapshot() Snapshot {
 			running = append(running, q)
 		}
 	}
+	st := s.mgr.Settings()
 	return Snapshot{
 		Items: items, Categories: engine.Categories(), Queues: queues, Running: running,
-		Limit: s.mgr.Settings().EffectiveSpeedLimit(), Speeds: total,
+		Limit: st.EffectiveSpeedLimit(), SavedLimit: st.SpeedLimit, Speeds: total,
 	}
 }
 
@@ -266,17 +272,53 @@ func (s *Service) Pause(ids []string) {
 	s.poke()
 }
 
-// PauseAll stops every running download.
+// PauseAll stops every running download; a started queue stays started.
 func (s *Service) PauseAll() {
 	s.mgr.PauseAll()
 	s.poke()
 }
 
-// Remove takes the downloads ids off the list, their files kept.
-func (s *Service) Remove(ids []string) {
+// ResumeAll restarts every paused or failed download.
+func (s *Service) ResumeAll() {
+	s.mgr.ResumeAll()
+	s.poke()
+}
+
+// StopAll pauses every download and stops every queue, so nothing carries
+// on by itself.
+func (s *Service) StopAll() {
+	s.mgr.StopAll()
+	s.poke()
+}
+
+// Remove takes the downloads ids off the list, and with withFiles deletes
+// their files too.
+func (s *Service) Remove(ids []string, withFiles bool) {
 	for _, id := range ids {
-		s.mgr.Remove(id)
+		s.mgr.RemoveWithFile(id, withFiles)
 	}
+	s.poke()
+}
+
+// MoveToQueue puts the downloads ids in queue.
+func (s *Service) MoveToQueue(ids []string, queue string) {
+	for _, id := range ids {
+		s.mgr.MoveToQueue(id, queue)
+	}
+	s.poke()
+}
+
+// MoveInQueue moves the download id up (delta -1) or down (+1) in its
+// queue's order.
+func (s *Service) MoveInQueue(id string, delta int) {
+	s.mgr.MoveInQueue(id, delta)
+	s.poke()
+}
+
+// SetSpeedLimiter turns the speed limit for all downloads on or off. A
+// bytesPerSecond above 0 also sets the limit; 0 keeps the one saved.
+func (s *Service) SetSpeedLimiter(on bool, bytesPerSecond int64) {
+	s.mgr.SetSpeedLimiter(on, bytesPerSecond)
 	s.poke()
 }
 
@@ -327,8 +369,7 @@ func (s *Service) ShowInFolder(id string) error {
 	return errNoDownload
 }
 
-// Appearance returns how the page should look: the language, and the
-// Windows accent colour (empty when Windows does not say).
+// Appearance returns how the page should look: the language and the theme.
 func (s *Service) Appearance() Appearance {
 	return currentAppearance()
 }

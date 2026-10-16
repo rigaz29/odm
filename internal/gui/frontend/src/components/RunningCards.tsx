@@ -15,7 +15,14 @@ export const MAX_CARDS = 3;
 function Card({ d, onOpen }: { d: Item; onOpen: () => void }) {
   const live = d.live;
   return (
-    <div onDoubleClick={onOpen} className="flex min-w-0 flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5 shadow-xs">
+    <div
+      role="button"
+      tabIndex={0}
+      title={t("Show in the list")}
+      onClick={onOpen}
+      onKeyDown={(e) => (e.key === "Enter" || e.key === " ") && (e.preventDefault(), onOpen())}
+      className="flex min-w-0 cursor-default flex-col gap-2.5 rounded-xl border border-border bg-card p-3.5 shadow-xs outline-none transition-colors hover:border-ring/40 focus-visible:ring-2 focus-visible:ring-ring/50"
+    >
       <div className="flex items-center gap-2.5">
         <FileTile category={d.category} size="size-8" icon="size-4" />
         <div className="min-w-0 flex-1">
@@ -43,7 +50,7 @@ function Card({ d, onOpen }: { d: Item; onOpen: () => void }) {
         )}
       </div>
       {/* The sizes stay whole; when the card is narrow the time left gives way. */}
-      <div className="flex min-w-0 items-center gap-3 whitespace-nowrap text-xs text-muted-foreground">
+      <div className="flex min-w-0 items-center gap-2.5 whitespace-nowrap text-xs text-muted-foreground">
         <span className="flex shrink-0 items-center gap-1 text-foreground">
           <ArrowDown className="size-3.5 text-cyan-500" />
           <b className="font-semibold tabular-nums">{speedText(d.speed) || "—"}</b>

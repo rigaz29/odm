@@ -64,9 +64,10 @@ func fyneKeys(t *testing.T) map[string]string {
 	return keys
 }
 
-// pageKeys is every text the new UI's page passes to t or tf.
+// pageKeys is every text the new UI's page passes to t or tf, or marks
+// with markT.
 func pageKeys(t *testing.T) map[string]string {
-	call := regexp.MustCompile(`\bt[f]?\(\s*("(?:[^"\\]|\\.)*")`)
+	call := regexp.MustCompile(`\b(?:t|tf|markT)\(\s*("(?:[^"\\]|\\.)*")`)
 	return keysIn(t, "../gui/frontend/src", call, func(p string) bool {
 		return (strings.HasSuffix(p, ".ts") || strings.HasSuffix(p, ".tsx")) && !strings.HasSuffix(p, ".test.ts")
 	})

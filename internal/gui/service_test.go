@@ -77,7 +77,7 @@ func TestWatchSendsChanges(t *testing.T) {
 		t.Fatalf("an unchanged snapshot was sent again (%d)", count())
 	}
 	d := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/b.zip", FileName: "b.zip"})
-	svc.Remove([]string{d.ID}) // pokes; the list is back as it was
+	svc.Remove([]string{d.ID}, false) // pokes; the list is back as it was
 	svc.poke()
 	time.Sleep(50 * time.Millisecond)
 	mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/c.zip", FileName: "c.zip"})
@@ -105,6 +105,39 @@ func TestAddURL(t *testing.T) {
 	}
 	if err := svc.OpenFile("nope"); err == nil {
 		t.Fatal("an unknown download was opened")
+	}
+}
+
+func TestQueueAndLimiterActions(t *testing.T) {
+	svc, mgr := newTestService(t)
+	mgr.AddQueue("Night")
+	a := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/a.zip", FileName: "a.zip"})
+	b := mgr.Create(engine.AddOptions{URL: "http://127.0.0.1:9/b.zip", FileName: "b.zip"})
+	svc.MoveToQueue([]string{a.ID, b.ID}, "Night")
+	svc.MoveInQueue(b.ID, -1)
+	snap := svc.Snapshot()
+	if len(snap.Items) != 2 || snap.Items[0].Queue != "Night" || snap.Items[1].Queue != "Night" {
+		t.Fatalf("items %+v", snap.Items)
+	}
+	if ia, ib := snap.Items[0], snap.Items[1]; ib.Order >= ia.Order {
+		t.Fatalf("b was not moved up: orders %d and %d", ia.Order, ib.Order)
+	}
+
+	if snap.Limit != 0 || snap.SavedLimit != 0 {
+		t.Fatalf("limit %d, saved %d before any was set", snap.Limit, snap.SavedLimit)
+	}
+	svc.SetSpeedLimiter(true, 300<<10)
+	if snap := svc.Snapshot(); snap.Limit != 300<<10 || snap.SavedLimit != 300<<10 {
+		t.Fatalf("limit %d, saved %d after turning it on", snap.Limit, snap.SavedLimit)
+	}
+	svc.SetSpeedLimiter(false, 0)
+	if snap := svc.Snapshot(); snap.Limit != 0 || snap.SavedLimit != 300<<10 {
+		t.Fatalf("limit %d, saved %d after turning it off", snap.Limit, snap.SavedLimit)
+	}
+
+	svc.Remove([]string{a.ID}, false)
+	if snap := svc.Snapshot(); len(snap.Items) != 1 || snap.Items[0].ID != b.ID {
+		t.Fatalf("items %+v after removing a", snap.Items)
 	}
 }
 

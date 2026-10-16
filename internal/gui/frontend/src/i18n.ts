@@ -1,7 +1,8 @@
 // The page is written in English; its Indonesian comes from ODM's shared
 // catalog (internal/i18n/id.json), which the Fyne UI reads too. Every text
 // passed to t or tf must be a string literal there: internal/i18n's tests
-// find them so, and check each has a translation.
+// find them so, and check each has a translation. A text kept as data and
+// translated later is wrapped in markT, for the tests to find it.
 
 import catalog from "../../../i18n/id.json";
 
@@ -17,6 +18,9 @@ export function setLanguage(l: string) {
 export function language(): string {
   return lang;
 }
+
+// markT marks a text that t translates later; it returns it as it is.
+export const markT = (s: string) => s;
 
 // t translates s; tf also fills %d and %s, in order.
 export function t(s: string): string {

@@ -208,6 +208,17 @@ export function matchesSearch(d: Item, query: string): boolean {
 // looksLikeURL is a pasted address the search box offers to download.
 export const looksLikeURL = (s: string) => /^https?:\/\/\S+$/i.test(s.trim());
 
+// step is where a key moves the keyboard's row in a list of n rows: by
+// delta rows (Up -1, Page Down +page...), or to the first or last. From no
+// row (at -1), moving down goes to the first and up to the last.
+export function step(n: number, at: number, move: number | "first" | "last"): number {
+  if (n === 0) return -1;
+  if (move === "first") return 0;
+  if (move === "last") return n - 1;
+  if (at < 0) return move > 0 ? 0 : n - 1;
+  return Math.min(n - 1, Math.max(0, at + move));
+}
+
 // select applies a click on id within order (the ids as listed): plain
 // picks only it, Ctrl toggles it, Shift picks the range from the anchor
 // (Ctrl+Shift adds that range). It returns the new selection and anchor.

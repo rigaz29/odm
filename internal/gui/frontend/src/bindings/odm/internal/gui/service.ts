@@ -27,8 +27,7 @@ export function AddURL(address: string): $CancellablePromise<$models.Item> {
 }
 
 /**
- * Appearance returns how the page should look: the language, and the
- * Windows accent colour (empty when Windows does not say).
+ * Appearance returns how the page should look: the language and the theme.
  */
 export function Appearance(): $CancellablePromise<$models.Appearance> {
     return $Call.ByID(3343968734).then(($result: any) => {
@@ -42,6 +41,21 @@ export function Appearance(): $CancellablePromise<$models.Appearance> {
  */
 export function ClearCompleted(): $CancellablePromise<number> {
     return $Call.ByID(2825398806);
+}
+
+/**
+ * MoveInQueue moves the download id up (delta -1) or down (+1) in its
+ * queue's order.
+ */
+export function MoveInQueue(id: string, delta: number): $CancellablePromise<void> {
+    return $Call.ByID(4141805797, id, delta);
+}
+
+/**
+ * MoveToQueue puts the downloads ids in queue.
+ */
+export function MoveToQueue(ids: string[], queue: string): $CancellablePromise<void> {
+    return $Call.ByID(2591071311, ids, queue);
 }
 
 /**
@@ -60,17 +74,18 @@ export function Pause(ids: string[]): $CancellablePromise<void> {
 }
 
 /**
- * PauseAll stops every running download.
+ * PauseAll stops every running download; a started queue stays started.
  */
 export function PauseAll(): $CancellablePromise<void> {
     return $Call.ByID(1892458477);
 }
 
 /**
- * Remove takes the downloads ids off the list, their files kept.
+ * Remove takes the downloads ids off the list, and with withFiles deletes
+ * their files too.
  */
-export function Remove(ids: string[]): $CancellablePromise<void> {
-    return $Call.ByID(2454442852, ids);
+export function Remove(ids: string[], withFiles: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2454442852, ids, withFiles);
 }
 
 /**
@@ -78,6 +93,21 @@ export function Remove(ids: string[]): $CancellablePromise<void> {
  */
 export function Resume(ids: string[]): $CancellablePromise<void> {
     return $Call.ByID(574679399, ids);
+}
+
+/**
+ * ResumeAll restarts every paused or failed download.
+ */
+export function ResumeAll(): $CancellablePromise<void> {
+    return $Call.ByID(2080170178);
+}
+
+/**
+ * SetSpeedLimiter turns the speed limit for all downloads on or off. A
+ * bytesPerSecond above 0 also sets the limit; 0 keeps the one saved.
+ */
+export function SetSpeedLimiter(on: boolean, bytesPerSecond: number): $CancellablePromise<void> {
+    return $Call.ByID(35223205, on, bytesPerSecond);
 }
 
 export function ShowInFolder(id: string): $CancellablePromise<void> {
@@ -98,6 +128,14 @@ export function Snapshot(): $CancellablePromise<$models.Snapshot> {
  */
 export function StartQueue(name: string): $CancellablePromise<void> {
     return $Call.ByID(1255612791, name);
+}
+
+/**
+ * StopAll pauses every download and stops every queue, so nothing carries
+ * on by itself.
+ */
+export function StopAll(): $CancellablePromise<void> {
+    return $Call.ByID(20496231);
 }
 
 export function StopQueue(name: string): $CancellablePromise<void> {

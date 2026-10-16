@@ -16,9 +16,9 @@ const seeds: Seed[] = [
   ["Blender-4.5-windows-x64.msi", "Programs", 412 * MB, "downloading", 27, 6.1 * MB, "download.blender.org"],
   ["Siaran NASA — ISS Earth View (live)", "Video", 0, "downloading", 0, 0.9 * MB, "youtube.com", { live: true, stream: "hls", done: 248 * MB }],
   ["Interstellar.2014.2160p.UHD.mkv", "Video", 21.4 * GB, "paused", 41, 0, "cdn.example.net"],
-  ["Figma-Desktop-Setup-x64.exe", "Programs", 98 * MB, "queued", 0, 0, "desktop.figma.com"],
+  ["Figma-Desktop-Setup-x64.exe", "Programs", 98 * MB, "queued", 0, 0, "desktop.figma.com", { queue: "Malam hari" }],
   ["foto-liburan-bali-2026.zip", "Compressed", 1.3 * GB, "error", 32, 0, "drive.example.com", { error: "403 Forbidden" }],
-  ["dataset-iklim-indonesia-2010-2026.csv", "Documents", 640 * MB, "queued", 0, 0, "data.bmkg.go.id"],
+  ["dataset-iklim-indonesia-2010-2026.csv", "Documents", 640 * MB, "queued", 0, 0, "data.bmkg.go.id", { queue: "Malam hari", description: "Data untuk skripsi" }],
   ["podcast-teknologi-eps-112.mp3", "Audio", 86 * MB, "complete", 100, 0, "anchor.fm"],
   ["laporan-keuangan-Q3-2026.pdf", "Documents", 3.2 * MB, "complete", 100, 0, "intranet.example.co.id"],
   ["Kuliah-Umum-AI-2026.mp4", "Video", 1.8 * GB, "complete", 100, 0, "vod.kampus.ac.id"],
@@ -51,6 +51,7 @@ function makeItems(n: number): Item[] {
         speed: running ? speed0 : 0,
         category,
         queue: "Main",
+        order: i,
         createdAt: new Date(now - i * 3.3e6).toISOString(),
         updatedAt: new Date(now - i * 3.1e6).toISOString(),
         conns: running && !extra?.live ? Array.from({ length: i === 0 ? 8 : 4 }, (_, k) => Math.max(0, 1 - k * 0.13 - (i ? 0.3 : 0))) : [],
@@ -72,11 +73,21 @@ export function mockApi(): Api {
   const n = Number(q.get("n") || seeds.length);
   let items = makeItems(n);
   let running: string[] = [];
+  const queues = ["Main", "Malam hari"];
+  const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
   const base = new Map<string, number>(); // each download's speed before the jitter
   const subs = new Set<(s: Snapshot) => void>();
   const snap = () =>
-    new Snapshot({ items: items.map((d) => new Item(d)), categories, queues: ["Main"], running, limit: 0, speeds: total.slice() });
+    new Snapshot({
+      items: items.map((d) => new Item(d)),
+      categories,
+      queues,
+      running,
+      limit: limiter.on ? limiter.saved : 0,
+      savedLimit: limiter.saved,
+      speeds: total.slice(),
+    });
   const push = () => subs.forEach((cb) => cb(snap()));
 
   setInterval(() => {
@@ -125,6 +136,29 @@ export function mockApi(): Api {
     resume: async (ids) => set(ids, "downloading", 3 * MB),
     pause: async (ids) => set(ids, "paused", 0),
     pauseAll: async () => set(items.filter((d) => d.status === "downloading").map((d) => d.id), "paused", 0),
+    resumeAll: async () => set(items.filter((d) => d.status === "paused" || d.status === "error").map((d) => d.id), "downloading", 3 * MB),
+    stopAll: async () => {
+      running = [];
+      set(items.filter((d) => d.status === "downloading" || d.status === "queued").map((d) => d.id), "paused", 0);
+    },
+    moveToQueue: async (ids, queue) => {
+      for (const d of items) if (ids.includes(d.id)) d.queue = queue;
+      push();
+    },
+    moveInQueue: async (id, delta) => {
+      const d = items.find((x) => x.id === id);
+      if (!d) return;
+      const sib = items.filter((x) => x.queue === d.queue).sort((a, b) => a.order - b.order);
+      const other = sib[sib.indexOf(d) + delta];
+      if (other) [d.order, other.order] = [other.order, d.order];
+      push();
+    },
+    setSpeedLimiter: async (on, bps) => {
+      limiter.on = on;
+      if (bps > 0) limiter.saved = bps;
+      push();
+    },
+    copyText: (text) => navigator.clipboard.writeText(text),
     remove: async (ids) => {
       items = items.filter((d) => !ids.includes(d.id));
       push();

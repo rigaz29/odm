@@ -1,39 +1,64 @@
-// Context menu (Radix), in the manner of shadcn/ui's.
+// Context menu (Radix), in the manner of shadcn/ui's. It looks as the
+// dropdown menu does (menu-styles).
 
 import * as ContextMenuPrimitive from "@radix-ui/react-context-menu";
+import { Check, ChevronRight } from "lucide-react";
 import * as React from "react";
 import { cn } from "../../lib/utils";
+import { menuCheck, menuContent, menuItem, menuLabel, menuSeparator, menuShortcut } from "./menu-styles";
 
 export const ContextMenu = ContextMenuPrimitive.Root;
 export const ContextMenuTrigger = ContextMenuPrimitive.Trigger;
+export const ContextMenuSub = ContextMenuPrimitive.Sub;
 
 export function ContextMenuContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Content>) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Content
-        className={cn("z-50 min-w-48 rounded-lg border border-border bg-popover p-1 text-sm text-foreground shadow-lg", className)}
-        {...props}
-      />
+      <ContextMenuPrimitive.Content className={cn(menuContent, className)} {...props} />
     </ContextMenuPrimitive.Portal>
   );
 }
 
 export function ContextMenuItem({ className, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Item>) {
+  return <ContextMenuPrimitive.Item className={cn(menuItem, className)} {...props} />;
+}
+
+export function ContextMenuCheckboxItem({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.CheckboxItem>) {
   return (
-    <ContextMenuPrimitive.Item
-      className={cn(
-        "flex h-8 items-center gap-2 rounded-md px-2 outline-none data-[disabled]:pointer-events-none data-[highlighted]:bg-accent data-[disabled]:opacity-45 [&_svg]:size-4 [&_svg]:text-muted-foreground",
-        className,
-      )}
-      {...props}
-    />
+    <ContextMenuPrimitive.CheckboxItem className={cn(menuItem, className)} {...props}>
+      {children}
+      <ContextMenuPrimitive.ItemIndicator className={menuCheck}>
+        <Check />
+      </ContextMenuPrimitive.ItemIndicator>
+    </ContextMenuPrimitive.CheckboxItem>
   );
 }
 
+export function ContextMenuSubTrigger({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubTrigger>) {
+  return (
+    <ContextMenuPrimitive.SubTrigger className={cn(menuItem, "data-[state=open]:bg-accent", className)} {...props}>
+      {children}
+      <ChevronRight className="ml-auto" />
+    </ContextMenuPrimitive.SubTrigger>
+  );
+}
+
+export function ContextMenuSubContent({ className, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.SubContent>) {
+  return (
+    <ContextMenuPrimitive.Portal>
+      <ContextMenuPrimitive.SubContent className={cn(menuContent, className)} {...props} />
+    </ContextMenuPrimitive.Portal>
+  );
+}
+
+export function ContextMenuLabel({ className, ...props }: React.ComponentPropsWithoutRef<typeof ContextMenuPrimitive.Label>) {
+  return <ContextMenuPrimitive.Label className={cn(menuLabel, className)} {...props} />;
+}
+
 export function ContextMenuSeparator() {
-  return <ContextMenuPrimitive.Separator className="-mx-1 my-1 h-px bg-border" />;
+  return <ContextMenuPrimitive.Separator className={menuSeparator} />;
 }
 
 export function ContextMenuShortcut({ children }: { children: React.ReactNode }) {
-  return <span className="ml-auto pl-4 text-xs text-muted-foreground">{children}</span>;
+  return <span className={menuShortcut}>{children}</span>;
 }

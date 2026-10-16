@@ -57,6 +57,11 @@ export class Item {
     "speed": number;
     "category": string;
     "queue": string;
+
+    /**
+     * Order is the place in its queue's run order: lower runs first.
+     */
+    "order": number;
     "description": string;
     "live": boolean;
     "site": boolean;
@@ -118,6 +123,9 @@ export class Item {
         if (!("queue" in $$source)) {
             this["queue"] = "";
         }
+        if (!("order" in $$source)) {
+            this["order"] = 0;
+        }
         if (!("description" in $$source)) {
             this["description"] = "";
         }
@@ -156,14 +164,14 @@ export class Item {
      * Creates a new Item instance from a string or object.
      */
     static createFrom($$source: any = {}): Item {
-        const $$createField19_0 = $$createType0;
-        const $$createField20_0 = $$createType1;
+        const $$createField20_0 = $$createType0;
+        const $$createField21_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("conns" in $$parsedSource) {
-            $$parsedSource["conns"] = $$createField19_0($$parsedSource["conns"]);
+            $$parsedSource["conns"] = $$createField20_0($$parsedSource["conns"]);
         }
         if ("speeds" in $$parsedSource) {
-            $$parsedSource["speeds"] = $$createField20_0($$parsedSource["speeds"]);
+            $$parsedSource["speeds"] = $$createField21_0($$parsedSource["speeds"]);
         }
         return new Item($$parsedSource as Partial<Item>);
     }
@@ -184,8 +192,11 @@ export class Snapshot {
 
     /**
      * Limit is the speed limit in force, in bytes per second; 0 for none.
+     * SavedLimit is the one the limiter uses when turned on, also while it
+     * is off; 0 when none was ever set.
      */
     "limit": number;
+    "savedLimit": number;
 
     /**
      * Speeds is the total speed over the last minute, a sample a second.
@@ -209,6 +220,9 @@ export class Snapshot {
         if (!("limit" in $$source)) {
             this["limit"] = 0;
         }
+        if (!("savedLimit" in $$source)) {
+            this["savedLimit"] = 0;
+        }
         if (!("speeds" in $$source)) {
             this["speeds"] = [];
         }
@@ -224,7 +238,7 @@ export class Snapshot {
         const $$createField1_0 = $$createType4;
         const $$createField2_0 = $$createType4;
         const $$createField3_0 = $$createType4;
-        const $$createField5_0 = $$createType1;
+        const $$createField6_0 = $$createType1;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -239,7 +253,7 @@ export class Snapshot {
             $$parsedSource["running"] = $$createField3_0($$parsedSource["running"]);
         }
         if ("speeds" in $$parsedSource) {
-            $$parsedSource["speeds"] = $$createField5_0($$parsedSource["speeds"]);
+            $$parsedSource["speeds"] = $$createField6_0($$parsedSource["speeds"]);
         }
         return new Snapshot($$parsedSource as Partial<Snapshot>);
     }

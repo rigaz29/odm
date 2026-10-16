@@ -16,6 +16,7 @@ import {
   since,
   statusKind,
   statusLabel,
+  step,
 } from "./format";
 import { setLanguage } from "./i18n";
 
@@ -87,6 +88,20 @@ describe("filters", () => {
     expect(matchesSearch(d, "holiday zip")).toBe(false);
     expect(looksLikeURL(" https://x.example/a.iso ")).toBe(true);
     expect(looksLikeURL("ubuntu iso")).toBe(false);
+  });
+});
+
+describe("step", () => {
+  it("moves the keyboard's row and stops at the ends", () => {
+    expect(step(5, 2, 1)).toBe(3);
+    expect(step(5, 4, 1)).toBe(4);
+    expect(step(5, 1, -10)).toBe(0);
+    expect(step(5, 1, 10)).toBe(4);
+    expect(step(5, 3, "first")).toBe(0);
+    expect(step(5, 0, "last")).toBe(4);
+    expect(step(5, -1, 1)).toBe(0);
+    expect(step(5, -1, -1)).toBe(4);
+    expect(step(0, -1, 1)).toBe(-1);
   });
 });
 

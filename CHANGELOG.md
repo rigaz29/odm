@@ -246,6 +246,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A download added without starting it (New Download → Download Later, or
+  `"start": false` from the API) was gone after ODM closed: it was saved
+  only once its state changed. It is saved when it is added.
 - Recording a YouTube broadcast failed when it was stopped ("merge
   failed … Invalid data found"). YouTube's live playlists now list the
   last hour, with video and audio apart: the recording began an hour in

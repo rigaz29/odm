@@ -943,7 +943,9 @@ func (m *Manager) Create(o AddOptions) Info {
 	m.downloads[d.ID] = d
 	m.order = append(m.order, d.ID)
 	m.mu.Unlock()
-	m.fire()
+	// Saved now, not only at its first change: a download added stopped
+	// ("Download Later") may not change before ODM closes.
+	m.changed(d)
 	m.pump()
 	return d.Info()
 }

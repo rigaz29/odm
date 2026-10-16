@@ -339,9 +339,23 @@ bawaan sampai UI baru setara fiturnya.
       socket kontrol, unduhan sampai jendela selesai, validasi jam di
       Penjadwal, batas unduhan, hitung mundur yang dibatalkan, dan ekspor
       lewat dialog Save As.
-- [ ] **Tahap 4** Integrasi Windows: tray, notifikasi, `-hidden`, prompt dari
+- [x] **Tahap 4** Integrasi Windows: tray, notifikasi, `-hidden`, prompt dari
       ekstensi (selalu di atas), mulai bersama Windows, clipboard, cek
-      pembaruan, suara. **S**
+      pembaruan, suara. **S** Hasilnya:
+      - tray dengan menu seperti UI Fyne, dan menutup jendela
+        menyembunyikannya ke tray;
+      - `-hidden`, notifikasi Windows saat unduhan selesai atau gagal,
+        suara, dan pertanyaan pertama kali soal program pendamping;
+      - ikon ODM yang digambar di kode untuk tray, jendela, dan taskbar.
+
+      Prompt dari ekstensi, mulai bersama Windows, dan cek pembaruan
+      sudah ada sejak Tahap 3; pemantau clipboard berjalan di `main.go`
+      untuk UI mana pun. Unduhan yang gagal sebelum sempat terlihat
+      berjalan (misalnya dari browser) kini tetap diberi notifikasi. Diuji
+      di exe: `-hidden`, menu tray, tutup ke tray, instans kedua, dan
+      notifikasi di pusat notifikasi. Kunci registry toast uji (HKCU) lalu
+      dihapus lagi. Catatan untuk Tahap 5: toast belum berikon karena
+      Wails mengambilnya dari resource ikon exe (ID 3), yang belum ada.
 - [ ] **Tahap 5** Perapian: Narrator dan keyboard, DPI tinggi, animasi
       halus, terjemahan lengkap, performa dan memori. **S**
 - [ ] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne

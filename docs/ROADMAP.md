@@ -226,8 +226,11 @@ Tahap 2: aliran kontinu (TikTok)
       halaman TikTok (`/@user/live`, `/@user/video/ID`) lewat yt-dlp,
       dengan urutan HLS → DASH → FLV untuk siaran. Dicek dengan siaran FLV
       publik Bilibili lewat host native (`kind: "live"`): ~35 detik →
-      Hentikan → MP4 H.264 720p + AAC. Saat diuji tidak ada akun TikTok
-      publik yang sedang live; jalurnya sama, alamatnya dari yt-dlp.
+      Hentikan → MP4 H.264 720p + AAC. Lewat ekstensi di Chrome uji: FLV
+      tanpa ukuran → "● LIVE · FLV stream" → Record → koneksi diputus
+      tiap 10 detik → 3 bagian → MP4 30 detik. Saat diuji tidak ada akun
+      TikTok publik yang sedang live; jalurnya sama, alamatnya dari
+      yt-dlp.
 - [x] Demuxer FLV di ffmpeg ringan (rilis `ffmpeg-min-n8.1-2`), lalu remux
       FLV → MP4. **K** Ditambah demuxer `flv`, `live_flv` dan `concat`;
       dicek: dua bagian FLV → satu MP4 6 detik. ODM yang memakai ffmpeg
@@ -246,7 +249,9 @@ Tahap 3: DASH live (Instagram, Facebook)
       sampai sekarang (minus satu segmen cadangan), paling jauh 10 menit
       ke belakang atau sepanjang `timeShiftBufferDepth`. Dicek dengan
       simulator DASH-IF (`livesim2`, template nomor dan SegmentTimeline):
-      42 detik video + audio, tanpa celah.
+      42 detik video + audio, tanpa celah; juga lewat menu ekstensi
+      ("● LIVE · DASH stream" → Record · 360p). Siaran Facebook/Instagram
+      sungguhan belum dicoba: butuh akun yang login.
 - [x] ~~Cookie login dari browser untuk platform yang mewajibkan login.~~
       Tidak diperlukan (diputuskan 2026-10-16): Instagram dan Facebook
       direkam lewat jalur browser. Pemutar yang sudah login memuat MPD

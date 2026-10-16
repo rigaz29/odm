@@ -202,10 +202,18 @@ type tableCell struct {
 	// selected paints the selection colour behind the cell.
 	selected bool
 	// row is the table row the cell shows now (cells are reused as the
-	// list scrolls); onSecondary, when set, is told of a right-click on
-	// it, so the click can pick its row before a menu opens.
+	// list scrolls). onSecondary, when set, is told of a right-click on
+	// it, so the click can pick its row before a menu opens; onPress of
+	// the left button going down, with the modifier keys held then;
+	// onDoubleTap of a double click.
+	//
+	// The cell takes every click on it: Fyne gives a click to the
+	// innermost object that handles any kind of click, so once the cell
+	// handled right-clicks, left clicks no longer reached the table.
 	row         int
 	onSecondary func(row int, pos fyne.Position)
+	onPress     func(row int, mods fyne.KeyModifier)
+	onDoubleTap func(row int)
 }
 
 func newTableCell() *tableCell {
@@ -256,6 +264,22 @@ func (c *tableCell) setSelected(on bool) {
 func (c *tableCell) TappedSecondary(e *fyne.PointEvent) {
 	if c.onSecondary != nil {
 		c.onSecondary(c.row, e.AbsolutePosition)
+	}
+}
+
+// MouseDown selects at the press, as Explorer does. A tap is only reported
+// after the double-click delay, when Ctrl or Shift may have been let go.
+func (c *tableCell) MouseDown(e *desktop.MouseEvent) {
+	if c.onPress != nil && e.Button == desktop.MouseButtonPrimary {
+		c.onPress(c.row, e.Modifier)
+	}
+}
+
+func (c *tableCell) MouseUp(*desktop.MouseEvent) {}
+
+func (c *tableCell) DoubleTapped(*fyne.PointEvent) {
+	if c.onDoubleTap != nil {
+		c.onDoubleTap(c.row)
 	}
 }
 

@@ -246,6 +246,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A left click selects a download in the list again, and a double click
+  opens its progress window: since right-clicks picked their row, the
+  cells took every click and left clicks were lost. Ctrl+click adds a
+  download to the selection or takes it out, Shift+click selects the
+  range from the last one clicked, and Ctrl+Shift+click adds that range.
+  The selection is made as the button goes down, with the keys held then,
+  as in Explorer. Help → Keyboard shortcuts lists the clicks.
 - Restarting the browser no longer sends its whole download history to
   ODM. Chromium reports every download in its history to extensions as a
   new one when it loads the history (at start, once the extension has

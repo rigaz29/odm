@@ -302,6 +302,18 @@ func newDownloadTable(a *application) *downloadTable {
 			a.secondaryClickRow(row)
 			a.showRowMenu(pos)
 		}
+		c.onPress = func(row int, mods fyne.KeyModifier) {
+			a.clickRow(row, mods)
+			// Keys (Delete, Space, arrows, Ctrl+A) go to the list next.
+			if cv := a.win.Canvas(); cv != nil {
+				cv.Focus(t)
+			}
+		}
+		c.onDoubleTap = func(row int) {
+			if d, ok := a.itemAt(row); ok {
+				a.openProgressWindow(d.ID)
+			}
+		}
 		return c
 	}
 	t.UpdateCell = a.updateCell
@@ -697,6 +709,8 @@ var shortcuts = [][2]string{
 	{"Del", markT("Remove the selected downloads from the list")},
 	{"Shift+Del", markT("Remove them and delete their files")},
 	{"Up / Down", markT("Move the selection (with Shift: extend it)")},
+	{"Ctrl+click", markT("Add a download to the selection, or take it out")},
+	{"Shift+click", markT("Select every download from the last one clicked")},
 }
 
 func (a *application) showShortcuts() {
@@ -1301,6 +1315,17 @@ func (a *application) current() (*engine.Info, bool) {
 	return &cp, true
 }
 
+// itemAt returns the download shown on row.
+func (a *application) itemAt(row int) (*engine.Info, bool) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if row < 0 || row >= len(a.items) {
+		return nil, false
+	}
+	cp := a.items[row]
+	return &cp, true
+}
+
 func (a *application) byID(id string) (*engine.Info, bool) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
@@ -1374,7 +1399,8 @@ func currentModifiers() fyne.KeyModifier {
 }
 
 // clickRow applies a click on row: plain selects only it, Ctrl (Cmd on macOS)
-// toggles it, Shift selects the range from the focus row.
+// toggles it, Shift selects the range from the focus row (Ctrl+Shift adds
+// that range to the selection).
 func (a *application) clickRow(row int, mods fyne.KeyModifier) {
 	a.mu.Lock()
 	if row < 0 || row >= len(a.items) {
@@ -1391,7 +1417,9 @@ func (a *application) clickRow(row int, mods fyne.KeyModifier) {
 		if lo > hi {
 			lo, hi = hi, lo
 		}
-		a.selected = map[string]bool{}
+		if mods&fyne.KeyModifierShortcutDefault == 0 {
+			a.selected = map[string]bool{}
+		}
 		for i := lo; i <= hi; i++ {
 			a.selected[a.items[i].ID] = true
 		}

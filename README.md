@@ -138,7 +138,7 @@ queues. It runs as a desktop app, or headless with a JSON API.
 ## Install
 
 Once a version is tagged, prebuilt archives are attached to
-[GitHub Releases](https://github.com/troke12/odm/releases):
+[GitHub Releases](https://github.com/rigaz29/odm/releases):
 
 | Platform | Archive |
 | -------- | ------- |

@@ -223,6 +223,9 @@ All notable changes to ODM are documented here. The format is based on
   Runtime, which Windows 11 and updated Windows 10 have; where it is
   missing, ODM says so and offers Microsoft's download page.
   `./scripts/build.sh windows-fyne` still builds the Fyne UI for Windows.
+- The update check, and the About window's link, read this repository's
+  releases (rigaz29/odm) instead of troke12/odm's. A fork still sets its
+  own with `-X odm/internal/version.Repo=<owner/name>`.
 - The Options window fits small laptops and tablets. It was as tall as its
   longest page (Downloads), taller than a 1080p screen at 125% with its
   OK button off the bottom. Pages now scroll instead, also by dragging

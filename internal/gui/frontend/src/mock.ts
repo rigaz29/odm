@@ -399,7 +399,7 @@ export function mockApi(): Api {
     importList: async () => 3,
     checkUpdate: async () => new UpdateInfo({ current: "0.4.2", latest: "v0.5.0", newer: true, url: "https://github.com/rigaz29/odm/releases/tag/v0.5.0", notes: "## ODM 0.5.0\n\n- UI baru untuk Windows (pratinjau)\n- Rekam siaran live YouTube dari ujung siaran\n- Perbaikan Unduh Nanti yang hilang setelah restart" }),
     onUpdate: () => () => {},
-    about: async () => new About({ name: "Ochi Download Manager", version: "0.4.2", repo: "troke12/odm", runtime: "go1.27.2 · windows/amd64" }),
+    about: async () => new About({ name: "Ochi Download Manager", version: "0.4.2", repo: "rigaz29/odm", runtime: "go1.27.2 · windows/amd64" }),
     openURL: async (address) => void window.open(address, "_blank"),
     grab: async () => {
       for (let i = 1; i <= 4; i++) {

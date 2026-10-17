@@ -6,6 +6,8 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-17
+
 ### Added
 
 - yt-dlp signs in to video sites, set under Options → Programs ("Sign in
@@ -625,7 +627,8 @@ All notable changes to ODM are documented here. The format is based on
   instance); no TCP port is opened unless `-serve` is given, and that
   listener requires a per-run token and rejects foreign origins.
 
-[Unreleased]: https://github.com/troke12/odm/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/rigaz29/odm/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/rigaz29/odm/releases/tag/v0.5.0
 [0.3.1]: https://github.com/troke12/odm/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/troke12/odm/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/troke12/odm/compare/v0.1.1...v0.2.0

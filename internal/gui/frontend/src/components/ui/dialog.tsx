@@ -13,9 +13,11 @@ export function DialogContent({ className, children, ...props }: React.Component
   return (
     <DialogPrimitive.Portal>
       <DialogPrimitive.Overlay className="dialog-fade fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+      {/* One column that may be narrower than its longest word: an auto
+          column grew to fit a long file name, out of the box. */}
       <DialogPrimitive.Content
         className={cn(
-          "dialog-pop fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-popover p-5 shadow-xl outline-none",
+          "dialog-pop fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 grid-cols-[minmax(0,1fr)] gap-4 rounded-xl border border-border bg-popover p-5 shadow-xl outline-none",
           className,
         )}
         {...props}

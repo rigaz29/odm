@@ -12,6 +12,8 @@ All notable changes to ODM are documented here. The format is based on
   (Back, Refresh, Save as, Print, Inspect): the Windows build is Wails'
   release build now. Text boxes and selected text keep Cut, Copy and
   Paste.
+- A long file name no longer runs out of the box of the question before
+  removing a download (or of any other dialog): it wraps inside it.
 
 ### Added
 

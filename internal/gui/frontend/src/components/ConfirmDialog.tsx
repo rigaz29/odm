@@ -20,7 +20,8 @@ export function ConfirmDialog({ confirm, onClose }: { confirm: Confirm | null; o
         <DialogContent className="max-w-sm">
           <div className="space-y-1.5 pr-6">
             <DialogTitle>{confirm.title}</DialogTitle>
-            <DialogDescription className="break-words">{confirm.message}</DialogDescription>
+            {/* A file name has no spaces to wrap at: break it anywhere. */}
+            <DialogDescription className="[overflow-wrap:anywhere]">{confirm.message}</DialogDescription>
           </div>
           <div className="flex justify-end gap-2">
             <Button onClick={onClose}>{t("Cancel")}</Button>

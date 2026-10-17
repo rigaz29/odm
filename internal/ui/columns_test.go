@@ -26,20 +26,16 @@ func reopen(t *testing.T, a *application) *application {
 func TestColumnWidths(t *testing.T) {
 	all := visibleColumns(nil)
 	const gap = 3
-	// What the table draws: the widths, and a gap between columns.
 	sum := func(w []float32) (s float32) {
-		for i, x := range w {
-			if i > 0 {
-				s += gap
-			}
-			s += x
+		for _, x := range w {
+			s += x + gap
 		}
 		return s
 	}
 	// Defaults: the fixed columns keep their widths and File Name and
 	// Description fill the rest, 60:40.
 	w := columnWidths(all, nil, 1200, gap)
-	if got := sum(w); got != 1200-0.5 {
+	if got := sum(w); got != 1200-2 {
 		t.Fatalf("columns fill %v of 1200", got)
 	}
 	if w[colStatus] != columns[colStatus].width || w[colName] <= w[colDescription] {
@@ -47,12 +43,12 @@ func TestColumnWidths(t *testing.T) {
 	}
 	// A dragged width stays; the sharing columns take up the difference.
 	w2 := columnWidths(all, map[int]float32{colStatus: 200}, 1200, gap)
-	if w2[colStatus] != 200 || sum(w2) != 1200-0.5 {
+	if w2[colStatus] != 200 || sum(w2) != 1200-2 {
 		t.Fatalf("dragged status: %v", w2)
 	}
 	// With File Name dragged, Description alone fills the rest.
 	w3 := columnWidths(all, map[int]float32{colName: 300}, 1200, gap)
-	if w3[colName] != 300 || sum(w3) != 1200-0.5 {
+	if w3[colName] != 300 || sum(w3) != 1200-2 {
 		t.Fatalf("dragged name: %v", w3)
 	}
 	// Too narrow: the sharing columns keep their minimums.
@@ -63,7 +59,7 @@ func TestColumnWidths(t *testing.T) {
 	// Hidden Description: File Name takes all of the rest.
 	vis := visibleColumns(map[int]bool{colDescription: true})
 	w5 := columnWidths(vis, nil, 1200, gap)
-	if len(w5) != columnCount-1 || sum(w5) != 1200-0.5 {
+	if len(w5) != columnCount-1 || sum(w5) != 1200-2 {
 		t.Fatalf("no description: %v", w5)
 	}
 }

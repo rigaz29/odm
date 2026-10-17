@@ -19,7 +19,6 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
-	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -30,7 +29,6 @@ import (
 	"odm/internal/clipmon"
 	"odm/internal/engine"
 	"odm/internal/tools"
-	"odm/internal/version"
 )
 
 // Available reports whether this build includes the desktop UI.
@@ -62,8 +60,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	a.fyneApp = app.NewWithID("com.ochi.odm")
 	a.applyLanguage() // before any text is made
 	a.applyTheme()
-	// The version in the title tells at a glance which build is running.
-	a.win = a.fyneApp.NewWindow(version.Name + " " + version.Version)
+	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
 	a.win.Resize(fyne.NewSize(1140, 660)) // the toolbar and the search box fit
 	// In the accent colour, not the text colour: a dark icon for the light
 	// theme vanished on a dark title bar or taskbar, and a light one on a
@@ -116,7 +113,6 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 			}
 		}()
 	}
-	go a.watchHangs(ctx)
 	a.setupTray()
 	if opts.Hidden && a.trayOK {
 		a.fyneApp.Run() // window stays hidden until the tray or a relaunch shows it
@@ -204,29 +200,6 @@ type sidebarEntry struct {
 	expanded bool
 }
 
-// sameEntries reports whether two sidebar lists draw the same. Icons are
-// compared by name: theme icons may be new values on every lookup.
-func sameEntries(a, b []sidebarEntry) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		x, y := a[i], b[i]
-		xi, yi := "", ""
-		if x.icon != nil {
-			xi = x.icon.Name()
-		}
-		if y.icon != nil {
-			yi = y.icon.Name()
-		}
-		x.icon, y.icon = nil, nil
-		if x != y || xi != yi {
-			return false
-		}
-	}
-	return true
-}
-
 type application struct {
 	mgr     *engine.Manager
 	fyneApp fyne.App
@@ -253,16 +226,8 @@ type application struct {
 	selected    map[string]bool
 	focusID     string
 	selectedRow int // index of focusID in items, kept in step by refresh
-	// hoverRow is the list row under the pointer (-1: none), painted
-	// across all its cells.
-	hoverRow int
-	// removing holds downloads being removed in the background; they are
-	// left out of the list and the counts until the removal is done.
-	// removeFn replaces Manager.RemoveWithFile in tests.
-	removing map[string]bool
-	removeFn func(id string, deleteFile bool) bool
-	sortCol  int
-	sortAsc  bool
+	sortCol     int
+	sortAsc     bool
 	// The shown columns in order, those hidden, the widths the user
 	// dragged, and the list width they were last laid out for.
 	visibleCols []int
@@ -349,7 +314,6 @@ func newDownloadTable(a *application) *downloadTable {
 				a.openProgressWindow(d.ID)
 			}
 		}
-		c.onHover = a.setHoverRow
 		return c
 	}
 	t.UpdateCell = a.updateCell
@@ -448,7 +412,6 @@ func (t *downloadTable) TappedSecondary(e *fyne.PointEvent) {
 func (a *application) build() {
 	a.loadColumns()
 	a.hoverGrip = -1
-	a.hoverRow = -1
 	tint := func(icon fyne.Resource, c fyne.ThemeColorName) fyne.Resource {
 		return theme.NewColoredResource(icon, c)
 	}
@@ -534,7 +497,14 @@ func (a *application) build() {
 			defer a.mu.Unlock()
 			return len(a.entries)
 		},
-		func() fyne.CanvasObject { return newSidebarRow() },
+		func() fyne.CanvasObject {
+			arrow := newTapIcon()
+			icon := widget.NewIcon(theme.FolderIcon())
+			label := widget.NewLabel("")
+			label.Truncation = fyne.TextTruncateEllipsis
+			left := container.NewHBox(newIndentSpacer(), arrow, icon)
+			return container.NewBorder(nil, nil, left, nil, label)
+		},
 		a.updateSidebarRow,
 	)
 	a.cats.HideSeparators = true
@@ -585,13 +555,13 @@ func (a *application) updateSidebarRow(id widget.ListItemID, o fyne.CanvasObject
 	e := a.entries[id]
 	a.mu.Unlock()
 	row := o.(*fyne.Container)
-	lay := row.Layout.(*sidebarRowLayout)
-	arrow := row.Objects[0].(*tapIcon)
-	icon := row.Objects[1].(*widget.Icon)
-	text := row.Objects[2].(*canvas.Text)
+	label := row.Objects[0].(*widget.Label)
+	left := row.Objects[1].(*fyne.Container)
+	spacer := left.Objects[0].(*indentSpacer)
+	arrow := left.Objects[1].(*tapIcon)
+	icon := left.Objects[2].(*widget.Icon)
 
-	lay.indent = float32(e.indent * 16)
-	lay.full = e.text
+	spacer.set(float32(e.indent * 16))
 	// Leaves keep an empty arrow slot so names stay aligned with branches.
 	arrow.onTap = nil
 	arrow.SetResource(nil)
@@ -604,11 +574,12 @@ func (a *application) updateSidebarRow(id widget.ListItemID, o fyne.CanvasObject
 			arrow.SetResource(theme.MenuExpandIcon())
 		}
 	}
-	icon.SetResource(e.icon)
-	// The theme of the moment: the look can change while the row lives.
-	text.Color = theme.Color(theme.ColorNameForeground)
-	// Lays the row out again for its own indent: rows are recycled.
+	// The HBox only re-reads the spacer's MinSize when laid out again;
+	// without this, recycled rows kept whatever indent they had before.
+	left.Refresh()
 	row.Refresh()
+	icon.SetResource(e.icon)
+	label.SetText(e.text)
 }
 
 func (a *application) toggleNode(node string) {
@@ -937,7 +908,7 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 		c.row = -1
 		c.setText("")
 		c.showIcon(false)
-		c.setSelected(false, false)
+		c.setSelected(false)
 		return
 	}
 	d := a.items[id.Row]
@@ -953,10 +924,9 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 	c.showIcon(col == colName)
 	a.mu.Lock()
 	selected := a.selected[d.ID]
-	hovered := a.hoverRow == id.Row
 	a.rowH = rowHeight()
 	a.mu.Unlock()
-	c.setSelected(selected, hovered)
+	c.setSelected(selected)
 
 	switch col {
 	case colName:
@@ -1104,22 +1074,9 @@ func (a *application) refresh() {
 	col, asc := a.sortCol, a.sortAsc
 	kind, value := a.filter.kind, a.filter.value
 	terms := a.query
-	removing := make(map[string]bool, len(a.removing))
-	for id := range a.removing {
-		removing[id] = true
-	}
 	a.mu.Unlock()
 
 	all := a.mgr.List()
-	if len(removing) > 0 {
-		kept := all[:0:0]
-		for _, d := range all {
-			if !removing[d.ID] {
-				kept = append(kept, d)
-			}
-		}
-		all = kept
-	}
 	queues := a.mgr.Queues()
 	limit := a.mgr.Settings().EffectiveSpeedLimit()
 	filtered := make([]engine.Info, 0, len(all))
@@ -1171,17 +1128,13 @@ func (a *application) refresh() {
 	entries := a.buildEntries(all)
 
 	a.mu.Lock()
-	sidebarChanged := !sameEntries(a.entries, entries)
 	a.entries = entries
 	a.mu.Unlock()
 
 	if a.table != nil {
 		a.table.Refresh()
 	}
-	// Only when the sidebar changed: Fyne's List.Refresh clears the hover
-	// highlight of every visible row (setupListItem resets it), so a
-	// refresh every second made the highlight under the pointer vanish.
-	if a.cats != nil && sidebarChanged {
+	if a.cats != nil {
 		a.cats.Refresh()
 	}
 	if a.grid != nil {
@@ -1445,26 +1398,6 @@ func currentModifiers() fyne.KeyModifier {
 	return 0
 }
 
-// setHoverRow repaints the rows the pointer left and entered.
-func (a *application) setHoverRow(row int) {
-	a.mu.Lock()
-	old := a.hoverRow
-	a.hoverRow = row
-	cols := len(a.visibleCols)
-	a.mu.Unlock()
-	if old == row || a.table == nil {
-		return
-	}
-	for _, r := range []int{old, row} {
-		if r < 0 {
-			continue
-		}
-		for col := 0; col < cols; col++ {
-			a.table.RefreshItem(widget.TableCellID{Row: r, Col: col})
-		}
-	}
-}
-
 // clickRow applies a click on row: plain selects only it, Ctrl (Cmd on macOS)
 // toggles it, Shift selects the range from the focus row (Ctrl+Shift adds
 // that range to the selection).
@@ -1617,37 +1550,10 @@ func (a *application) removeSelected(withFile bool) {
 		if !yes {
 			return
 		}
-		// Off the UI thread: removing can wait for a transfer to stop
-		// (up to 10 s) and for Windows to delete large files, which took
-		// long enough to freeze the window ("Not Responding"). Meanwhile
-		// the downloads are hidden, so they cannot be removed twice.
-		a.mu.Lock()
-		if a.removing == nil {
-			a.removing = map[string]bool{}
-		}
 		for _, d := range sel {
-			a.removing[d.ID] = true
-			delete(a.selected, d.ID)
+			a.mgr.RemoveWithFile(d.ID, withFile)
 		}
-		a.mu.Unlock()
 		a.refresh()
-		go func() {
-			remove := a.mgr.RemoveWithFile
-			if a.removeFn != nil {
-				remove = a.removeFn
-			}
-			for _, d := range sel {
-				remove(d.ID, withFile)
-			}
-			fyne.Do(func() {
-				a.mu.Lock()
-				for _, d := range sel {
-					delete(a.removing, d.ID)
-				}
-				a.mu.Unlock()
-				a.refresh()
-			})
-		}()
 	})
 }
 

@@ -146,13 +146,10 @@ func columnWidths(visible []int, user map[int]float32, total, gap float32) []flo
 		}
 		used += widths[i]
 	}
-	// widget.Table spaces columns by its theme's Padding, between columns
-	// only: its content is the widths plus (columns-1) gaps. Leaving the
-	// gaps out made the row wider than the view (a horizontal scrollbar,
-	// the last column clipped); counting one gap too many, plus slack, left
-	// a strip after the last column that the header and the selection did
-	// not reach. Half a pixel absorbs float rounding.
-	slack := total - float32(max(len(visible)-1, 0))*gap - 0.5 - used
+	// widget.Table spaces columns by its theme's Padding; leaving that out
+	// made the row wider than the view, which showed a horizontal scrollbar
+	// and clipped the last column. The last 2px absorb float rounding.
+	slack := total - float32(len(visible))*gap - 2 - used
 	least := func(i int) float32 {
 		if visible[i] == colName {
 			return minNameWidth

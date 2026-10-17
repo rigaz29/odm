@@ -989,7 +989,7 @@ func (a *application) openOptionsTab(tab int) {
 				c.setText("")
 				return
 			}
-			c.setSelected(id.Row == hostSel, false)
+			c.setSelected(id.Row == hostSel)
 			if id.Col == 0 {
 				c.setText(hosts[id.Row].host)
 			} else {
@@ -1151,7 +1151,7 @@ func (a *application) openOptionsTab(tab int) {
 				c.setText("")
 				return
 			}
-			c.setSelected(id.Row == loginSel, false)
+			c.setSelected(id.Row == loginSel)
 			l := logins[id.Row]
 			c.setText([]string{l.Host, l.User, strings.Repeat("•", len(l.Pass))}[id.Col])
 		},

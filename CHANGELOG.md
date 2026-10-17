@@ -6,55 +6,6 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
-### Added
-
-- When the Fyne window stops responding for 5 seconds, ODM writes the
-  stacks of all its goroutines to `odm-hang-<time>.txt` in the config
-  folder, once per hang, for reports of freezes that cannot be
-  reproduced. (Ported from upstream f1d1287a.)
-
-### Changed
-
-- The Fyne main window's title shows the version ("Ochi Download Manager
-  0.5.0"). (Ported from upstream 2a4a639d.)
-
-### Security
-
-- File downloads get the protection streams already had: a link on a
-  public server that redirects to the user's own machine or network
-  (localhost, a router, a NAS) is refused, and so is the New Download
-  window's look at it and a changed address's check. Links that are
-  themselves on the local network still work. The site grabber is held
-  to its start page the same way: crawling a public site no longer
-  fetches or queues pages and files on the local network that it links
-  to. (Ported from upstream 45bd71d4.)
-
-### Fixed
-
-- The extension no longer clears a tab's media list when only the
-  address's #hash changes (a timestamp, a section): the page stays, and
-  so do the videos it loaded. A script switching to another address
-  (pushState) still starts a fresh list. (Ported from upstream 7948225e.)
-- The Fyne download list's last column reaches the right edge: its header
-  and the selected row stopped a few pixels short, and a stray grid line
-  stood in the gap. (Ported from upstream 0eaeb35d.)
-- The hover highlight in the Fyne window's category sidebar no longer
-  vanishes within a second: the sidebar's refresh every second cleared it,
-  so it is now refreshed only when its entries change. (Ported from
-  upstream a218f0c8.) Its rows also no longer shift a few pixels when the
-  pointer touches them: they are laid out at fixed offsets instead of the
-  theme's spacing. (Ported from upstream 383e2666.)
-- The Fyne download list highlights the whole row under the pointer, not
-  just the one cell under it. (Ported from upstream 06648f0d.)
-- Fyne toolbar buttons look pushed in while held: a darker background,
-  the icon a little smaller and a pixel lower. (Ported from upstream
-  0f6ae194.)
-- Deleting downloads in the Fyne window no longer freezes it: removing
-  can wait for a transfer to stop and for Windows to delete a large file,
-  which took seconds, and ran on the UI thread. It now runs in the
-  background; the downloads leave the list at once. (Ported from upstream
-  c15037d6.)
-
 ## [0.5.0] - 2026-10-17
 
 ### Added

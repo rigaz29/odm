@@ -17,14 +17,12 @@ import (
 	"golang.org/x/net/idna"
 )
 
-// errLocalNetwork refuses a request that a public address (a stream's
-// playlist, a redirect) made toward the user's own machine or network.
-// Retrying cannot change the answer.
-var errLocalNetwork = errors.New("a public address led into the local network")
+// errLocalNetwork refuses a request a stream's playlist made toward the
+// user's own machine or network. Retrying cannot change the answer.
+var errLocalNetwork = errors.New("the playlist points into the local network")
 
 // localGuard keeps a playlist from a public server away from the user's
-// machine and network. File downloads go through it too: a public link
-// that redirects to a router or localhost is refused the same way.
+// machine and network.
 //
 // A playlist names its segments, keys and variants by URL, on any host.
 // ODM fetches them from the user's computer, which sits behind the
@@ -167,7 +165,7 @@ func (g *localGuard) RoundTrip(req *http.Request) (*http.Response, error) {
 	}
 	host := canonicalHost(req.URL.Hostname())
 	refuse := func() (*http.Response, error) {
-		return nil, fmt.Errorf("%w (%s); ODM follows such links only from an address on the local network", errLocalNetwork, host)
+		return nil, fmt.Errorf("%w (%s); ODM follows such links only from a playlist on the local network", errLocalNetwork, host)
 	}
 	if localName(host) {
 		return refuse()

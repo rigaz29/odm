@@ -28,7 +28,6 @@ type toolButton struct {
 	text     string
 	onTap    func()
 	hover    bool
-	pressed  bool // the mouse button is down on it
 	disabled bool
 }
 
@@ -40,7 +39,7 @@ func (b *toolButton) setEnabled(on bool) {
 	}
 	b.disabled = !on
 	if b.disabled {
-		b.hover, b.pressed = false, false
+		b.hover = false
 	}
 	b.Refresh()
 }
@@ -68,23 +67,7 @@ func (b *toolButton) MouseIn(*desktop.MouseEvent) {
 
 func (b *toolButton) MouseMoved(*desktop.MouseEvent) {}
 
-func (b *toolButton) MouseOut() { b.hover, b.pressed = false, false; b.Refresh() }
-
-// MouseDown and MouseUp show the button pushed in while it is held, like a
-// native toolbar; the action runs on Tapped (released over the button).
-func (b *toolButton) MouseDown(e *desktop.MouseEvent) {
-	if !b.disabled && e.Button == desktop.MouseButtonPrimary {
-		b.pressed = true
-		b.Refresh()
-	}
-}
-
-func (b *toolButton) MouseUp(*desktop.MouseEvent) {
-	if b.pressed {
-		b.pressed = false
-		b.Refresh()
-	}
-}
+func (b *toolButton) MouseOut() { b.hover = false; b.Refresh() }
 
 type toolButtonRenderer struct {
 	btn     *toolButton
@@ -142,14 +125,9 @@ func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
 func (r *toolButtonRenderer) Layout(size fyne.Size) {
 	r.bg.Resize(size)
 	const pad, iconSize = float32(4), float32(30)
-	// Held down: the icon shrinks a little and the content sinks a pixel.
-	icon, sink := iconSize, float32(0)
-	if r.btn.pressed {
-		icon, sink = iconSize-2, 1
-	}
-	r.icon.Move(fyne.NewPos(size.Width/2-icon/2, pad+(iconSize-icon)/2+sink))
-	r.icon.Resize(fyne.NewSize(icon, icon))
-	top := pad + iconSize + 3 + sink
+	r.icon.Move(fyne.NewPos(size.Width/2-iconSize/2, pad))
+	r.icon.Resize(fyne.NewSize(iconSize, iconSize))
+	top := pad + iconSize + 3
 	lh := r.lines[0].MinSize().Height
 	for i, l := range r.lines {
 		l.Move(fyne.NewPos(0, top+float32(i)*lh))
@@ -173,8 +151,6 @@ func (r *toolButtonRenderer) Refresh() {
 	case r.btn.disabled:
 		r.bg.FillColor = color.Transparent
 		fg = theme.DisabledColor()
-	case r.btn.pressed:
-		r.bg.FillColor = theme.PressedColor()
 	case r.btn.hover:
 		r.bg.FillColor = theme.HoverColor()
 	default:
@@ -193,7 +169,6 @@ func (r *toolButtonRenderer) Refresh() {
 		l.Color = fg
 		l.Refresh()
 	}
-	r.Layout(r.btn.Size()) // a press moves the icon and the label
 	r.bg.Refresh()
 	r.icon.Refresh()
 }
@@ -239,26 +214,6 @@ type tableCell struct {
 	onSecondary func(row int, pos fyne.Position)
 	onPress     func(row int, mods fyne.KeyModifier)
 	onDoubleTap func(row int)
-	// hovered paints the hover colour behind the cell. onHover is told of
-	// the pointer entering the cell (its row) or leaving it (-1), so the
-	// whole row under the pointer is highlighted, not the one cell Fyne's
-	// table marks.
-	hovered bool
-	onHover func(row int)
-}
-
-func (c *tableCell) MouseIn(*desktop.MouseEvent) {
-	if c.onHover != nil {
-		c.onHover(c.row)
-	}
-}
-
-func (c *tableCell) MouseMoved(*desktop.MouseEvent) {}
-
-func (c *tableCell) MouseOut() {
-	if c.onHover != nil {
-		c.onHover(-1)
-	}
 }
 
 func newTableCell() *tableCell {
@@ -295,11 +250,10 @@ func (c *tableCell) showIcon(on bool) {
 }
 
 // setSelected paints the whole row: widget.Table only highlights the one
-// clicked cell, so every cell of the selected row draws its own background,
-// and so does every cell of the row under the pointer (hovered).
-func (c *tableCell) setSelected(on, hovered bool) {
-	if c.selected != on || c.hovered != hovered {
-		c.selected, c.hovered = on, hovered
+// clicked cell, so every cell of the selected row draws its own background.
+func (c *tableCell) setSelected(on bool) {
+	if c.selected != on {
+		c.selected = on
 		c.Refresh()
 	}
 }
@@ -354,11 +308,8 @@ func (r *cellRenderer) MinSize() fyne.Size { return fyne.NewSize(20, rowHeight()
 func (r *cellRenderer) Refresh() {
 	r.c.text.Color = theme.ForegroundColor()
 	r.c.bg.FillColor = color.Transparent
-	switch {
-	case r.c.selected:
+	if r.c.selected {
 		r.c.bg.FillColor = theme.SelectionColor()
-	case r.c.hovered:
-		r.c.bg.FillColor = theme.HoverColor()
 	}
 	r.c.bg.Refresh()
 	r.Layout(r.c.Size())
@@ -519,6 +470,44 @@ func (r *headerRenderer) Refresh() {
 func (r *headerRenderer) Objects() []fyne.CanvasObject { return r.objects }
 
 func (r *headerRenderer) Destroy() {}
+
+/* ---------- sidebar indent ---------- */
+
+// indentSpacer reserves horizontal space so nested sidebar rows line up.
+type indentSpacer struct {
+	widget.BaseWidget
+	w float32
+}
+
+func newIndentSpacer() *indentSpacer {
+	s := &indentSpacer{}
+	s.ExtendBaseWidget(s)
+	return s
+}
+
+func (s *indentSpacer) set(w float32) {
+	if s.w == w {
+		return
+	}
+	s.w = w
+	s.Refresh()
+}
+
+func (s *indentSpacer) MinSize() fyne.Size { return fyne.NewSize(s.w, 1) }
+
+func (s *indentSpacer) CreateRenderer() fyne.WidgetRenderer { return &spacerRenderer{s: s} }
+
+type spacerRenderer struct{ s *indentSpacer }
+
+func (r *spacerRenderer) Layout(fyne.Size) {}
+
+func (r *spacerRenderer) MinSize() fyne.Size { return r.s.MinSize() }
+
+func (r *spacerRenderer) Refresh() {}
+
+func (r *spacerRenderer) Objects() []fyne.CanvasObject { return nil }
+
+func (r *spacerRenderer) Destroy() {}
 
 /* ---------- connection strip ---------- */
 
@@ -691,14 +680,10 @@ func (r *gridRenderer) Layout(size fyne.Size) {
 		full += w + gap
 	}
 	if full <= size.Width+gap {
-		// Between columns only, as the table draws them: a line after the
-		// last column would stand alone at the right edge.
 		x := float32(0)
-		for i, w := range widths {
+		for _, w := range widths {
 			x += w
-			if i < len(widths)-1 {
-				line(x+off, top, sep, size.Height-top)
-			}
+			line(x+off, top, sep, size.Height-top)
 			x += gap
 		}
 	}
@@ -782,7 +767,6 @@ func (r *frameRenderer) Destroy() {}
 
 var (
 	_ desktop.Hoverable      = (*toolButton)(nil)
-	_ desktop.Mouseable      = (*toolButton)(nil)
 	_ desktop.Hoverable      = (*headerLabel)(nil)
 	_ fyne.SecondaryTappable = (*headerLabel)(nil)
 	_ desktop.Cursorable     = (*headerGrips)(nil)
@@ -873,68 +857,3 @@ func (r *swatchRenderer) Refresh() {
 func (r *swatchRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.ring, r.dot} }
 
 func (r *swatchRenderer) Destroy() {}
-
-/* ---------- sidebar row ---------- */
-
-// Sidebar row metrics. Fixed rather than taken from the theme: the rows
-// used to follow the theme's padding (through a compact theme override),
-// and some rows were laid out with a different theme than others, so
-// they sat a few pixels apart and moved when the pointer touched them.
-const (
-	sideRowHeight = 20
-	sideArrowW    = 16
-	sideIconW     = 16
-	sideGap       = 6
-	sideLeft      = 4
-)
-
-// sidebarRowLayout places a sidebar row's arrow, icon and name at fixed
-// offsets from its indent, and shortens the name to fit.
-type sidebarRowLayout struct {
-	indent float32
-	full   string // the name before shortening
-}
-
-func (l *sidebarRowLayout) MinSize([]fyne.CanvasObject) fyne.Size {
-	return fyne.NewSize(sideLeft+sideArrowW+sideIconW+sideGap+40, sideRowHeight)
-}
-
-func (l *sidebarRowLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
-	arrow, icon, text := objs[0], objs[1], objs[2].(*canvas.Text)
-	x := sideLeft + l.indent
-	place := func(o fyne.CanvasObject, x, w float32) {
-		o.Move(fyne.NewPos(x, (size.Height-w)/2))
-		o.Resize(fyne.NewSize(w, w))
-	}
-	place(arrow, x, 14)
-	x += sideArrowW
-	place(icon, x, sideIconW)
-	x += sideIconW + sideGap
-	text.Text = fitText(l.full, size.Width-x-4, text.TextSize, text.TextStyle)
-	ts := fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
-	text.Move(fyne.NewPos(x, (size.Height-ts.Height)/2))
-	text.Resize(ts)
-	text.Refresh()
-}
-
-// fitText shortens s with "…" until it fits in w.
-func fitText(s string, w, size float32, style fyne.TextStyle) string {
-	if w <= 0 || fyne.MeasureText(s, size, style).Width <= w {
-		return s
-	}
-	r := []rune(s)
-	for len(r) > 0 {
-		r = r[:len(r)-1]
-		if c := string(r) + "…"; fyne.MeasureText(c, size, style).Width <= w {
-			return c
-		}
-	}
-	return "…"
-}
-
-// newSidebarRow is the list's item template: arrow, icon, name.
-func newSidebarRow() *fyne.Container {
-	text := canvas.NewText("", theme.Color(theme.ColorNameForeground))
-	text.TextSize = theme.TextSize()
-	return container.New(&sidebarRowLayout{}, newTapIcon(), widget.NewIcon(nil), text)
-}

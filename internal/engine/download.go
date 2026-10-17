@@ -76,9 +76,6 @@ type Download struct {
 	Stream *StreamJob
 	// Site is set for a video page that yt-dlp downloads; see site.go.
 	Site *SiteJob
-	// TrustFrom, when set, replaces URL as the address localGuard judges
-	// (AddOptions.TrustFrom).
-	TrustFrom string
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -178,9 +175,6 @@ type Download struct {
 	// its verdict on the manifest is cached.
 	guarded, guardedFrom *http.Client
 	guardedFor           string
-	// guardedH1 is h1 wrapped the same way, for ranged file connections.
-	guardedH1, guardedH1From *http.Client
-	guardedH1For             string
 }
 
 // New creates a queued download. Probing happens on the first Start.
@@ -823,9 +817,6 @@ func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk, ready *bool) e
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		if errors.Is(err, errLocalNetwork) {
-			return err // the same refusal on every try
-		}
 		if serr := sleepCtx(ctx, retryWait(err, backoff)); serr != nil {
 			return serr
 		}
@@ -860,7 +851,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	alone := d.alone
 	pass := d.pass
 	d.mu.Unlock()
-	client := d.fetchClient(rangeOK, conns)
+	client := d.segmentClient(rangeOK, conns)
 	validator := etag
 	if validator == "" {
 		validator = modified
@@ -1063,29 +1054,6 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 
 // segmentClient returns the HTTP/1.1 client when more than one ranged
 // connection will run. One stream keeps the shared client.
-// fetchClient is the client a file connection fetches with:
-// segmentClient's, kept off the local network as guardedClient is, so a
-// public link that redirects into it is refused (see localGuard).
-func (d *Download) fetchClient(rangeOK bool, conns int) *http.Client {
-	c := d.segmentClient(rangeOK, conns)
-	d.mu.Lock()
-	ranged := c != nil && c == d.h1
-	d.mu.Unlock()
-	if !ranged {
-		return d.guardedClient()
-	}
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	trust := d.trustLocked()
-	if d.guardedH1 == nil || d.guardedH1From != c || d.guardedH1For != trust {
-		if d.guardedH1 != nil {
-			d.guardedH1.CloseIdleConnections() // its pool is its own
-		}
-		d.guardedH1, d.guardedH1From, d.guardedH1For = guardLocal(c, trust), c, trust
-	}
-	return d.guardedH1
-}
-
 func (d *Download) segmentClient(rangeOK bool, conns int) *http.Client {
 	d.mu.Lock()
 	defer d.mu.Unlock()
@@ -1962,7 +1930,6 @@ type State struct {
 	Chunks       []*Chunk          `json:"chunks"`
 	Stream       *StreamJob        `json:"stream,omitempty"`
 	Site         *SiteJob          `json:"site,omitempty"`
-	TrustFrom    string            `json:"trust_from,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -2001,7 +1968,7 @@ func (d *Download) State() State {
 		Queue: d.Queue, Description: d.Description, Order: d.Order, Checksum: d.Checksum,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
 		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
-		Chunks: chunks, Stream: stream, Site: site, TrustFrom: d.TrustFrom, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
+		Chunks: chunks, Stream: stream, Site: site, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
 
@@ -2033,7 +2000,6 @@ func Restore(s State, client *http.Client) *Download {
 	d.Checksum = s.Checksum
 	d.Chunks = s.Chunks
 	d.Stream = s.Stream
-	d.TrustFrom = s.TrustFrom
 	if s.Stream != nil {
 		d.streamDone = s.Stream.Done
 		if s.Status == StatusComplete {

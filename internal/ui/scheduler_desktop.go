@@ -278,7 +278,7 @@ func (v *schedulerView) buildFiles() fyne.CanvasObject {
 				return
 			}
 			d := v.rows[id.Row]
-			c.setSelected(id.Row == v.selRow, false)
+			c.setSelected(id.Row == v.selRow)
 			switch id.Col {
 			case 0:
 				c.setText(d.FileName)

@@ -127,7 +127,7 @@ func (m *Manager) ProbeStream(ctx context.Context, rawURL string, headers map[st
 	d.SetAuthLookup(m.credentials)
 	d.Stream = &StreamJob{Manifest: rawURL}
 	// The probe's guarded client has a connection pool of its own.
-	defer d.guardedClient().CloseIdleConnections()
+	defer d.streamClient().CloseIdleConnections()
 	data, base, err := d.fetchText(ctx, rawURL)
 	if err != nil {
 		return nil, err

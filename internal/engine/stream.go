@@ -225,7 +225,7 @@ func (d *Download) fetchText(ctx context.Context, raw string) ([]byte, *url.URL,
 		return nil, nil, err
 	}
 	d.decorate(req)
-	resp, err := d.authorizer().do(req, d.guardedClient().Do)
+	resp, err := d.authorizer().do(req, d.streamClient().Do)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -276,13 +276,16 @@ func (d *Download) decorate(req *http.Request) {
 	// asks for one.
 }
 
-// guardedClient is the client for every request of a download, stream or
-// file: the download's own, kept off the local network when the address it
-// was given (a stream's manifest, else its URL) is public (see localGuard).
-func (d *Download) guardedClient() *http.Client {
+// streamClient is the client for every request of a stream: the
+// download's own, kept off the local network when the manifest is public
+// (see localGuard).
+func (d *Download) streamClient() *http.Client {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	manifest := d.trustLocked()
+	manifest := d.URL
+	if d.Stream != nil && d.Stream.Manifest != "" {
+		manifest = d.Stream.Manifest
+	}
 	if d.guarded == nil || d.guardedFrom != d.client || d.guardedFor != manifest {
 		if d.guarded != nil {
 			d.guarded.CloseIdleConnections() // its pool is its own
@@ -290,18 +293,6 @@ func (d *Download) guardedClient() *http.Client {
 		d.guarded, d.guardedFrom, d.guardedFor = guardLocal(d.client, manifest), d.client, manifest
 	}
 	return d.guarded
-}
-
-// trustLocked is the address localGuard judges a download by: a stream's
-// manifest, else TrustFrom, else its URL. d.mu is held.
-func (d *Download) trustLocked() string {
-	switch {
-	case d.Stream != nil && d.Stream.Manifest != "":
-		return d.Stream.Manifest
-	case d.TrustFrom != "":
-		return d.TrustFrom
-	}
-	return d.URL
 }
 
 // sameSite reports whether u belongs to the site (registrable domain, e.g.
@@ -1004,7 +995,7 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 	if p.rng != nil {
 		req.Header.Set("Range", p.rng.Header())
 	}
-	resp, err := d.authorizer().do(req, d.guardedClient().Do)
+	resp, err := d.authorizer().do(req, d.streamClient().Do)
 	if err != nil {
 		return err
 	}
@@ -1157,7 +1148,7 @@ func (s *streamRun) key(ctx context.Context, keyURL string) ([]byte, error) {
 		return nil, err
 	}
 	s.d.decorate(req)
-	resp, err := s.d.authorizer().do(req, s.d.guardedClient().Do)
+	resp, err := s.d.authorizer().do(req, s.d.streamClient().Do)
 	if err != nil {
 		return nil, err
 	}

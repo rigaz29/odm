@@ -288,19 +288,6 @@ async function handOff(fields) {
 
 const tabKey = (tabId) => `media:${tabId}`;
 
-// sameDocument reports whether two URLs differ only in their #hash.
-function sameDocument(a, b) {
-  try {
-    const x = new URL(a);
-    const y = new URL(b);
-    x.hash = "";
-    y.hash = "";
-    return x.href === y.href;
-  } catch {
-    return false;
-  }
-}
-
 // What ODM said about each playlist or site page, kept for STREAM_INFO_MS:
 // a menu asks whenever it opens, and the page need not be read each time.
 // A failure that may pass (ODM busy, yt-dlp missing, a network error) is
@@ -473,28 +460,18 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     ["responseHeaders"],
   );
 
-  // A new page in the tab starts a fresh media list, also one a script
-  // switched to (pushState): its media is not the previous view's, and a
-  // stale playlist would be offered first. Only a change of the #hash
-  // keeps the list, as the page itself stays. tabURLs is in memory: after
-  // the background restarts, the first change resets as before.
-  const tabURLs = new Map();
+  // A new page in the tab starts a fresh media list.
   chrome.tabs.onUpdated.addListener((tabId, change) => {
-    if (!change.url) return;
-    const before = tabURLs.get(tabId);
-    tabURLs.set(tabId, change.url);
-    if (before && sameDocument(before, change.url)) return;
     // Queued like the updates, or one still running for the old page
     // could write its list (and count) back after the reset.
-    updateTab(tabId, async () => {
-      await chrome.storage.session.remove(tabKey(tabId));
-      setBadge(tabId, 0);
-    });
+    if (change.url) {
+      updateTab(tabId, async () => {
+        await chrome.storage.session.remove(tabKey(tabId));
+        setBadge(tabId, 0);
+      });
+    }
   });
-  chrome.tabs.onRemoved.addListener((tabId) => {
-    tabURLs.delete(tabId);
-    chrome.storage.session.remove(tabKey(tabId));
-  });
+  chrome.tabs.onRemoved.addListener((tabId) => chrome.storage.session.remove(tabKey(tabId)));
 
   chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     const tab = sender.tab;
@@ -548,5 +525,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, sameDocument, DEFAULT_TYPES };
+  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
 }

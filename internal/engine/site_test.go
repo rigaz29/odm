@@ -241,6 +241,9 @@ func TestSiteDownloadArgs(t *testing.T) {
 			t.Errorf("args lack %q:\n%s", want, args)
 		}
 	}
+	if strings.Contains(args, "--cookies-from-browser") {
+		t.Errorf("yt-dlp was given a browser's cookies unasked:\n%s", args)
+	}
 
 	// Pause stops yt-dlp; the bytes count stays for the next run.
 	m.Pause(info.ID)
@@ -303,5 +306,42 @@ func TestSiteTitleNames(t *testing.T) {
 		if got := siteTitleName(title); got != want {
 			t.Errorf("siteTitleName(%q) = %q, want %q", title, got, want)
 		}
+	}
+}
+
+// The browser chosen in the Options goes to yt-dlp, which signs in with
+// its cookies; an unknown one reads as none.
+func TestSiteDownloadSignsInWhenAsked(t *testing.T) {
+	m := fakeYtDlp(t, "slow")
+	t.Cleanup(func() { setYtDlpCookies("") })
+	st := m.Settings()
+	st.YtDlpCookies = " Firefox "
+	m.UpdateSettings(st)
+	if got := m.Settings().YtDlpCookies; got != "firefox" {
+		t.Fatalf("browser %q", got)
+	}
+	dir := t.TempDir()
+	info := m.Create(AddOptions{
+		URL: "https://www.youtube.com/watch?v=abc", Dir: dir, FileName: "A talk.mp4", Start: true,
+		Site: &SiteJob{Format: "137+140"},
+	})
+	waitFor(t, "progress", func() bool {
+		i, _ := m.Get(info.ID)
+		return i.Done == 1200
+	})
+	data, _ := os.ReadFile(filepath.Join(dir, "A talk.mp4.odmparts", "args.txt"))
+	if !strings.Contains(string(data), "\n--cookies-from-browser\nfirefox\n") {
+		t.Fatalf("args lack the browser:\n%s", data)
+	}
+	m.Pause(info.ID)
+	waitFor(t, "the pause", func() bool {
+		i, _ := m.Get(info.ID)
+		return i.Status == StatusPaused
+	})
+
+	st.YtDlpCookies = "netscape"
+	m.UpdateSettings(st)
+	if got := m.Settings().YtDlpCookies; got != "" {
+		t.Fatalf("an unknown browser was kept: %q", got)
 	}
 }

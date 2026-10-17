@@ -35,6 +35,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -134,10 +135,23 @@ func version(ctx context.Context, bin string) string {
 }
 
 // baseArgs are the options every run takes.
-func baseArgs(ctx context.Context, bin string) []string {
+// CookieBrowsers are the browsers yt-dlp can sign in to video sites with
+// (--cookies-from-browser), reading their cookies itself, in the order the
+// Options offer them.
+var CookieBrowsers = []string{"firefox", "chrome", "edge", "brave", "opera", "vivaldi", "chromium"}
+
+// CookieBrowser reports whether b is one of CookieBrowsers.
+func CookieBrowser(b string) bool { return slices.Contains(CookieBrowsers, b) }
+
+func baseArgs(ctx context.Context, bin, cookies string) []string {
 	// --ignore-config: a user's yt-dlp config could change the output
 	// name or format ODM asks for.
 	args := []string{"--ignore-config", "--no-playlist", "--color", "never"}
+	if cookies != "" {
+		// Chosen in the Options: the site sees the person signed in, as
+		// YouTube asks of some ("Sign in to confirm you're not a bot").
+		args = append(args, "--cookies-from-browser", cookies)
+	}
 	if version(ctx, bin) >= "2025.11" {
 		if _, err := exec.LookPath("deno"); err != nil {
 			if _, err := exec.LookPath("node"); err == nil {
@@ -270,9 +284,10 @@ type Format struct {
 	Headers     map[string]string `json:"http_headers"`
 }
 
-// Probe asks yt-dlp what the page offers.
-func Probe(ctx context.Context, bin, page string) (*Video, error) {
-	cmd := command(ctx, bin, append(baseArgs(ctx, bin), "-J", "--", page)...)
+// Probe asks yt-dlp what the page offers, signed in with the cookies of
+// the browser cookies names ("" for none; see CookieBrowsers).
+func Probe(ctx context.Context, bin, page, cookies string) (*Video, error) {
+	cmd := command(ctx, bin, append(baseArgs(ctx, bin, cookies), "-J", "--", page)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
@@ -586,6 +601,7 @@ type Options struct {
 	FFmpeg    string // "" lets yt-dlp look for ffmpeg itself
 	RateLimit int64  // bytes per second, 0 for none
 	Fragments int    // pieces fetched at once for formats that come in pieces
+	Cookies   string // the browser to sign in with (CookieBrowsers), "" for none
 }
 
 // Progress is yt-dlp's report on the format it is fetching.
@@ -645,7 +661,7 @@ func parseProgress(line string) (Progress, bool) {
 // Download runs yt-dlp until the video is in Out plus its extension, and
 // returns that file. progress is called for each report.
 func Download(ctx context.Context, bin string, o Options, progress func(Progress)) (string, error) {
-	cmd := command(ctx, bin, append(baseArgs(ctx, bin), args(o)...)...)
+	cmd := command(ctx, bin, append(baseArgs(ctx, bin, o.Cookies), args(o)...)...)
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 	stdout, err := cmd.StdoutPipe()

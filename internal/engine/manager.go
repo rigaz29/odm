@@ -86,6 +86,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 	setCategories(settings.CategoryDefs)
 	setFFmpegPath(settings.FFmpegPath)
 	setYtDlpPath(settings.YtDlpPath)
+	setYtDlpCookies(settings.YtDlpCookies)
 	m := &Manager{
 		downloads: map[string]*Download{},
 		running:   map[string]bool{},
@@ -366,6 +367,7 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	setCategories(next.CategoryDefs)
 	setFFmpegPath(next.FFmpegPath)
 	setYtDlpPath(next.YtDlpPath)
+	setYtDlpCookies(next.YtDlpCookies)
 	m.saveSettings()
 	m.fire()
 	return next.clone()

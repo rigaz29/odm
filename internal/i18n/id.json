@@ -256,6 +256,7 @@
   "New…": "Baru…",
   "No": "Tidak",
   "No address yet": "Belum ada alamat",
+  "No browser (the default)": "Tidak ada browser (bawaan)",
   "No downloads here": "Tidak ada unduhan di sini",
   "No ffmpeg at this path. Leave it empty to search next to ODM and on PATH.": "Tidak ada ffmpeg di path ini. Kosongkan untuk mencarinya di sebelah ODM dan di PATH.",
   "No proxy": "Tanpa proxy",
@@ -396,6 +397,7 @@
   "Show the New Download window for downloads from the browser": "Tampilkan jendela Unduhan Baru untuk unduhan dari browser",
   "Show the progress of the selected download": "Tampilkan progres unduhan yang dipilih",
   "Show the progress window when a download starts": "Tampilkan jendela progres saat unduhan dimulai",
+  "Sign in to video sites with the cookies of:": "Masuk ke situs video dengan cookie dari:",
   "Simultaneous downloads": "Unduhan bersamaan",
   "Site": "Situs",
   "Site login": "Login situs",
@@ -510,5 +512,6 @@
   "You are running the latest version (%s).": "Anda sudah memakai versi terbaru (%s).",
   "YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 20 MB), check their checksums, and keep them up to date by itself. Download them now?": "Video YouTube membutuhkan yt-dlp, dan menggabungkan video dengan audionya membutuhkan ffmpeg. ODM bisa mengunduh keduanya dari rilis resminya (sekitar 20 MB), memeriksa checksum-nya, dan memperbaruinya sendiri. Unduh sekarang?",
   "yt-dlp (downloads videos from YouTube and similar sites):": "yt-dlp (mengunduh video dari YouTube dan situs serupa):",
-  "yt-dlp could not read the page just now": "yt-dlp belum bisa membaca halaman ini saat ini"
+  "yt-dlp could not read the page just now": "yt-dlp belum bisa membaca halaman ini saat ini",
+  "yt-dlp then reads that browser's cookies itself, and the site sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. Firefox works best; Chrome, Edge and other Chromium browsers may have to be closed first, and recent versions of Chrome keep their cookies where yt-dlp cannot read them.": "yt-dlp lalu membaca sendiri cookie browser itu, dan situs melihat Anda sudah masuk: YouTube meminta sebagian pengunjung masuk untuk memastikan mereka bukan bot. Firefox paling andal; Chrome, Edge, dan browser Chromium lain mungkin harus ditutup dulu, dan Chrome versi baru menyimpan cookie di tempat yang tidak bisa dibaca yt-dlp."
 }

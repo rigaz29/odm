@@ -489,6 +489,17 @@ function useToolStatus(tool: string, typed: string, again: number): ToolStatus |
   return s;
 }
 
+// The browsers yt-dlp can take cookies from (ytdlp.CookieBrowsers).
+const COOKIE_BROWSERS: [string, string][] = [
+  ["firefox", "Firefox"],
+  ["chrome", "Chrome"],
+  ["edge", "Microsoft Edge"],
+  ["brave", "Brave"],
+  ["opera", "Opera"],
+  ["vivaldi", "Vivaldi"],
+  ["chromium", "Chromium"],
+];
+
 function Programs({ o, set }: TabProps) {
   const [again, setAgain] = useState(0);
   const [updating, setUpdating] = useState("");
@@ -512,6 +523,22 @@ function Programs({ o, set }: TabProps) {
     <Section title={t("Companion programs")}>
       {tool("opt-ffmpeg", t("ffmpeg (joins the video and audio of some streams):"), o.ffmpegPath, (v) => set({ ffmpegPath: v }), toolText("ffmpeg", ff))}
       {tool("opt-ytdlp", t("yt-dlp (downloads videos from YouTube and similar sites):"), o.ytdlpPath, (v) => set({ ytdlpPath: v }), toolText("yt-dlp", yt))}
+      <div className="space-y-1.5">
+        <label className="text-sm" htmlFor="opt-cookies">
+          {t("Sign in to video sites with the cookies of:")}
+        </label>
+        <Select id="opt-cookies" className="w-56" value={o.ytdlpCookies} onChange={(e) => set({ ytdlpCookies: e.target.value })}>
+          <option value="">{t("No browser (the default)")}</option>
+          {COOKIE_BROWSERS.map(([id, name]) => (
+            <option key={id} value={id}>
+              {name}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {t("yt-dlp then reads that browser's cookies itself, and the site sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. Firefox works best; Chrome, Edge and other Chromium browsers may have to be closed first, and recent versions of Chrome keep their cookies where yt-dlp cannot read them.")}
+        </p>
+      </div>
       <div className="space-y-2 border-t border-border pt-3">
         <Check label={t("Download and update yt-dlp and ffmpeg automatically")} checked={o.toolUpdates} onChange={(v) => set({ toolUpdates: v })} />
         <div className="flex items-center gap-3">

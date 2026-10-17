@@ -8,6 +8,15 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
+- yt-dlp can sign in to video sites with a browser's cookies, chosen
+  under Options → Programs ("Sign in to video sites with the cookies of":
+  Firefox, Chrome, Edge, Brave, Opera, Vivaldi or Chromium; none by
+  default). YouTube asks some visitors to "sign in to confirm you're not
+  a bot", and then lists no qualities: the menu offered only "best
+  quality", and the download failed. yt-dlp reads the browser's cookies
+  itself (`--cookies-from-browser`) for the page's qualities, the
+  download, and a live recording's fresh address. The setting is
+  `ytdlp_cookies` in the settings and the API.
 - Live broadcasts on video sites can be recorded: YouTube Live, Twitch,
   and others yt-dlp reads, where they come as HLS. yt-dlp finds the
   broadcast's playlist and the headers it needs; ODM records it with its

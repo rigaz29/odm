@@ -113,7 +113,13 @@ queues. It runs as a desktop app, or headless with a JSON API.
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) reads them, and ODM downloads
   the one you pick through yt-dlp, with its progress, pause and resume.
   A YouTube address pasted into *New Download* works the same way. yt-dlp
-  reads the page itself; the browser's cookies are not given to it.
+  reads the page itself, without the browser's cookies, unless a browser
+  is chosen under *Options → Programs* ("Sign in to video sites with the
+  cookies of"): yt-dlp then reads that browser's cookies itself, and the
+  site sees you signed in, as YouTube asks of some visitors ("Sign in to
+  confirm you're not a bot"). Firefox works best; Chromium browsers may
+  have to be closed, and recent Chrome versions keep their cookies where
+  yt-dlp cannot read them.
 - A broadcast on such a page (YouTube Live, Twitch, TikTok and others
   yt-dlp reads) shows "● LIVE" with a Record row per quality. ODM records
   the playlist or stream yt-dlp finds with its own recorder, from the

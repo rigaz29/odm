@@ -930,6 +930,12 @@ export class OptionsForm {
     "ytdlpPath": string;
 
     /**
+     * YtDlpCookies is the browser yt-dlp signs in to video sites with
+     * (ytdlp.CookieBrowsers), "" for none.
+     */
+    "ytdlpCookies": string;
+
+    /**
      * download and update them automatically
      */
     "toolUpdates": boolean;
@@ -1037,6 +1043,9 @@ export class OptionsForm {
         if (!("ytdlpPath" in $$source)) {
             this["ytdlpPath"] = "";
         }
+        if (!("ytdlpCookies" in $$source)) {
+            this["ytdlpCookies"] = "";
+        }
         if (!("toolUpdates" in $$source)) {
             this["toolUpdates"] = false;
         }
@@ -1100,17 +1109,17 @@ export class OptionsForm {
      */
     static createFrom($$source: any = {}): OptionsForm {
         const $$createField11_0 = $$createType8;
-        const $$createField26_0 = $$createType10;
-        const $$createField36_0 = $$createType12;
+        const $$createField27_0 = $$createType10;
+        const $$createField37_0 = $$createType12;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField11_0($$parsedSource["categories"]);
         }
         if ("hosts" in $$parsedSource) {
-            $$parsedSource["hosts"] = $$createField26_0($$parsedSource["hosts"]);
+            $$parsedSource["hosts"] = $$createField27_0($$parsedSource["hosts"]);
         }
         if ("logins" in $$parsedSource) {
-            $$parsedSource["logins"] = $$createField36_0($$parsedSource["logins"]);
+            $$parsedSource["logins"] = $$createField37_0($$parsedSource["logins"]);
         }
         return new OptionsForm($$parsedSource as Partial<OptionsForm>);
     }

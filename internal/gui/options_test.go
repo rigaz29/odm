@@ -71,6 +71,7 @@ func TestSaveOptions(t *testing.T) {
 	o.CapOn, o.CapMB, o.CapHours, o.CapWarning = true, 500, 6, false
 	o.Logins = []SiteLogin{{Host: "files.example.com", User: "me", Pass: "pw"}, {Host: " "}}
 	o.Theme, o.Language = "dark", "id"
+	o.YtDlpCookies = " Firefox "
 	o.Categories = append([]CategoryOption{{Name: "Comics", Exts: "CBZ cbr", Folder: filepath.Join(dir, "comics")}}, o.Categories...)
 	if r := svc.SaveOptions(o); r.Refused != nil || r.Appearance == nil || r.Appearance.Theme != "dark" || r.Appearance.Language != "id" {
 		t.Fatalf("result %+v", r)
@@ -95,6 +96,8 @@ func TestSaveOptions(t *testing.T) {
 		t.Fatalf("Other is not last, or the folder was lost: %+v %v", st.CategoryDefs, st.CategoryDirs)
 	case st.Theme != "dark" || st.Language != "id" || svc.Appearance().Language != "id":
 		t.Fatalf("look %q %q", st.Theme, st.Language)
+	case st.YtDlpCookies != "firefox" || svc.Options().YtDlpCookies != "firefox":
+		t.Fatalf("yt-dlp's browser %q", st.YtDlpCookies)
 	}
 	mu.Lock()
 	if len(looks) != 1 || looks[0].Theme != "dark" {

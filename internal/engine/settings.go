@@ -9,6 +9,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"odm/internal/ytdlp"
 )
 
 // Duplicate policies for automatic adds.
@@ -149,6 +151,11 @@ type Settings struct {
 	// video sites' pages such as YouTube's. Empty: look next to ODM, then
 	// on PATH.
 	YtDlpPath string `json:"ytdlp_path,omitempty"`
+	// YtDlpCookies names the browser whose cookies yt-dlp reads itself
+	// (ytdlp.CookieBrowsers), so a video site sees the person signed in:
+	// YouTube asks some visitors to sign in to confirm they are not a bot.
+	// Empty, the default: ODM gives yt-dlp no cookies.
+	YtDlpCookies string `json:"ytdlp_cookies,omitempty"`
 	// ToolUpdates says whether ODM may download yt-dlp and ffmpeg itself
 	// and keep them updated: "" (not asked yet), "auto" or "off".
 	ToolUpdates string `json:"tool_updates,omitempty"`
@@ -357,6 +364,10 @@ func (s *Settings) normalize(fallbackDir string) {
 		s.CategoryDirs = map[string]string{}
 	}
 	s.CategoryDefs = normalizeCategories(s.CategoryDefs)
+	s.YtDlpCookies = strings.ToLower(strings.TrimSpace(s.YtDlpCookies))
+	if !ytdlp.CookieBrowser(s.YtDlpCookies) {
+		s.YtDlpCookies = ""
+	}
 }
 
 // NewQueueSchedule returns the defaults a new queue starts with.

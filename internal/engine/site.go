@@ -73,6 +73,19 @@ var ytdlpSetting atomic.Pointer[string]
 
 func setYtDlpPath(p string) { ytdlpSetting.Store(&p) }
 
+// ytdlpCookies is the browser yt-dlp signs in with (Settings.YtDlpCookies),
+// read from download goroutines.
+var ytdlpCookies atomic.Pointer[string]
+
+func setYtDlpCookies(b string) { ytdlpCookies.Store(&b) }
+
+func cookiesFrom() string {
+	if b := ytdlpCookies.Load(); b != nil {
+		return *b
+	}
+	return ""
+}
+
 func ytdlpConfigured() string {
 	if p := ytdlpSetting.Load(); p != nil {
 		return *p
@@ -129,7 +142,7 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	if err != nil {
 		return nil, err
 	}
-	v, err := ytdlp.Probe(ctx, bin, strings.TrimSpace(page))
+	v, err := ytdlp.Probe(ctx, bin, strings.TrimSpace(page), cookiesFrom())
 	if err != nil {
 		return nil, err
 	}
@@ -158,7 +171,7 @@ func resolveSiteLive(ctx context.Context, page string, kind media.Kind) (string,
 	if err != nil {
 		return "", nil, err
 	}
-	v, err := ytdlp.Probe(ctx, bin, page)
+	v, err := ytdlp.Probe(ctx, bin, page, cookiesFrom())
 	if err != nil {
 		return "", nil, err
 	}
@@ -295,7 +308,7 @@ func (d *Download) nameFromSite(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	v, err := ytdlp.Probe(ctx, bin, page)
+	v, err := ytdlp.Probe(ctx, bin, page, cookiesFrom())
 	if err != nil {
 		return
 	}
@@ -336,7 +349,7 @@ func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
 	d.mu.Lock()
 	o := ytdlp.Options{
 		Page: d.URL, Format: d.Site.Format, Out: filepath.Join(work, "media"),
-		FFmpeg: ff, RateLimit: d.SpeedLimit, Fragments: d.Connections,
+		FFmpeg: ff, RateLimit: d.SpeedLimit, Fragments: d.Connections, Cookies: cookiesFrom(),
 	}
 	if o.RateLimit <= 0 && d.shared != nil {
 		o.RateLimit = d.shared.Rate() // the limit for all downloads, as yt-dlp's own

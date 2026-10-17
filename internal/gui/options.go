@@ -75,9 +75,12 @@ type OptionsForm struct {
 	DuplicateAgain bool   `json:"duplicateAgain"`
 	UserAgent      string `json:"userAgent"`
 	// Programs
-	FFmpegPath  string `json:"ffmpegPath"`
-	YtDlpPath   string `json:"ytdlpPath"`
-	ToolUpdates bool   `json:"toolUpdates"` // download and update them automatically
+	FFmpegPath string `json:"ffmpegPath"`
+	YtDlpPath  string `json:"ytdlpPath"`
+	// YtDlpCookies is the browser yt-dlp signs in to video sites with
+	// (ytdlp.CookieBrowsers), "" for none.
+	YtDlpCookies string `json:"ytdlpCookies"`
+	ToolUpdates  bool   `json:"toolUpdates"` // download and update them automatically
 	// Connection
 	Connections int               `json:"connections"`
 	Concurrent  int               `json:"concurrent"`
@@ -118,7 +121,7 @@ func (s *Service) Options() OptionsForm {
 		StartDialog: !st.NoStartDialog, ProgressDialog: !st.NoProgressDialog, CompleteDialog: !st.NoCompleteDialog,
 		Notifications: !st.NoNotifications, Sounds: st.Sounds, DuplicateAgain: st.DuplicateAuto == engine.DuplicateAgain,
 		UserAgent:  st.UserAgent,
-		FFmpegPath: st.FFmpegPath, YtDlpPath: st.YtDlpPath, ToolUpdates: st.ToolUpdates == tools.ModeAuto,
+		FFmpegPath: st.FFmpegPath, YtDlpPath: st.YtDlpPath, YtDlpCookies: st.YtDlpCookies, ToolUpdates: st.ToolUpdates == tools.ModeAuto,
 		Connections: st.Connections, Concurrent: st.Concurrent,
 		LimitOn: st.EffectiveSpeedLimit() > 0, LimitKB: int(st.SpeedLimit / 1024),
 		CapOn: st.Limits.Enabled, CapMB: st.Limits.MB, CapHours: st.Limits.Hours, CapWarning: !st.Limits.NoWarning,
@@ -219,6 +222,7 @@ func (s *Service) SaveOptions(o OptionsForm) SaveResult {
 	next.UserAgent = strings.TrimSpace(o.UserAgent)
 	next.FFmpegPath = strings.TrimSpace(o.FFmpegPath)
 	next.YtDlpPath = strings.TrimSpace(o.YtDlpPath)
+	next.YtDlpCookies = o.YtDlpCookies // an unknown browser reads as none
 	next.ToolUpdates = toolMode(was.ToolUpdates, o.ToolUpdates)
 	next.Connections = o.Connections
 	next.Concurrent = o.Concurrent

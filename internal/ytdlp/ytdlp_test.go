@@ -193,7 +193,7 @@ func TestDownload(t *testing.T) {
 	var reports []Progress
 	file, err := Download(context.Background(), bin, Options{
 		Page: "https://www.youtube.com/watch?v=abc", Format: "137+140",
-		Out: filepath.Join(dir, "media"), FFmpeg: "C:/ff/ffmpeg.exe", RateLimit: 5000, Fragments: 4,
+		Out: filepath.Join(dir, "media"), FFmpeg: "C:/ff/ffmpeg.exe", RateLimit: 5000, Fragments: 4, Cookies: "firefox",
 	}, func(p Progress) { reports = append(reports, p) })
 	if err != nil {
 		t.Fatal(err)
@@ -206,7 +206,7 @@ func TestDownload(t *testing.T) {
 	}
 	data, _ := os.ReadFile(filepath.Join(dir, "args.txt"))
 	args := strings.Split(string(data), "\n")
-	for _, want := range []string{"--ignore-config", "--no-playlist", "--limit-rate", "5000", "-N", "4", "--ffmpeg-location", "C:/ff/ffmpeg.exe"} {
+	for _, want := range []string{"--ignore-config", "--no-playlist", "--limit-rate", "5000", "-N", "4", "--ffmpeg-location", "C:/ff/ffmpeg.exe", "--cookies-from-browser", "firefox"} {
 		if !contains(args, want) {
 			t.Errorf("args lack %q: %q", want, args)
 		}
@@ -252,7 +252,7 @@ func TestDownloadStops(t *testing.T) {
 
 func TestProbe(t *testing.T) {
 	bin := fakeBin(t, "ok")
-	v, err := Probe(context.Background(), bin, "https://www.youtube.com/watch?v=jNQXAC9IVRw")
+	v, err := Probe(context.Background(), bin, "https://www.youtube.com/watch?v=jNQXAC9IVRw", "")
 	if err != nil {
 		t.Fatal(err)
 	}

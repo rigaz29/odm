@@ -76,7 +76,7 @@ func TestBuildFromRepoExtension(t *testing.T) {
 		t.Fatalf("firefox background: %v", bg)
 	}
 	gecko := fm["browser_specific_settings"].(map[string]any)["gecko"].(map[string]any)
-	if gecko["id"] != "odm@troke.id" {
+	if gecko["id"] != "odm@rigaz29.github.io" {
 		t.Fatalf("gecko id %v", gecko["id"])
 	}
 

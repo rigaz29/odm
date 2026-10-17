@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -73,7 +74,7 @@ func TestWriteManifests(t *testing.T) {
 		cm.AllowedOrigins[0] != "chrome-extension://"+ChromeExtensionID+"/" {
 		t.Fatalf("chromium manifest %+v", cm)
 	}
-	if len(fm.AllowedOrigins) != 0 || fm.AllowedExtensions[0] != FirefoxExtensionID {
+	if len(fm.AllowedOrigins) != 0 || !slices.Equal(fm.AllowedExtensions, []string{FirefoxExtensionID, "odm@troke.id"}) {
 		t.Fatalf("firefox manifest %+v", fm)
 	}
 }

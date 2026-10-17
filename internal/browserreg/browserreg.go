@@ -29,8 +29,15 @@ const ChromeExtensionID = "fnondfibgeiffjplpokfgiacjelmbcbk"
 // browser reads only the first registered host manifest it finds.
 var ChromiumExtensionIDs = []string{ChromeExtensionID}
 
-// FirefoxExtensionID is browser_specific_settings.gecko.id in the manifest.
-const FirefoxExtensionID = "odm@troke.id"
+// FirefoxExtensionID is browser_specific_settings.gecko.id in the manifest:
+// this fork's add-on, which Mozilla signs on its AMO account.
+const FirefoxExtensionID = "odm@rigaz29.github.io"
+
+// FirefoxExtensionIDs are every ID the Firefox add-on can have,
+// FirefoxExtensionID first, then odm@troke.id: the add-on of the project
+// this fork comes from (signed on that project's AMO account), which may
+// be installed already. The host manifest allows them all.
+var FirefoxExtensionIDs = []string{FirefoxExtensionID, "odm@troke.id"}
 
 // Result describes one browser registration.
 type Result struct {
@@ -73,7 +80,7 @@ func writeManifests(dir, exe string) (chromium, firefox string, err error) {
 		c.AllowedOrigins = append(c.AllowedOrigins, "chrome-extension://"+id+"/")
 	}
 	f := base
-	f.AllowedExtensions = []string{FirefoxExtensionID}
+	f.AllowedExtensions = append([]string(nil), FirefoxExtensionIDs...)
 	chromium = filepath.Join(dir, HostName+".json")
 	firefox = filepath.Join(dir, HostName+".firefox.json")
 	for path, m := range map[string]manifest{chromium: c, firefox: f} {

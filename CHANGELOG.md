@@ -218,6 +218,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- The Firefox add-on's ID is `odm@rigaz29.github.io`, so Mozilla signs it
+  on this repository's AMO account when a release is tagged (the release
+  workflow's `AMO_JWT_ISSUER` and `AMO_JWT_SECRET`). `odm@troke.id` was
+  signed on the account of the project this fork comes from. ODM's native
+  host manifest allows both, so an add-on already installed keeps working;
+  after installing the new one, register ODM again (Options → General →
+  Register) and restart Firefox.
 - Windows builds have a new desktop UI (`internal/gui`, see
   `docs/GUI.md`): a page drawn by Microsoft Edge WebView2 through Wails,
   built with React and shadcn/ui, in place of the Fyne UI, which Linux and

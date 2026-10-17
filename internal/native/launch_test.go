@@ -9,7 +9,7 @@ func TestLaunchedByBrowser(t *testing.T) {
 	}{
 		{[]string{"chrome-extension://fnondfibgeiffjplpokfgiacjelmbcbk/", "--parent-window=0"}, true},
 		{[]string{"chrome-extension://abc/"}, true},
-		{[]string{`C:\Users\u\AppData\Roaming\odm\native\com.ochi.odm.firefox.json`, "odm@troke.id"}, true},
+		{[]string{`C:\Users\u\AppData\Roaming\odm\native\com.ochi.odm.firefox.json`, "odm@rigaz29.github.io"}, true},
 		{nil, false},
 		{[]string{"-no-ui"}, false},
 		{[]string{"-add", "https://host/file.zip"}, false},

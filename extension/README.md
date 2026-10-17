@@ -47,7 +47,8 @@ Each release ships both packages:
   hence the unpacked route until the extension is in the stores.
 - **Firefox** — `odm-extension-firefox.xpi`, signed by Mozilla: open it in
   Firefox (drag it onto a window, or *File → Open File*) and confirm. Its
-  add-on ID is `odm@troke.id`. Pre-releases ship
+  add-on ID is `odm@rigaz29.github.io`; ODM's host manifest also allows
+  `odm@troke.id`, the add-on of the project this fork comes from. Pre-releases ship
   `odm-extension-firefox-unsigned.xpi`, which only Firefox Developer Edition
   or Nightly accept (with `xpinstall.signatures.required` set to `false`).
 

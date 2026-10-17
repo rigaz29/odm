@@ -29,7 +29,9 @@ func (s *Store) path(id string) string {
 	return filepath.Join(s.dir, id+".json")
 }
 
-// Save writes the state atomically.
+// Save writes the state atomically. The new file is flushed to the disk
+// before it replaces the old one: after a power cut, a renamed file whose
+// bytes never reached the disk would not parse either.
 func (s *Store) Save(st State) error {
 	data, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
@@ -38,7 +40,18 @@ func (s *Store) Save(st State) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	tmp := s.path(st.ID) + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o644); err != nil {
+	f, err := os.Create(tmp)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write(data)
+	if err == nil {
+		err = f.Sync()
+	}
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
 		return err
 	}
 	return os.Rename(tmp, s.path(st.ID))

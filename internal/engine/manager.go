@@ -762,7 +762,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 		d.SetCategoryDirs(stt.CategoryDirs)
 		d.SetLimiter(m.limiter)
 		d.SetAuthLookup(m.credentials)
-		d.SetOnUpdate(m.changed)
+		d.SetOnUpdate(m.updated)
 
 		m.mu.Lock()
 		// Under mu, so a proxy change cannot slip in between: d is not
@@ -800,7 +800,7 @@ func (m *Manager) Restore(states []State) {
 		d.SetCategoryDirs(m.settings.CategoryDirs)
 		d.SetLimiter(m.limiter)
 		d.SetAuthLookup(m.credentials)
-		d.SetOnUpdate(m.changed)
+		d.SetOnUpdate(m.updated)
 		m.claimOrderLocked(d)
 		m.downloads[d.ID] = d
 		m.order = append(m.order, d.ID)
@@ -953,7 +953,7 @@ func (m *Manager) Create(o AddOptions) Info {
 		d.Status = StatusPaused
 		d.mu.Unlock()
 	}
-	d.SetOnUpdate(m.changed)
+	d.SetOnUpdate(m.updated)
 
 	m.mu.Lock()
 	// Under mu, so a proxy change cannot slip in between: d is not in the
@@ -1442,18 +1442,24 @@ func (m *Manager) retryInQueue(d *Download) bool {
 	return ok
 }
 
-func (m *Manager) changed(d *Download) {
+func (m *Manager) changed(d *Download) { m.updated(d, false) }
+
+// updated saves d and tells the listeners. progress marks an update of the
+// bytes done only, which a running download saves at most every syncEvery
+// (Download.persist).
+func (m *Manager) updated(d *Download, progress bool) {
 	if m.store != nil {
-		m.saveMu.Lock()
-		// The run goroutine reports a download once more after Start
-		// returns, which can be after RemoveWithFile deleted its state.
-		// Saving it then would bring the download back at the next start.
-		// The snapshot is taken under the lock so the last write is the
-		// newest state.
-		if m.get(d.ID) == d {
-			_ = m.store.Save(d.State())
-		}
-		m.saveMu.Unlock()
+		d.persist(progress, func(st State) {
+			m.saveMu.Lock()
+			// The run goroutine reports a download once more after Start
+			// returns, which can be after RemoveWithFile deleted its state.
+			// Saving it then would bring the download back at the next
+			// start.
+			if m.get(d.ID) == d {
+				_ = m.store.Save(st)
+			}
+			m.saveMu.Unlock()
+		})
 	}
 	m.fire()
 }

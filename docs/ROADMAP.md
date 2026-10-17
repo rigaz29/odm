@@ -149,8 +149,13 @@ setara untuk kecepatan dan stabilitas, tetapi ada celah berikut.
 - [x] Buang karakter kontrol arah teks (RTLO dan sejenisnya) dari nama file,
       agar `foto‮gpj.exe` tidak tampil sebagai `fotoexe.jpg`. **K** Di
       `SanitizeName`, yang dilalui nama dari server, API, dan form.
-- [ ] `fsync` berkala sebelum progres disimpan, agar resume setelah listrik
-      mati tidak meninggalkan lubang di file. **K** Ditunda.
+- [x] `fsync` berkala sebelum progres disimpan, agar resume setelah listrik
+      mati tidak meninggalkan lubang di file. **K** Saat unduhan berjalan,
+      progres disimpan paling sering tiap 5 detik, selalu setelah
+      `.odmpart` di-flush; state diambil sebelum flush, jadi hanya
+      menghitung byte yang sudah ditulis. Pause, error, dan perubahan lain
+      langsung di-flush lalu disimpan. File state `<id>.json` juga
+      di-flush sebelum menggantikan yang lama.
 - [x] Validasi akhir dan total ukuran di `Content-Range`, bukan hanya byte
       awal. **K** Total yang berubah = file di server berganti → unduh ulang
       dari awal. Akhir range yang melebihi permintaan tetap diterima.

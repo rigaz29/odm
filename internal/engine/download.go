@@ -110,7 +110,15 @@ type Download struct {
 	auth        func(host string) (string, string, bool)
 	authz       *authorizer
 	catDirs     map[string]string
-	onUpdate    func(*Download)
+	onUpdate    func(*Download, bool)
+
+	// unsynced is set when bytes go to file after its last flush to the
+	// disk, which was at syncedAt (persist). syncedAt is zeroed when
+	// progress goes back, so the next update saves the state that no
+	// longer counts those bytes. saveMu holds one save at a time.
+	unsynced bool
+	syncedAt time.Time
+	saveMu   sync.Mutex
 
 	// connLimit is how many connections this run may open. connOpened is how
 	// many workers have been started. connReady is how many of those have
@@ -255,7 +263,8 @@ func (d *Download) SetCategoryDirs(dirs map[string]string) {
 }
 
 // SetOnUpdate registers a callback invoked when visible state changes.
-func (d *Download) SetOnUpdate(fn func(*Download)) { d.onUpdate = fn }
+// Its progress argument is true when only the bytes done changed.
+func (d *Download) SetOnUpdate(fn func(d *Download, progress bool)) { d.onUpdate = fn }
 
 // httpClient is the client for the next request of this download.
 func (d *Download) httpClient() *http.Client {
@@ -570,6 +579,7 @@ func (d *Download) planLocked(p *Probe) {
 	if conns < 1 {
 		conns = 1
 	}
+	d.syncedAt = time.Time{} // progress went back: save it at the next update
 	if p.RangeOK && p.Total > 0 {
 		d.Chunks = NewPlan(p.Total, conns)
 		return
@@ -998,6 +1008,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 					return werr
 				}
 				d.mu.Lock()
+				d.unsynced = true
 				counted := ownedSpan(pos, writeN, ch.End)
 				if counted > 0 {
 					if at, mis := d.mismatchLocked(pos, buf[:counted]); mis {
@@ -1453,6 +1464,7 @@ func (d *Download) restartFromZero() error {
 	d.restarted = true
 	d.single = true
 	d.witnesses = nil
+	d.syncedAt = time.Time{} // progress went back: save it at the next update
 	if rangeOK {
 		d.Chunks = NewPlan(total, conns)
 	} else if total > 0 {
@@ -1471,6 +1483,7 @@ func (d *Download) rewindLocked(at int64) {
 		at = 0
 	}
 	d.witnesses = nil
+	d.syncedAt = time.Time{} // progress went back: save it at the next update
 	for _, c := range d.Chunks {
 		c.claimed = false
 		if c.End >= 0 && c.End < at {
@@ -2145,7 +2158,55 @@ func (d *Download) notify(force bool) {
 	}
 	d.notifyAt = time.Now()
 	d.mu.Unlock()
-	d.onUpdate(d)
+	d.onUpdate(d, !force)
+}
+
+// syncEvery is how often a running download's progress is saved. Its file
+// is flushed to the disk first, so the saved state never counts bytes that
+// were still in the system's cache when the power went: a resume after
+// that would trust them and leave runs of zeros in the file.
+const syncEvery = 5 * time.Second
+
+// fsync flushes a file to the disk. Tests replace it.
+var fsync = (*os.File).Sync
+
+// persist hands save the state to keep. When the file has bytes not yet
+// flushed to the disk it flushes them first, and the state is taken before
+// that, so it counts only bytes that were written before the flush. A
+// progress update is not saved until the next flush is due (syncEvery),
+// nor while another save of the download runs. One save runs at a time, so
+// the last one written is the newest state.
+func (d *Download) persist(progress bool, save func(State)) {
+	if !progress {
+		d.saveMu.Lock()
+	} else if !d.saveMu.TryLock() {
+		return
+	}
+	defer d.saveMu.Unlock()
+	d.mu.Lock()
+	f := d.file
+	flush := f != nil && d.unsynced
+	if flush && progress && time.Since(d.syncedAt) < syncEvery {
+		d.mu.Unlock()
+		return
+	}
+	if flush {
+		d.unsynced = false // bytes written from now on wait for the next flush
+	}
+	d.mu.Unlock()
+	st := d.State()
+	if flush {
+		if err := fsync(f); err != nil {
+			d.mu.Lock()
+			d.unsynced = true
+			d.mu.Unlock()
+			return
+		}
+		d.mu.Lock()
+		d.syncedAt = time.Now()
+		d.mu.Unlock()
+	}
+	save(st)
 }
 
 func cookieHeader(cookies []*http.Cookie) string {

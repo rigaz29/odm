@@ -22,6 +22,14 @@ All notable changes to ODM are documented here. The format is based on
   joined. Once a broadcast is over, TikTok's server keeps sending its
   last seconds on every connection: those repeats are dropped, so the
   recording ends instead of adding the same seconds again and again.
+- A download resumed after a power cut (or Windows crashing) no longer
+  ends with runs of zeros in its file: a broken video or archive, with no
+  error unless a checksum was given. The progress saved could count bytes
+  still in Windows' cache, which the cut lost. A running download's file
+  is now flushed to the disk before its progress is saved, every 5
+  seconds, and a download's state file is flushed before it replaces the
+  old one, so a cut cannot leave one that drops the download from the
+  list.
 
 ### Added
 

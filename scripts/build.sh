@@ -64,8 +64,10 @@ gui() {
   local name="$1"
   echo "building gui windows/amd64 -> $OUT/$name"
   (cd internal/gui/frontend && npm ci --no-audit --no-fund && npm run build)
+  # production: Wails' release mode, without WebView2's own right-click
+  # menu (Back, Refresh, Print, Inspect) and its developer tools.
   CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-    go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/$name" ./cmd/odm
+    go build -tags gui,production -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/$name" ./cmd/odm
   echo "built $OUT/$name"
 }
 

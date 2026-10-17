@@ -78,9 +78,10 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X odm/internal/version.Version=${VERSION}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            # The desktop UI of internal/gui: no cgo.
+            # The desktop UI of internal/gui: no cgo. production is Wails'
+            # release mode (no WebView2 right-click menu or developer tools).
             CGO_ENABLED=0 GOOS=windows GOARCH=${{ matrix.goarch }} \
-              go build -tags gui -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
+              go build -tags gui,production -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
               -o "dist/${{ matrix.name }}" ./cmd/odm
           else
             # Linux and macOS: the Fyne UI, with cgo.

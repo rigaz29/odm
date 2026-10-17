@@ -188,7 +188,7 @@ the `fyne` build tag, so it needs cgo.
 go test ./...                                    # engine tests, no UI needed
 (cd internal/gui/frontend && npm ci && npm test && npm run build)  # the Windows UI's page
 go test -tags gui ./internal/gui ./internal/i18n # the Windows UI's Go side
-go build -tags gui -ldflags -H=windowsgui -o ODM.exe ./cmd/odm  # Windows desktop build
+go build -tags gui,production -ldflags -H=windowsgui -o ODM.exe ./cmd/odm  # Windows desktop build
 go test -tags fyne ./internal/ui                 # Fyne UI tests (cgo)
 go build -tags fyne -o odm ./cmd/odm             # Fyne desktop build for the current OS
 ```

@@ -6,6 +6,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- A right-click in ODM's windows no longer shows the browser's own menu
+  (Back, Refresh, Save as, Print, Inspect): the Windows build is Wails'
+  release build now. Text boxes and selected text keep Cut, Copy and
+  Paste.
+
 ### Added
 
 - A Setup window on Windows, opened at ODM's first start (and once for

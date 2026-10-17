@@ -119,10 +119,14 @@ internal/engine, server, native, tools …    tidak berubah
 - Kebutuhan: Go ≥ 1.25, Node LTS + npm, dan CLI `wails3` (untuk membuat
   binding).
 - Build: `bash scripts/build.sh windows`. Isinya `npm ci`, lalu `npm run
-  build` di `internal/gui/frontend`, lalu `go build -tags gui` tanpa CGO,
-  dan hasilnya `dist/ODM.exe` (sejak Tahap 6; sebelumnya pratinjau
-  `ODM-Next.exe` lewat target `gui`). UI Fyne untuk Windows tetap bisa
-  dibangun dengan `bash scripts/build.sh windows-fyne`.
+  build` di `internal/gui/frontend`, lalu `go build -tags gui,production`
+  tanpa CGO, dan hasilnya `dist/ODM.exe` (sejak Tahap 6; sebelumnya
+  pratinjau `ODM-Next.exe` lewat target `gui`). UI Fyne untuk Windows tetap
+  bisa dibangun dengan `bash scripts/build.sh windows-fyne`.
+- Tag `production` adalah mode rilis Wails: menu klik kanan bawaan WebView2
+  (Back, Refresh, Print, Inspect) disembunyikan kecuali di kolom teks dan
+  teks yang diseleksi, dan DevTools mati. Build uji yang perlu DevTools atau
+  CDP menambahkan tag `devtools`.
 - Binding hasil generate di-commit; `frontend/dist` tidak. Build dan tes
   tanpa tag tetap jalan tanpa Node.
 - Selama transisi `ODM.exe` (Fyne) dan `ODM-Next.exe` memakai data yang

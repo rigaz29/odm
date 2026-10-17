@@ -31,6 +31,10 @@ All notable changes to ODM are documented here. The format is based on
 - The Fyne download list's last column reaches the right edge: its header
   and the selected row stopped a few pixels short, and a stray grid line
   stood in the gap. (Ported from upstream 0eaeb35d.)
+- The hover highlight in the Fyne window's category sidebar no longer
+  vanishes within a second: the sidebar's refresh every second cleared it,
+  so it is now refreshed only when its entries change. (Ported from
+  upstream a218f0c8.)
 
 ## [0.5.0] - 2026-10-17
 

@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/theme"
 
 	"odm/internal/engine"
 )
@@ -92,5 +93,56 @@ func TestSelectionFollowsDownloadsAcrossResort(t *testing.T) {
 	a.selectAll()
 	if len(ids()) != 4 {
 		t.Fatalf("select all = %v", ids())
+	}
+}
+
+// The 1 s refresh must not clear the hover highlight in the sidebar: Fyne's
+// List.Refresh resets it on every visible row, so an unchanged sidebar is
+// not refreshed. Checked on pixels: the hovered row keeps its colour.
+func TestSidebarKeepsHoverOnRefresh(t *testing.T) {
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	a := &application{mgr: mgr, progressWindows: map[string]*progressView{}, selectedRow: -1, sortCol: -1}
+	a.fyneApp = test.NewTempApp(t)
+	a.fyneApp.Settings().SetTheme(newTheme())
+	a.win = a.fyneApp.NewWindow("t")
+	a.build()
+	a.win.Resize(fyne.NewSize(700, 420))
+	a.refresh()
+	base := a.fyneApp.Driver().AbsolutePositionForObject(a.cats)
+	row := base.Add(fyne.NewPos(120, 30)) // second row, right of its label
+	test.MoveMouse(a.win.Canvas(), row)
+	at := func() (uint32, uint32, uint32) {
+		img := a.win.Canvas().Capture()
+		s := a.win.Canvas().Scale()
+		r, g, b, _ := img.At(int(row.X*s), int(row.Y*s)).RGBA()
+		return r, g, b
+	}
+	r1, g1, b1 := at()
+	other := base.Add(fyne.NewPos(120, 120))
+	img := a.win.Canvas().Capture()
+	s := a.win.Canvas().Scale()
+	r0, g0, b0, _ := img.At(int(other.X*s), int(other.Y*s)).RGBA()
+	if r1 == r0 && g1 == g0 && b1 == b0 {
+		t.Fatal("no hover highlight to begin with")
+	}
+	a.refresh()
+	if r2, g2, b2 := at(); r2 != r1 || g2 != g1 || b2 != b1 {
+		t.Fatalf("hover highlight lost on refresh: %v,%v,%v -> %v,%v,%v", r1, g1, b1, r2, g2, b2)
+	}
+}
+
+func TestSameEntries(t *testing.T) {
+	a := []sidebarEntry{{text: "Video (1)", icon: theme.MediaVideoIcon()}, {text: "Audio"}}
+	b := []sidebarEntry{{text: "Video (1)", icon: theme.MediaVideoIcon()}, {text: "Audio"}}
+	if !sameEntries(a, b) {
+		t.Fatal("equal lists reported as different")
+	}
+	b[0].text = "Video (2)"
+	if sameEntries(a, b) {
+		t.Fatal("a changed count went unnoticed")
+	}
+	b[0].text, b[0].icon = "Video (1)", theme.MediaMusicIcon()
+	if sameEntries(a, b) {
+		t.Fatal("a changed icon went unnoticed")
 	}
 }

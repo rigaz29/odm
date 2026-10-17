@@ -202,6 +202,29 @@ type sidebarEntry struct {
 	expanded bool
 }
 
+// sameEntries reports whether two sidebar lists draw the same. Icons are
+// compared by name: theme icons may be new values on every lookup.
+func sameEntries(a, b []sidebarEntry) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		x, y := a[i], b[i]
+		xi, yi := "", ""
+		if x.icon != nil {
+			xi = x.icon.Name()
+		}
+		if y.icon != nil {
+			yi = y.icon.Name()
+		}
+		x.icon, y.icon = nil, nil
+		if x != y || xi != yi {
+			return false
+		}
+	}
+	return true
+}
+
 type application struct {
 	mgr     *engine.Manager
 	fyneApp fyne.App
@@ -1130,13 +1153,17 @@ func (a *application) refresh() {
 	entries := a.buildEntries(all)
 
 	a.mu.Lock()
+	sidebarChanged := !sameEntries(a.entries, entries)
 	a.entries = entries
 	a.mu.Unlock()
 
 	if a.table != nil {
 		a.table.Refresh()
 	}
-	if a.cats != nil {
+	// Only when the sidebar changed: Fyne's List.Refresh clears the hover
+	// highlight of every visible row (setupListItem resets it), so a
+	// refresh every second made the highlight under the pointer vanish.
+	if a.cats != nil && sidebarChanged {
 		a.cats.Refresh()
 	}
 	if a.grid != nil {

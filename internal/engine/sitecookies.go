@@ -14,10 +14,14 @@ import (
 
 // CookiesFromExtension, as Settings.YtDlpCookies, has yt-dlp sign in to a
 // video site with the cookies ODM's browser extension sends along with
-// the site's page. yt-dlp cannot take them from Chrome itself: Chrome
-// locks its cookie database while it runs, and since version 127 keeps
-// the cookies under an encryption yt-dlp cannot undo.
-const CookiesFromExtension = "extension"
+// the site's page; it is the default. yt-dlp cannot take them from Chrome
+// itself: Chrome locks its cookie database while it runs, and since
+// version 127 keeps the cookies under an encryption yt-dlp cannot undo.
+// CookiesNone has yt-dlp sign in nowhere.
+const (
+	CookiesFromExtension = "extension"
+	CookiesNone          = "none"
+)
 
 // BrowserCookie is one cookie of a video site's page, as the extension's
 // browser holds it.
@@ -86,7 +90,7 @@ func siteKey(page string) string {
 func siteCookieArgs(page string) (c ytdlp.Cookies, done func()) {
 	done = func() {}
 	switch b := cookiesFrom(); b {
-	case "":
+	case "", CookiesNone:
 		return c, done
 	case CookiesFromExtension:
 		siteCookies.Lock()

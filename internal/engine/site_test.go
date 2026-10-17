@@ -310,7 +310,8 @@ func TestSiteTitleNames(t *testing.T) {
 }
 
 // The browser chosen in the Options goes to yt-dlp, which signs in with
-// its cookies; an unknown one reads as none.
+// its cookies; an unknown one reads as none, and none chosen as the
+// default, the extension's cookies.
 func TestSiteDownloadSignsInWhenAsked(t *testing.T) {
 	m := fakeYtDlp(t, "slow")
 	t.Cleanup(func() { setYtDlpCookies("") })
@@ -341,8 +342,13 @@ func TestSiteDownloadSignsInWhenAsked(t *testing.T) {
 
 	st.YtDlpCookies = "netscape"
 	m.UpdateSettings(st)
-	if got := m.Settings().YtDlpCookies; got != "" {
-		t.Fatalf("an unknown browser was kept: %q", got)
+	if got := m.Settings().YtDlpCookies; got != CookiesNone {
+		t.Fatalf("an unknown browser reads as %q", got)
+	}
+	st.YtDlpCookies = ""
+	m.UpdateSettings(st)
+	if got := m.Settings().YtDlpCookies; got != CookiesFromExtension {
+		t.Fatalf("none chosen reads as %q", got)
 	}
 }
 

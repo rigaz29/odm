@@ -529,8 +529,8 @@ function Programs({ o, set }: TabProps) {
           {t("Sign in to video sites with the cookies of:")}
         </label>
         <Select id="opt-cookies" className="w-56" value={o.ytdlpCookies} onChange={(e) => set({ ytdlpCookies: e.target.value })}>
-          <option value="">{t("No browser (the default)")}</option>
           <option value="extension">{t("The browser you download from (ODM's extension)")}</option>
+          <option value="none">{t("No browser")}</option>
           {COOKIE_BROWSERS.map(([id, name]) => (
             <option key={id} value={id}>
               {name}

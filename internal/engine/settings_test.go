@@ -56,14 +56,14 @@ func TestSettingsNormalize(t *testing.T) {
 func TestLoadSaveSettings(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "settings.json")
 	def := LoadSettings(path, "/fallback")
-	if def.Dir != "/fallback" || def.Connections != DefaultConnections {
+	if def.Dir != "/fallback" || def.Connections != DefaultConnections || def.YtDlpCookies != CookiesFromExtension {
 		t.Fatalf("defaults wrong: %+v", def)
 	}
 
 	want := Settings{Dir: "/downloads", Connections: 12, Concurrent: 5, SpeedLimit: 1048576, Categories: false, Proxy: ProxyConfig{Mode: "none"}, Queues: []string{DefaultQueue}, FileTypes: DefaultFileTypes(), CategoryDirs: map[string]string{},
 		HostConnections: map[string]int{}, DuplicateAuto: DuplicateSkip,
 		Schedules: map[string]QueueSchedule{DefaultQueue: {Days: []bool{true, true, true, true, true, true, true}, Parallel: 1, Retries: 10}},
-		Limits:    DownloadLimits{MB: 200, Hours: 5}}
+		Limits:    DownloadLimits{MB: 200, Hours: 5}, YtDlpCookies: CookiesFromExtension}
 	if err := SaveSettings(path, want); err != nil {
 		t.Fatal(err)
 	}

@@ -55,13 +55,18 @@ func TestSiteCookiesFollowTheOptions(t *testing.T) {
 	})
 	page := "https://www.youtube.com/watch?v=abc"
 	cookies := []BrowserCookie{{Name: "SID", Value: "s1", Domain: ".youtube.com", Path: "/", Secure: true}}
-
-	m.SetSiteCookies(page, cookies) // not asked for: dropped
-	if c, _ := siteCookieArgs(page); c.File != "" || c.Browser != "" {
-		t.Fatalf("cookies without the Options: %+v", c)
+	st := m.Settings()
+	if st.YtDlpCookies != CookiesFromExtension {
+		t.Fatalf("the default is %q", st.YtDlpCookies)
 	}
 
-	st := m.Settings()
+	st.YtDlpCookies = CookiesNone
+	m.UpdateSettings(st)
+	m.SetSiteCookies(page, cookies) // not asked for: dropped
+	if c, _ := siteCookieArgs(page); c.File != "" || c.Browser != "" {
+		t.Fatalf("cookies with none chosen: %+v", c)
+	}
+
 	st.YtDlpCookies = CookiesFromExtension
 	m.UpdateSettings(st)
 	m.SetSiteCookies(page, cookies)

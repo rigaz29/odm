@@ -8,8 +8,9 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
-- yt-dlp can sign in to video sites, chosen under Options → Programs
-  ("Sign in to video sites with the cookies of"; none by default).
+- yt-dlp signs in to video sites, set under Options → Programs ("Sign in
+  to video sites with the cookies of"; by default with the browser you
+  download from, or "No browser").
   YouTube asks some visitors to "sign in to confirm you're not a bot",
   and then lists no qualities: the menu offered only "best quality", and
   the download failed. "The browser you download from (ODM's extension)"
@@ -22,7 +23,8 @@ All notable changes to ODM are documented here. The format is based on
   itself (`--cookies-from-browser`), which Chrome does not allow: it
   locks its cookies while open and, since version 127, encrypts them. Used
   for the page's qualities, the download, and a live recording's fresh
-  address. The setting is `ytdlp_cookies` (`extension` or a browser).
+  address. The setting is `ytdlp_cookies`: `extension` (the default, also
+  for an empty value), `none`, or a browser.
 - When yt-dlp cannot list a video's qualities, the extension's menu says
   why next to its one "best quality" row ("Could not copy Chrome cookie
   database", "Sign in to confirm you're not a bot").

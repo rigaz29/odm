@@ -138,7 +138,7 @@ export function mockApi(): Api {
     theme: q.get("theme") || "system", language: "system", fileTypes: "3GP 7Z AAC AVI EXE ISO MKV MP3 MP4 PDF RAR ZIP",
     dir: String.raw`C:\Users\me\Downloads`, categoryFolders: true, rememberDir: true, categories: defaultCategories.map((c) => new CategoryOption(c)),
     startDialog: true, progressDialog: true, completeDialog: true, notifications: true, sounds: false, duplicateAgain: false, userAgent: "",
-    ffmpegPath: "", ytdlpPath: "", ytdlpCookies: "", toolUpdates: true, connections: 8, concurrent: 3, limitOn: false, limitKB: 512,
+    ffmpegPath: "", ytdlpPath: "", ytdlpCookies: "extension", toolUpdates: true, connections: 8, concurrent: 3, limitOn: false, limitKB: 512,
     hosts: [new HostConnections({ host: "cdn.example.com", connections: 2 })], capOn: false, capMB: 200, capHours: 5, capWarning: true,
     proxyMode: "system", proxyHost: "", proxyPort: 8080, proxyUser: "", proxyPass: "",
     logins: [new SiteLogin({ host: "files.example.com", user: "rigaz", pass: "rahasia" })], canSound: true, canTools: true,

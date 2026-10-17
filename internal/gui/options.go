@@ -77,8 +77,8 @@ type OptionsForm struct {
 	// Programs
 	FFmpegPath string `json:"ffmpegPath"`
 	YtDlpPath  string `json:"ytdlpPath"`
-	// YtDlpCookies is the browser yt-dlp signs in to video sites with
-	// (ytdlp.CookieBrowsers), "" for none.
+	// YtDlpCookies is how yt-dlp signs in to video sites: "extension" (the
+	// default), "none", or a browser (ytdlp.CookieBrowsers).
 	YtDlpCookies string `json:"ytdlpCookies"`
 	ToolUpdates  bool   `json:"toolUpdates"` // download and update them automatically
 	// Connection

@@ -113,16 +113,16 @@ queues. It runs as a desktop app, or headless with a JSON API.
   [yt-dlp](https://github.com/yt-dlp/yt-dlp) reads them, and ODM downloads
   the one you pick through yt-dlp, with its progress, pause and resume.
   A YouTube address pasted into *New Download* works the same way. yt-dlp
-  reads the page itself, without the browser's cookies, unless *Options →
-  Programs* says to sign in to video sites ("Sign in to video sites with
-  the cookies of"), as YouTube asks of some visitors ("Sign in to confirm
-  you're not a bot"). "The browser you download from" works in any browser
-  with ODM's extension, Chrome included: the extension sends the site's
+  reads the page itself and signs in to the site as you, as YouTube asks of
+  some visitors ("Sign in to confirm you're not a bot"): by default with
+  the cookies of the browser you download from, which works in any browser
+  with ODM's extension, Chrome included. The extension sends the site's
   cookies with the page, and ODM keeps them in memory for yt-dlp, which
-  gets them in a cookie file removed after each run. A browser named there
-  instead has its cookies read by yt-dlp itself, which works with Firefox;
-  Chrome and other Chromium browsers lock their cookies while open, and
-  recent Chrome encrypts them. When yt-dlp cannot list a video's
+  gets them in a cookie file removed after each run. *Options → Programs*
+  ("Sign in to video sites with the cookies of") turns this off, or names
+  a browser whose cookies yt-dlp reads itself instead, which works with
+  Firefox; Chrome and other Chromium browsers lock their cookies while
+  open, and recent Chrome encrypts them. When yt-dlp cannot list a video's
   qualities, the button's menu says why.
 - A broadcast on such a page (YouTube Live, Twitch, TikTok and others
   yt-dlp reads) shows "● LIVE" with a Record row per quality. ODM records

@@ -302,8 +302,10 @@ function mediaInfo(item, referrer) {
 function grab(item, referrer, title) {
   if (item.kind === "site") {
     // yt-dlp reads the page itself: no cookies or user agent go with it.
+    // The item's title is yt-dlp's or the page's without the site's name;
+    // with none, ODM asks yt-dlp (the tab's title can be just the site's).
     return askOdm({
-      type: "download", kind: "site", url: item.url, title: item.title || title,
+      type: "download", kind: "site", url: item.url, title: item.title || "",
       format: item.format || "", ext: item.ext || "", estimate: item.estimate || 0,
     });
   }

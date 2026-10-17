@@ -240,3 +240,21 @@ func TestDetail(t *testing.T) {
 		t.Fatal("an unknown download has a detail")
 	}
 }
+
+// A video page handed over with only the site's title for a name leaves
+// the name to yt-dlp's title of the video.
+func TestPrefillDropsASiteOnlyName(t *testing.T) {
+	svc, _ := newTestService(t)
+	generic := svc.keepPrefill(engine.AddOptions{URL: "https://www.tiktok.com/@a/video/1", FileName: "TikTok_-_Make_Your_Day.mp4", Site: &engine.SiteJob{}})
+	named := svc.keepPrefill(engine.AddOptions{URL: "https://www.tiktok.com/@a/video/2", FileName: "Cats.mp4", Site: &engine.SiteJob{}})
+	file := svc.keepPrefill(engine.AddOptions{URL: "https://example.com/video.mp4", FileName: "video.mp4"})
+	if got := svc.Prefill(generic).FileName; got != "" {
+		t.Errorf("generic site name kept: %q", got)
+	}
+	if got := svc.Prefill(named).FileName; got != "Cats.mp4" {
+		t.Errorf("a site name of its own: %q", got)
+	}
+	if got := svc.Prefill(file).FileName; got != "video.mp4" {
+		t.Errorf("a file's name: %q", got)
+	}
+}

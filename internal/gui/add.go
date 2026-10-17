@@ -162,7 +162,13 @@ func (s *Service) prefill(token string) engine.AddOptions {
 // Prefill returns the browser's hand-off for the window token opened.
 func (s *Service) Prefill(token string) AddPrefill {
 	o := s.prefill(token)
-	return AddPrefill{URL: o.URL, FileName: o.FileName, Category: o.Category, Description: o.Description,
+	name := o.FileName
+	if o.Site != nil && engine.NeedsSiteTitle(name) {
+		// The page's title was only the site's ("TikTok - Make Your Day"):
+		// the form takes yt-dlp's title of the video instead.
+		name = ""
+	}
+	return AddPrefill{URL: o.URL, FileName: name, Category: o.Category, Description: o.Description,
 		Site: o.Site != nil, Stream: o.Stream != nil}
 }
 

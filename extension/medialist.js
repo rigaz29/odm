@@ -66,9 +66,12 @@
     return /^https:\/\/www\.tiktok\.com\//.test(page) ? "TikTok" : "YouTube";
   }
 
-  // siteTitle drops the site's name a page title ends with.
+  // siteTitle drops the site's name a page title ends with. A title that is
+  // only the site's own names nothing ("" lets ODM ask yt-dlp): TikTok
+  // keeps "TikTok - Make Your Day" while its player moves between videos.
   function siteTitle(title) {
-    return String(title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*(YouTube( Music)?|TikTok)$/, "").trim();
+    const t = String(title || "").replace(/^\(\d+\)\s*/, "").replace(/\s*[-–|]\s*(YouTube( Music)?|TikTok)$/, "").trim();
+    return /^(TikTok(\s*[-–|]\s*Make Your Day)?|YouTube( Music)?)$/i.test(t) ? "" : t;
   }
 
   function mediaLabel(it) {
@@ -143,15 +146,18 @@
 
   // siteEntries are a site video's rows: its qualities as yt-dlp lists them
   // (r is ODM's reply to a "site-formats" message), each item carrying
-  // yt-dlp's format, the container and the expected size.
+  // yt-dlp's format, the container, the expected size and its title of the
+  // video, which names the file better than the page's (on TikTok, the
+  // video's caption).
   function siteEntries(it, r) {
     const name = mediaLabel(it);
     if (!r) return [{ text: `${name} · reading qualities…`, at: it.at }];
     if (r.ok && r.site && r.site.live) return liveEntries(it, r.site, name);
     if (r.ok && r.site) {
       const out = [{ text: name, heading: true, at: it.at }];
+      const title = r.site.title || it.title;
       for (const q of r.site.qualities) {
-        out.push({ text: qualityLabel(q), item: { ...it, format: q.format, ext: q.ext, estimate: q.estimate || 0 }, sub: true });
+        out.push({ text: qualityLabel(q), item: { ...it, title, format: q.format, ext: q.ext, estimate: q.estimate || 0 }, sub: true });
       }
       return out;
     }
@@ -171,7 +177,7 @@
       : site.kind === "dash"
         ? { kind: "stream", mime: "application/dash+xml", format: "DASH" }
         : { kind: "stream", mime: "application/vnd.apple.mpegurl", format: "HLS" };
-    Object.assign(live, { url: site.manifest, headers: site.headers || {}, sitePage: it.url, title: it.title, at: it.at });
+    Object.assign(live, { url: site.manifest, headers: site.headers || {}, sitePage: it.url, title: site.title || it.title, at: it.at });
     const out = [{ text: `● LIVE · ${name}`, heading: true, at: it.at }];
     const s = site.stream;
     if (s && !s.single && s.qualities && s.qualities.length) {

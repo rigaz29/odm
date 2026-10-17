@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync/atomic"
+	"unicode/utf8"
 
 	"odm/internal/ffmpeg"
 	"odm/internal/media"
@@ -202,6 +203,7 @@ func (d *Download) useSiteManifest(manifest string, headers map[string]string) {
 
 // runSite is Start for a video page.
 func (d *Download) runSite(ctx context.Context) {
+	d.nameFromSite(ctx)
 	// finish may give the file another name; the work folder keeps the
 	// one it was created under.
 	work := d.workDir()
@@ -231,6 +233,85 @@ func (d *Download) runSite(ctx context.Context) {
 	default:
 		d.fail(err)
 	}
+}
+
+// genericSiteTitles are the titles a video site's page has before it names
+// the video, as ODM's names write them ("_" for spaces, compared without
+// case). The browser extension falls back to the page title when it has
+// no other, and TikTok keeps "TikTok - Make Your Day" while its player
+// moves from one video to the next; "video" is ODM's own last resort.
+var genericSiteTitles = map[string]bool{
+	"tiktok": true, "tiktok_-_make_your_day": true, "youtube": true, "youtube_music": true, "video": true,
+}
+
+// NeedsSiteTitle reports whether a site download's name says nothing of
+// the video: it has none, or one of genericSiteTitles. ODM then names it
+// after yt-dlp's title of the video.
+func NeedsSiteTitle(name string) bool {
+	stem := strings.TrimSuffix(name, filepath.Ext(name))
+	stem = strings.ToLower(strings.Join(strings.Fields(stem), "_"))
+	return stem == "" || genericSiteTitles[stem]
+}
+
+// maxSiteTitle keeps names made from a video's title well inside path
+// limits, as the extension's names from page titles are kept.
+const maxSiteTitle = 120
+
+// siteTitleName turns yt-dlp's title of a video into a file name written
+// as the extension writes names from titles: "_" for spaces (and for what
+// Windows forbids), no "_" or "." at the ends, at most maxSiteTitle
+// characters. TikTok's titles are the video's caption.
+func siteTitleName(title string) string {
+	name := SanitizeName(strings.Join(strings.Fields(title), "_"))
+	for strings.Contains(name, "__") {
+		name = strings.ReplaceAll(name, "__", "_")
+	}
+	name = strings.Trim(name, "_.")
+	for utf8.RuneCountInString(name) > maxSiteTitle {
+		_, size := utf8.DecodeLastRuneInString(name)
+		name = name[:len(name)-size]
+	}
+	return strings.TrimRight(name, "_.")
+}
+
+// nameFromSite names a site download after its video, as yt-dlp reads it,
+// when the name it came with says nothing of it (NeedsSiteTitle): the
+// extension sends yt-dlp's title, but an older one, or one that could not
+// ask ODM for the page's qualities, sends the page's. A download that
+// already fetched under its name keeps it, with its work folder.
+func (d *Download) nameFromSite(ctx context.Context) {
+	d.mu.Lock()
+	name, page := d.FileName, d.URL
+	d.mu.Unlock()
+	if !NeedsSiteTitle(name) {
+		return
+	}
+	if name != "" {
+		if _, err := os.Stat(d.workDir()); err == nil {
+			return
+		}
+	}
+	bin, err := locateYtDlp(ctx)
+	if err != nil {
+		return
+	}
+	v, err := ytdlp.Probe(ctx, bin, page)
+	if err != nil {
+		return
+	}
+	title := siteTitleName(v.Title)
+	if title == "" {
+		return
+	}
+	// placeSite puts the container yt-dlp chose in place of this one.
+	ext := filepath.Ext(name)
+	if ext == "" {
+		ext = ".mp4"
+	}
+	d.mu.Lock()
+	d.FileName = title + ext
+	d.mu.Unlock()
+	d.notify(true)
 }
 
 // fetchSite runs yt-dlp until the video is in the work folder and returns

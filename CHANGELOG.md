@@ -274,6 +274,15 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- TikTok videos sent from the browser were all named
+  `TikTok_-_Make_Your_Day.mp4`: TikTok keeps that page title while its
+  player moves from one video to the next, and the extension named site
+  videos after the page. They are now named after yt-dlp's title of the
+  video (on TikTok, its caption), which the extension already had from the
+  quality menu. A name that is only a site's title ("TikTok - Make Your
+  Day", "YouTube", none at all) is replaced with yt-dlp's title when the
+  download starts, so older extensions benefit too, and New Download shows
+  yt-dlp's title instead of it.
 - A download added without starting it (New Download → Download Later, or
   `"start": false` from the API) was gone after ODM closed: it was saved
   only once its state changed. It is saved when it is added.

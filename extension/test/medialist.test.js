@@ -114,6 +114,12 @@ test("siteTitle drops the site's name", () => {
   assert.equal(ml.siteTitle("A song - YouTube Music"), "A song");
   assert.equal(ml.siteTitle("someone is LIVE | TikTok"), "someone is LIVE");
   assert.equal(ml.siteTitle("Plain"), "Plain");
+  // Only the site's own title: nothing, so ODM asks yt-dlp.
+  assert.equal(ml.siteTitle("TikTok - Make Your Day"), "");
+  assert.equal(ml.siteTitle("(2) TikTok - Make Your Day"), "");
+  assert.equal(ml.siteTitle("TikTok"), "");
+  assert.equal(ml.siteTitle("YouTube"), "");
+  assert.equal(ml.siteTitle("TikTok dance - TikTok"), "TikTok dance");
 });
 
 test("menuEntries lists a site video's qualities from yt-dlp", () => {
@@ -134,6 +140,14 @@ test("menuEntries lists a site video's qualities from yt-dlp", () => {
     "Audio only · 130 kbps · AAC · M4A",
   ]);
   assert.deepEqual([got[1].item.format, got[1].item.ext, got[1].item.estimate, got[1].item.title], ["133+140", "mp4", 1024, "Me at the zoo"]);
+
+  // yt-dlp's title names the file, not the page's: TikTok's page title can
+  // be just "TikTok - Make Your Day".
+  const tiktok = { kind: "site", site: "TikTok", url: "https://www.tiktok.com/@someone/video/123", title: "" };
+  const caption = ml.menuEntries([tiktok], new Map([[tiktok.url, { ok: true, site: { title: "Balas @yola hayu yu? 🔥", qualities: [
+    { label: "720p · MP4", format: "h264_720", ext: "mp4" },
+  ] } }]]));
+  assert.equal(caption[1].item.title, "Balas @yola hayu yu? 🔥");
 
   const say = (r) => ml.menuEntries([page], new Map([[page.url, r]])).map((e) => [e.text, !!e.item]);
   assert.deepEqual(say({ ok: false, missing: true, error: "yt-dlp not found" }), [["YouTube video · needs yt-dlp (see ODM's Options)", false]]);

@@ -256,3 +256,52 @@ func TestSiteDownloadArgs(t *testing.T) {
 		t.Fatal("a video page changed its address")
 	}
 }
+
+// A site download named after a page that had not named the video (TikTok
+// keeps "TikTok - Make Your Day"), or not named at all, takes yt-dlp's
+// title of the video; one with a name of its own keeps it.
+func TestSiteDownloadNamedAfterTheVideo(t *testing.T) {
+	m := fakeYtDlp(t, "ok")
+	dir := t.TempDir()
+	for _, c := range []struct{ given, want string }{
+		{"TikTok_-_Make_Your_Day.mp4", "A_talk.mkv"},
+		{"", "A_talk.mkv"},
+		{"Cats.mp4", "Cats.mkv"},
+	} {
+		info := m.Create(AddOptions{
+			URL: "https://www.tiktok.com/@someone/video/123", Dir: dir, FileName: c.given, Start: true,
+			Site: &SiteJob{Format: "137+140"},
+		})
+		waitFor(t, "the download to finish", func() bool {
+			i, _ := m.Get(info.ID)
+			return i.Status == StatusComplete || i.Status == StatusError
+		})
+		got, _ := m.Get(info.ID)
+		if got.Status != StatusComplete || got.FileName != c.want {
+			t.Errorf("given %q: status %s, name %q, want %q (%s)", c.given, got.Status, got.FileName, c.want, got.Error)
+		}
+		m.RemoveWithFile(info.ID, true)
+	}
+}
+
+func TestSiteTitleNames(t *testing.T) {
+	for name, want := range map[string]bool{
+		"": true, "video": true, "TikTok_-_Make_Your_Day.mp4": true, "TikTok - Make Your Day.mp4": true,
+		"YouTube.webm": true, "Cats.mp4": false, "TikTok_dance.mp4": false,
+	} {
+		if NeedsSiteTitle(name) != want {
+			t.Errorf("NeedsSiteTitle(%q) = %v", name, !want)
+		}
+	}
+	for title, want := range map[string]string{
+		"Balas @yolaaftwsr hayu yu ? #SquadRandom_ 🔥":                  "Balas_@yolaaftwsr_hayu_yu_#SquadRandom_🔥",
+		"Tag 1 Friend reverse this Video and look what happens 🤩😱 ...": "Tag_1_Friend_reverse_this_Video_and_look_what_happens_🤩😱",
+		"a/b: c":                 "a_b_c",
+		strings.Repeat("x", 200): strings.Repeat("x", maxSiteTitle),
+		"   ":                    "",
+	} {
+		if got := siteTitleName(title); got != want {
+			t.Errorf("siteTitleName(%q) = %q, want %q", title, got, want)
+		}
+	}
+}

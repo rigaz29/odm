@@ -6,6 +6,11 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- The Fyne main window's title shows the version ("Ochi Download Manager
+  0.5.0"). (Ported from upstream 2a4a639d.)
+
 ### Security
 
 - File downloads get the protection streams already had: a link on a

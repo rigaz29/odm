@@ -29,6 +29,7 @@ import (
 	"odm/internal/clipmon"
 	"odm/internal/engine"
 	"odm/internal/tools"
+	"odm/internal/version"
 )
 
 // Available reports whether this build includes the desktop UI.
@@ -60,7 +61,8 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	a.fyneApp = app.NewWithID("com.ochi.odm")
 	a.applyLanguage() // before any text is made
 	a.applyTheme()
-	a.win = a.fyneApp.NewWindow("Ochi Download Manager")
+	// The version in the title tells at a glance which build is running.
+	a.win = a.fyneApp.NewWindow(version.Name + " " + version.Version)
 	a.win.Resize(fyne.NewSize(1140, 660)) // the toolbar and the search box fit
 	// In the accent colour, not the text colour: a dark icon for the light
 	// theme vanished on a dark title bar or taskbar, and a light one on a

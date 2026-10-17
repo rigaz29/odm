@@ -152,3 +152,11 @@ test("YouTube's player pieces are not listed as media", () => {
   assert.equal(bg.mediaKind("https://manifest.googlevideo.com/api/manifest/hls_variant/x/index.m3u8", "application/x-mpegurl"), null);
   assert.equal(bg.mediaKind("https://notgooglevideo.com/v.mp4", "video/mp4"), "file");
 });
+
+test("sameDocument", () => {
+  assert.equal(bg.sameDocument("https://s.example/watch?v=1#t=10", "https://s.example/watch?v=1#comments"), true);
+  assert.equal(bg.sameDocument("https://s.example/watch?v=1", "https://s.example/watch?v=1#x"), true);
+  assert.equal(bg.sameDocument("https://s.example/watch?v=1", "https://s.example/watch?v=2"), false);
+  assert.equal(bg.sameDocument("https://s.example/a", "https://s.example/b"), false);
+  assert.equal(bg.sameDocument("not a url", "not a url"), false);
+});

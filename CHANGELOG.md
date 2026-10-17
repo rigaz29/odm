@@ -17,6 +17,13 @@ All notable changes to ODM are documented here. The format is based on
   fetches or queues pages and files on the local network that it links
   to. (Ported from upstream 45bd71d4.)
 
+### Fixed
+
+- The extension no longer clears a tab's media list when only the
+  address's #hash changes (a timestamp, a section): the page stays, and
+  so do the videos it loaded. A script switching to another address
+  (pushState) still starts a fresh list. (Ported from upstream 7948225e.)
+
 ## [0.5.0] - 2026-10-17
 
 ### Added

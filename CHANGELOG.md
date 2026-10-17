@@ -12,6 +12,9 @@ All notable changes to ODM are documented here. The format is based on
   (Back, Refresh, Save as, Print, Inspect): the Windows build is Wails'
   release build now. Text boxes and selected text keep Cut, Copy and
   Paste.
+- A dialog (such as the question before removing a download) no longer
+  blurs the whole window behind it, which made the list unreadable; the
+  window is dimmed instead.
 
 ### Added
 

@@ -12,7 +12,9 @@ export const DialogClose = DialogPrimitive.Close;
 export function DialogContent({ className, children, ...props }: React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>) {
   return (
     <DialogPrimitive.Portal>
-      <DialogPrimitive.Overlay className="dialog-fade fixed inset-0 z-50 bg-black/40 backdrop-blur-[2px]" />
+      {/* Dimmed, not blurred: a blur made the whole window unreadable
+          behind a dialog, which Windows' own dialogs never do. */}
+      <DialogPrimitive.Overlay className="dialog-fade fixed inset-0 z-50 bg-black/50" />
       <DialogPrimitive.Content
         className={cn(
           "dialog-pop fixed left-1/2 top-1/2 z-50 grid w-full max-w-md -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-popover p-5 shadow-xl outline-none",

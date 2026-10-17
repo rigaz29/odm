@@ -15,10 +15,11 @@ const Available = false
 
 // Options mirrors the desktop build's Run options.
 type Options struct {
-	Show   <-chan struct{}
-	Prompt <-chan engine.AddOptions
-	Hidden bool
-	Tools  *tools.Keeper
+	Show     <-chan struct{}
+	Prompt   <-chan engine.AddOptions
+	Hidden   bool
+	Tools    *tools.Keeper
+	FirstRun bool
 }
 
 // Run is unavailable in headless builds (built without the fyne tag); the web

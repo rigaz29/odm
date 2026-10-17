@@ -14,6 +14,7 @@ import {
   type CreateRequest,
   type CreateResult,
   type Detail,
+  type ExtensionStep,
   type GrabProgress,
   type GrabRequest,
   Item,
@@ -25,6 +26,9 @@ import {
   type OptionsForm,
   type ProbeResult,
   type SaveResult,
+  type SetupBrowser,
+  type SetupStatus,
+  type SetupTool,
   type Snapshot,
   type ToolStatus,
   type ZipListing,
@@ -106,6 +110,16 @@ export interface Api {
   runFinish(action: string): Promise<void>;
   setToolUpdates(on: boolean): Promise<void>;
 
+  // The Setup window (setup.go): yt-dlp, ffmpeg and the extension.
+  setupStatus(): Promise<SetupStatus>;
+  setupBrowsers(): Promise<SetupBrowser[]>;
+  installTool(name: string): Promise<SetupTool>;
+  // onSetupProgress calls cb as a tool downloads.
+  onSetupProgress(cb: (p: SetupProgress) => void): () => void;
+  installExtension(key: string): Promise<ExtensionStep>;
+  showExtensionFolder(): Promise<void>;
+  openSetup(): Promise<void>;
+
   // This window: its title and size, and closing it.
   setTitle(title: string): void;
   setSize(width: number, height: number): void;
@@ -116,6 +130,15 @@ const SNAPSHOT_EVENT = "odm:snapshot";
 const APPEARANCE_EVENT = "odm:appearance";
 const UPDATE_EVENT = "odm:update";
 const GRAB_EVENT = "odm:grab";
+const SETUP_PROGRESS_EVENT = "odm:setup-progress";
+
+// SetupProgress is how far a tool's download is (setup.go): bytes so far
+// and the total, 0 when unknown.
+export interface SetupProgress {
+  tool: string;
+  done: number;
+  total: number;
+}
 
 export const inODM = location.hostname === "wails.localhost";
 
@@ -193,6 +216,13 @@ const wailsApi: Api = {
   stopGrab: () => Service.StopGrab(),
   runFinish: (action) => Service.RunFinish(action),
   setToolUpdates: (on) => Service.SetToolUpdates(on),
+  setupStatus: () => Service.SetupStatus(),
+  setupBrowsers: () => Service.SetupBrowsers(),
+  installTool: (name) => Service.InstallTool(name),
+  onSetupProgress: (cb) => Events.On(SETUP_PROGRESS_EVENT, (e) => cb(e.data as SetupProgress)),
+  installExtension: (key) => Service.InstallExtension(key),
+  showExtensionFolder: () => Service.ShowExtensionFolder(),
+  openSetup: () => Service.OpenSetup(),
   setTitle: (title) => {
     document.title = title;
     void Window.SetTitle(title);

@@ -347,6 +347,7 @@ export function App() {
         (u) => (u.newer ? setUpdate(u) : setMessage({ title: t("Check for updates"), text: tf("You are running the latest version (%s).", u.current) })),
         (e) => setMessage({ title: t("Check for updates"), text: tf("Could not check for updates: %s", String((e as Error)?.message ?? e)) }),
       ),
+    setup: () => void api.openSetup(),
     about: () => setDialog("about"),
   };
   const limiterLabel = limit > 0 ? tf("Speed limiter (%s/s)", humanBytes(limit)) : t("Speed limiter");

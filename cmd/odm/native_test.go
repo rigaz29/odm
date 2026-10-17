@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"odm/internal/ipc"
 	"odm/internal/native"
 )
 
@@ -236,5 +237,41 @@ func TestRelaySiteCookies(t *testing.T) {
 	relaySite(client, native.Message{URL: "https://www.youtube.com/watch?v=abc", SiteCookies: cookies})
 	if list, _ := body["cookies"].([]any); len(list) != 1 {
 		t.Fatalf("site-formats posted %v", body)
+	}
+}
+
+func TestBrowserName(t *testing.T) {
+	chromium := []string{"chrome-extension://fnondfibgeiffjplpokfgiacjelmbcbk/", "--parent-window=0"}
+	firefox := []string{`C:\odm\com.ochi.odm.firefox.json`, "odm@rigaz29.github.io"}
+	cases := []struct {
+		said string
+		args []string
+		want string
+	}{
+		{"edge", chromium, "edge"},
+		{" Brave ", chromium, "brave"},
+		{"", chromium, "chromium"},
+		{"", firefox, "firefox"},
+		{"zen", firefox, "zen"},
+		{"not a name!", chromium, "chromium"},
+		{"", nil, ""},
+	}
+	for _, c := range cases {
+		if got := browserName(c.said, c.args); got != c.want {
+			t.Errorf("browserName(%q, %v) = %q, want %q", c.said, c.args, got, c.want)
+		}
+	}
+}
+
+// Every relayed request names the browser it came from.
+func TestTagBrowser(t *testing.T) {
+	var seen string
+	browser := "edge"
+	client := &http.Client{Transport: tagBrowser{browser: &browser, next: roundTrip(func(r *http.Request) (*http.Response, error) {
+		seen = r.Header.Get(ipc.BrowserHeader)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})}}
+	if r := relayPing(client); !r.OK || seen != "edge" {
+		t.Fatalf("ping: %+v, header %q", r, seen)
 	}
 }

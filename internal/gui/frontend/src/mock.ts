@@ -5,7 +5,7 @@
 // addresses: a YouTube page, an .m3u8 playlist, a .zip, "missing", or any
 // other file; ?view=add&token=demo opens it prefilled as the browser would.
 
-import type { Api } from "./api";
+import type { Api, SetupProgress } from "./api";
 import {
   About,
   AddDefaults,
@@ -17,6 +17,7 @@ import {
   Chunk,
   CreateResult,
   Detail,
+  ExtensionStep,
   GrabProgress,
   Limits,
   QueueState,
@@ -31,6 +32,9 @@ import {
   ProbeResult,
   Quality,
   SaveResult,
+  SetupBrowser,
+  SetupStatus,
+  SetupTool,
   SiteLogin,
   Snapshot,
   ToolStatus,
@@ -123,6 +127,20 @@ export function mockApi(): Api {
   };
   let limitsState = new Limits({ on: false, mb: 200, hours: 5, warning: true });
   const grabSubs = new Set<(p: GrabProgress) => void>();
+  // The Setup window: ffmpeg missing, Chrome's extension talking to ODM.
+  const setupSubs = new Set<(p: SetupProgress) => void>();
+  const setup = {
+    toolMode: "",
+    tools: [
+      { name: "yt-dlp", state: "found", path: String.raw`C:\Users\me\AppData\Roaming\Python\Python310\Scripts\yt-dlp.exe`, version: "2026.08.19", canInstall: true },
+      { name: "ffmpeg", state: "missing", path: "", version: "", canInstall: true },
+    ],
+    browsers: [
+      { key: "chrome", name: "Google Chrome", family: "chromium", connected: true },
+      { key: "edge", name: "Microsoft Edge", family: "chromium", connected: false },
+      { key: "firefox", name: "Mozilla Firefox", family: "firefox", connected: false },
+    ],
+  };
   const defaultCategories = [
     { name: "Video", exts: "3gp avi flv m4v mkv mov mp4 mpeg mpg webm wmv", folder: "" },
     { name: "Audio", exts: "aac flac m4a mp3 ogg opus wav wma", folder: "" },
@@ -414,7 +432,32 @@ export function mockApi(): Api {
     },
     stopGrab: async () => {},
     runFinish: async () => {},
-    setToolUpdates: async () => {},
+    setToolUpdates: async (on) => void (setup.toolMode = on ? "auto" : "off"),
+    setupStatus: async () =>
+      new SetupStatus({ toolMode: setup.toolMode, tools: setup.tools.map((x) => new SetupTool(x)), browsers: setup.browsers.map((b) => new SetupBrowser(b)) }),
+    setupBrowsers: async () => setup.browsers.map((b) => new SetupBrowser(b)),
+    installTool: async (name) => {
+      const total = 9_400_000;
+      for (let done = 0; done <= total; done += 940_000) {
+        await new Promise((r) => setTimeout(r, 120));
+        setupSubs.forEach((cb) => cb({ tool: name, done, total }));
+      }
+      const tool = setup.tools.find((x) => x.name === name)!;
+      Object.assign(tool, { state: "found", path: "C:\\Users\\me\\AppData\\Local\\odm\\tools\\" + name + ".exe", version: name === "ffmpeg" ? "ffmpeg version n8.1" : "2026.10.10" });
+      return new SetupTool(tool);
+    },
+    onSetupProgress: (cb) => {
+      setupSubs.add(cb);
+      return () => setupSubs.delete(cb);
+    },
+    installExtension: async (key) => {
+      const b = setup.browsers.find((x) => x.key === key)!;
+      setTimeout(() => (b.connected = true), 4000); // as if loaded, then talking to ODM
+      if (b.family === "firefox") return new ExtensionStep({});
+      return new ExtensionStep({ page: key === "edge" ? "edge://extensions" : "chrome://extensions", folder: String.raw`C:\Users\me\AppData\Local\odm\extension\chromium` });
+    },
+    showExtensionFolder: async () => {},
+    openSetup: async () => void window.open("?view=setup", "_blank", "width=640,height=740"),
     setTitle: (title) => void (document.title = title),
     setSize: () => {},
     closeWindow: () => window.close(),

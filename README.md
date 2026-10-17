@@ -252,7 +252,11 @@ shows the window.
 1. Start ODM once: it registers itself with Chrome, Edge, Chromium and
    Firefox. *Options → General* shows the status. (`ODM.exe
    -register-browser` does the same from a shell.)
-2. Install the extension from the release:
+2. Install the extension. On Windows, ODM's Setup window (it opens at the
+   first start; later ⋯ → *Help* → *Set up ODM…*) lists your browsers and
+   installs it in each: Firefox asks to add the signed add-on, and for
+   Chrome, Edge, Brave or Opera it gives the folder to load and the steps.
+   It installs yt-dlp and ffmpeg too. Or from the release:
    - Chrome, Edge, Brave, Opera: unzip `odm-extension-chromium.zip`, then
      *Developer mode* → *Load unpacked* in `chrome://extensions`.
    - Firefox: open `odm-extension-firefox.xpi` (signed by Mozilla).

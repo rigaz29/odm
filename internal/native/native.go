@@ -50,6 +50,9 @@ type Message struct {
 	// browser holds them, for yt-dlp when ODM's Options say to sign in
 	// with them; passed on as they came.
 	SiteCookies json.RawMessage `json:"siteCookies,omitempty"`
+	// Browser is the browser the extension runs in ("chrome", "edge",
+	// "firefox", ...), sent with every message; empty from older ones.
+	Browser string `json:"browser"`
 }
 
 // Reply is the response sent back to the extension.

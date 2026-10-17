@@ -18,6 +18,7 @@ import {
   MoreHorizontal,
   PanelLeft,
   RefreshCw,
+  Wrench,
 } from "lucide-react";
 import type { ColumnState } from "../columns";
 import { t } from "../i18n";
@@ -52,6 +53,7 @@ export function MoreMenu(props: {
     importList(): void;
     shortcuts(): void;
     checkUpdate(): void;
+    setup(): void;
     about(): void;
   };
 }) {
@@ -122,6 +124,9 @@ export function MoreMenu(props: {
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={on.checkUpdate}>
               <RefreshCw /> {t("Check for updates…")}
+            </DropdownMenuItem>
+            <DropdownMenuItem onSelect={on.setup}>
+              <Wrench /> {t("Set up ODM…")}
             </DropdownMenuItem>
             <DropdownMenuItem onSelect={on.about}>
               <Info /> {t("About ODM")}

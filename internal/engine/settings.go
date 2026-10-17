@@ -161,6 +161,13 @@ type Settings struct {
 	// ToolUpdates says whether ODM may download yt-dlp and ffmpeg itself
 	// and keep them updated: "" (not asked yet), "auto" or "off".
 	ToolUpdates string `json:"tool_updates,omitempty"`
+	// SetupDone records that the Setup window (yt-dlp, ffmpeg and the
+	// browser extension) was offered at start: it opens by itself once.
+	SetupDone bool `json:"setup_done,omitempty"`
+	// ExtensionBrowsers lists the browsers whose ODM extension has talked
+	// to this ODM ("chrome", "edge", "firefox", ...; "chromium" when an
+	// extension did not say which Chromium browser), for the Setup window.
+	ExtensionBrowsers []string `json:"extension_browsers,omitempty"`
 	// Theme ("light", "dark", "system") and Language ("en", "id",
 	// "system") are the new UI's (internal/gui) look; empty until chosen
 	// there. The Fyne UI keeps its own in its preferences.
@@ -231,6 +238,7 @@ func (s Settings) clone() Settings {
 	c.Queues = slices.Clone(s.Queues)
 	c.FileTypes = slices.Clone(s.FileTypes)
 	c.ExcludeSites = slices.Clone(s.ExcludeSites)
+	c.ExtensionBrowsers = slices.Clone(s.ExtensionBrowsers)
 	c.CategoryDirs = maps.Clone(s.CategoryDirs)
 	c.HostConnections = maps.Clone(s.HostConnections)
 	if s.CategoryDefs != nil {

@@ -152,3 +152,16 @@ test("YouTube's player pieces are not listed as media", () => {
   assert.equal(bg.mediaKind("https://manifest.googlevideo.com/api/manifest/hls_variant/x/index.m3u8", "application/x-mpegurl"), null);
   assert.equal(bg.mediaKind("https://notgooglevideo.com/v.mp4", "video/mp4"), "file");
 });
+
+test("browserName", () => {
+  const ua = (brands, userAgent = "Mozilla/5.0") => ({ userAgent, userAgentData: { brands: brands.map((brand) => ({ brand, version: "1" })) } });
+  assert.equal(bg.browserName(ua(["Not)A;Brand", "Microsoft Edge", "Chromium"])), "edge");
+  assert.equal(bg.browserName(ua(["Brave", "Chromium", "Not_A Brand"])), "brave");
+  assert.equal(bg.browserName(ua(["Opera GX", "Chromium"])), "opera");
+  assert.equal(bg.browserName(ua(["Google Chrome", "Chromium", "Not.A/Brand"])), "chrome");
+  assert.equal(bg.browserName(ua(["Chromium", "Not_A Brand"])), "chromium");
+  assert.equal(bg.browserName({ userAgent: "Mozilla/5.0 (Windows NT 10.0; rv:140.0) Gecko/20100101 Firefox/140.0" }), "firefox");
+  assert.equal(bg.browserName({}, { name: "Firefox" }), "firefox");
+  assert.equal(bg.browserName({}, { name: "Zen" }), "zen");
+  assert.equal(bg.browserName({}, { name: "LibreWolf" }), "librewolf");
+});

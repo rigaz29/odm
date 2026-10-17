@@ -217,12 +217,42 @@ function mergeMedia(list, item) {
   return next;
 }
 
+// browserName is the browser the extension runs in, as ODM names it
+// (internal/browsers): a Firefox-based browser's own name from
+// runtime.getBrowserInfo (info), else the Chromium brand ("edge", "brave",
+// "opera", "chrome"), else "chromium".
+function browserName(nav, info) {
+  if (info && info.name) return String(info.name).toLowerCase().replace(/[^a-z]/g, "");
+  const brands = ((nav && nav.userAgentData && nav.userAgentData.brands) || []).map((b) => b.brand);
+  if (brands.includes("Microsoft Edge")) return "edge";
+  if (brands.includes("Brave")) return "brave";
+  if (brands.some((b) => b.startsWith("Opera"))) return "opera";
+  if (brands.includes("Google Chrome")) return "chrome";
+  if (/Firefox\//.test((nav && nav.userAgent) || "")) return "firefox";
+  return "chromium";
+}
+
 /* ---------- browser side ---------- */
 
+// thisBrowser resolves to browserName, worked out the first time ODM is
+// asked something.
+let thisBrowser = null;
+function whichBrowser() {
+  if (!thisBrowser) {
+    const rt = typeof browser !== "undefined" && browser.runtime;
+    thisBrowser = Promise.resolve(rt && rt.getBrowserInfo ? rt.getBrowserInfo() : null)
+      .catch(() => null)
+      .then((info) => browserName(navigator, info));
+  }
+  return thisBrowser;
+}
+
+// askOdm sends message to ODM, named with the browser it comes from: ODM's
+// Setup window shows which browsers have the extension.
 function askOdm(message) {
-  return new Promise((resolve) => {
+  return whichBrowser().then((name) => new Promise((resolve) => {
     try {
-      chrome.runtime.sendNativeMessage(HOST, message, (reply) => {
+      chrome.runtime.sendNativeMessage(HOST, { ...message, browser: name }, (reply) => {
         if (chrome.runtime.lastError) {
           resolve({ ok: false, error: chrome.runtime.lastError.message });
         } else {
@@ -232,7 +262,7 @@ function askOdm(message) {
     } catch (e) {
       resolve({ ok: false, error: String(e) });
     }
-  });
+  }));
 }
 
 async function isEnabled() {
@@ -525,5 +555,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, DEFAULT_TYPES };
+  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, browserName, DEFAULT_TYPES };
 }

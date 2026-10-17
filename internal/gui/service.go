@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"odm/internal/browsers"
 	"odm/internal/engine"
 	"odm/internal/osutil"
 	"odm/internal/tools"
@@ -134,13 +135,18 @@ type Service struct {
 	announce announcer
 	// onLook is told when the Options change the look (the tray's menu).
 	onLook func()
+	// installed lists the browsers and launch opens one (setup.go);
+	// replaced in tests.
+	installed func() []browsers.Browser
+	launch    func(b browsers.Browser, args ...string) error
 }
 
 // NewService makes the page's Service for mgr.
 func NewService(mgr *engine.Manager) *Service {
 	return &Service{mgr: mgr, wake: make(chan struct{}, 1), sent: map[string]Item{},
 		speeds: map[string][]int64{}, since: map[string]time.Time{}, now: time.Now,
-		prefills: map[string]engine.AddOptions{}, probes: map[string]*probed{}}
+		prefills: map[string]engine.AddOptions{}, probes: map[string]*probed{},
+		installed: browsers.Installed, launch: func(b browsers.Browser, args ...string) error { return b.Open(args...) }}
 }
 
 // Snapshot returns what the main window shows now.

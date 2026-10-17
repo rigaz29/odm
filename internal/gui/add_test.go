@@ -163,6 +163,7 @@ func (w *stubWindows) openComplete(id string)               { w.note("complete "
 func (w *stubWindows) openOptions(tab string)               { w.note("options " + tab) }
 func (w *stubWindows) openScheduler(newQueue bool)          { w.note("scheduler") }
 func (w *stubWindows) openNotice(q url.Values)              { w.note("notice " + q.Encode()) }
+func (w *stubWindows) openSetup()                           { w.note("setup") }
 func (w *stubWindows) pickOpen(name, pattern string) string { return w.open }
 func (w *stubWindows) pickSave(name string) string          { return w.save }
 func (w *stubWindows) pickFolder(current string) string     { return current + `\picked` }

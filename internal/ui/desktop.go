@@ -47,6 +47,9 @@ type Options struct {
 	// Tools keeps yt-dlp and ffmpeg; the window asks the person whether
 	// it may and tells them when they are ready.
 	Tools *tools.Keeper
+	// FirstRun is ODM's first start; the new UI's Setup window opens then.
+	// This UI has none.
+	FirstRun bool
 }
 
 // Run starts the desktop UI and blocks until ODM quits or ctx ends.

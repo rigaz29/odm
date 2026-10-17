@@ -7,6 +7,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"odm/internal/ipc"
@@ -32,12 +33,21 @@ func runNativeHost(configDir string) {
 		path = ipc.SocketPath(configDir)
 		start = func() error { return startODM(path) }
 	}
-	client := ipc.Client(path, 10*time.Second)
+	// Each request names the browser the message came from, so ODM knows
+	// which browsers have its extension (the Setup window).
+	var browser string
+	tagged := func(c *http.Client) *http.Client {
+		c.Transport = tagBrowser{next: c.Transport, browser: &browser}
+		return c
+	}
+	client := tagged(ipc.Client(path, 10*time.Second))
 	// Reading a playlist or a video page can take a while, more so when
 	// ODM first downloads yt-dlp for it.
-	slow := ipc.Client(path, 4*time.Minute)
+	slow := tagged(ipc.Client(path, 4*time.Minute))
+	args := os.Args[1:]
 
 	err := native.Serve(os.Stdin, os.Stdout, func(m native.Message) native.Reply {
+		browser = browserName(m.Browser, args)
 		switch m.Type {
 		case "ping":
 			return relayStarting(func() native.Reply { return relayPing(client) }, start)
@@ -57,6 +67,37 @@ func runNativeHost(configDir string) {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "odm native host:", err)
 	}
+}
+
+// browserName is the browser a message came from: as the extension names
+// it, else its family, told by what the browser passed when it started the
+// host (see native.LaunchedByBrowser).
+func browserName(said string, args []string) string {
+	said = strings.ToLower(strings.TrimSpace(said))
+	if said != "" && len(said) <= 20 && strings.Trim(said, "abcdefghijklmnopqrstuvwxyz") == "" {
+		return said
+	}
+	switch {
+	case len(args) > 0 && strings.HasPrefix(args[0], "chrome-extension://"):
+		return "chromium"
+	case native.LaunchedByBrowser(args):
+		return "firefox"
+	}
+	return ""
+}
+
+// tagBrowser names the browser (ipc.BrowserHeader) in every request.
+type tagBrowser struct {
+	next    http.RoundTripper
+	browser *string
+}
+
+func (t tagBrowser) RoundTrip(r *http.Request) (*http.Response, error) {
+	if *t.browser != "" {
+		r = r.Clone(r.Context())
+		r.Header.Set(ipc.BrowserHeader, *t.browser)
+	}
+	return t.next.RoundTrip(r)
 }
 
 // relayStarting runs relay and, when ODM is not running, starts it with

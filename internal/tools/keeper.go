@@ -65,7 +65,7 @@ func (k *Keeper) Ensure(ctx context.Context, name string) (string, error) {
 	}
 	switch k.Mode() {
 	case ModeAuto:
-		if _, err := k.install(ctx, t); err != nil {
+		if _, err := k.install(ctx, t, nil); err != nil {
 			return "", err
 		}
 		return filepath.Join(k.Installer.Dir, t.Files[0]), nil
@@ -78,9 +78,20 @@ func (k *Keeper) Ensure(ctx context.Context, name string) (string, error) {
 	return "", fmt.Errorf("downloading %s is turned off in Options → Downloads", name)
 }
 
-func (k *Keeper) install(ctx context.Context, t Tool) (string, error) {
+// Install installs or updates the tool named name now, whatever the mode:
+// the person asked for it (the Setup window). progress, which may be nil,
+// follows the download.
+func (k *Keeper) Install(ctx context.Context, name string, progress Progress) (string, error) {
+	t, ok := byName(name)
+	if !ok || !t.Supported() {
+		return "", fmt.Errorf("ODM cannot download %s on this system", name)
+	}
+	return k.install(ctx, t, progress)
+}
+
+func (k *Keeper) install(ctx context.Context, t Tool, progress Progress) (string, error) {
 	before := k.Installer.Installed(t)
-	v, err := k.Installer.Install(ctx, t, nil)
+	v, err := k.Installer.Install(ctx, t, progress)
 	if err != nil {
 		k.logf("tools: %s: %v", t.Name, err)
 		return "", err
@@ -102,7 +113,7 @@ func (k *Keeper) UpdateAll(ctx context.Context) error {
 		if !t.Supported() {
 			continue
 		}
-		if _, err := k.install(ctx, t); err != nil && first == nil {
+		if _, err := k.install(ctx, t, nil); err != nil && first == nil {
 			first = fmt.Errorf("%s: %w", t.Name, err)
 		}
 	}

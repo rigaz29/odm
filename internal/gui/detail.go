@@ -26,6 +26,8 @@ type windowOpener interface {
 	// openNotice shows the scheduler's notices: the download limit
 	// reached, or the countdown before a finish action.
 	openNotice(q url.Values)
+	// openSetup opens the Setup window: yt-dlp, ffmpeg, the extension.
+	openSetup()
 	pickFolder(current string) string
 	pickFile(current string) string
 	pickOpen(filterName, pattern string) string

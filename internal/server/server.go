@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"odm/internal/engine"
+	"odm/internal/ipc"
 	"odm/internal/media"
 	"odm/internal/osutil"
 )
@@ -30,6 +31,9 @@ type Server struct {
 	// browser handed over, instead of adding it directly. It reports whether
 	// it took the request.
 	OnPrompt func(engine.AddOptions) bool
+	// OnBrowser, when set, is told the browser named in a request the
+	// native host relayed (ipc.BrowserHeader).
+	OnBrowser func(browser string)
 
 	mu   sync.Mutex
 	subs map[chan []byte]struct{}
@@ -73,7 +77,12 @@ func (s *Server) Handler() http.Handler {
 	if err == nil {
 		mux.Handle("GET /", noStore(http.FileServer(http.FS(sub))))
 	}
-	return mux
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if b := r.Header.Get(ipc.BrowserHeader); b != "" && s.OnBrowser != nil {
+			s.OnBrowser(b)
+		}
+		mux.ServeHTTP(w, r)
+	})
 }
 
 // noStore stops the WebView2/browser from caching the embedded assets, so a

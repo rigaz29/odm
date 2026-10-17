@@ -16,13 +16,15 @@ const Available = true
 
 // Options mirrors the Fyne build's Run options.
 type Options struct {
-	Show   <-chan struct{}
-	Prompt <-chan engine.AddOptions
-	Hidden bool
-	Tools  *tools.Keeper
+	Show     <-chan struct{}
+	Prompt   <-chan engine.AddOptions
+	Hidden   bool
+	Tools    *tools.Keeper
+	FirstRun bool
 }
 
 // Run starts the new UI and blocks until ODM quits or ctx ends.
 func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
-	return gui.Run(ctx, mgr, gui.Options{Show: opts.Show, Prompt: opts.Prompt, Hidden: opts.Hidden, Tools: opts.Tools})
+	return gui.Run(ctx, mgr, gui.Options{Show: opts.Show, Prompt: opts.Prompt, Hidden: opts.Hidden, Tools: opts.Tools,
+		FirstRun: opts.FirstRun})
 }

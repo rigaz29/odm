@@ -27,6 +27,11 @@ const SocketName = "odm.sock"
 // ignored because Client always dials the socket.
 const BaseURL = "http://odm"
 
+// BrowserHeader names the browser whose extension sent a request the
+// native host relays ("chrome", "firefox", ...), so ODM knows which
+// browsers have its extension.
+const BrowserHeader = "X-ODM-Browser"
+
 // ErrRunning reports that another ODM instance already owns the socket.
 var ErrRunning = errors.New("ODM is already running")
 

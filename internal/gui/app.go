@@ -38,6 +38,8 @@ type Options struct {
 	Hidden bool
 	// Tools keeps ODM's copies of yt-dlp and ffmpeg; nil for none.
 	Tools *tools.Keeper
+	// FirstRun is ODM's first start, when the Setup window opens.
+	FirstRun bool
 }
 
 // The window's colours before the page has painted, the page's own
@@ -135,6 +137,15 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	// shutdown can be cancelled from a countdown instead of happening blind.
 	mgr.SetActionHandler(svc.handleAction)
 	go svc.checkAtStart(ctx)
+	go func() {
+		// After the main window, which it opens in front of.
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(time.Second):
+		}
+		svc.setupAtStart(opts.FirstRun, !opts.Hidden)
+	}()
 
 	go svc.watch(ctx, 500*time.Millisecond)
 	if opts.Prompt != nil {

@@ -91,6 +91,11 @@ func (w *appWindows) openNotice(q url.Values) {
 	w.open("notice-"+q.Get("kind"), "ODM", "notice", q, 480, 240, true)
 }
 
+// openSetup opens the Setup window, or brings it forward.
+func (w *appWindows) openSetup() {
+	w.open("setup", "ODM Setup", "setup", url.Values{}, 640, 740, false)
+}
+
 // pickOpen asks for a file to read, of the type pattern names.
 func (w *appWindows) pickOpen(filterName, pattern string) string {
 	file, err := w.app.Dialog.OpenFile().CanChooseFiles(true).AddFilter(filterName, pattern).PromptForSingleSelection()

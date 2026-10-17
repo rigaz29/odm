@@ -6,6 +6,23 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- A Setup window on Windows, opened at ODM's first start (and once for
+  someone who used ODM before when yt-dlp or ffmpeg is missing), or from
+  ⋯ → Help → Set up ODM… and Options → General → Install the extension….
+  It installs yt-dlp and ffmpeg in one go, with progress and the choice to
+  keep them updated, and lists the installed browsers with ODM's extension
+  in each: Firefox and Firefox-based browsers get the add-on Mozilla
+  signed, opened in them so they ask to add it; Chrome, Edge, Brave and
+  Opera get the extension ODM carries, written to a folder, with the steps
+  of "Load unpacked" (the extensions page's address and the folder copied
+  to paste). A browser shows as connected once its extension talks to
+  ODM; the extension now says which browser it runs in. ODM brings that
+  folder up to date at every start, so the extension follows ODM's
+  releases after a browser restart. Browsers take no extension from
+  outside their store by themselves, so these steps stay the person's.
+
 ## [0.5.0] - 2026-10-17
 
 ### Added

@@ -52,6 +52,18 @@ Each release ships both packages:
   `odm-extension-firefox-unsigned.xpi`, which only Firefox Developer Edition
   or Nightly accept (with `xpinstall.signatures.required` set to `false`).
 
+On Windows, ODM's Setup window does both for you (it opens at the first
+start; later ⋯ → *Help* → *Set up ODM…*). For Firefox it downloads the
+signed add-on of its release and opens it in Firefox. For a Chromium
+browser it writes the extension it carries to
+`%LocalAppData%\odm\extension\chromium`, copies the extensions page's
+address and that folder for the *Load unpacked* steps, and brings the
+folder up to date at every start, so a browser restart picks up a new
+release. Browsers do not open their extensions page from another program,
+so the address is there to paste. The extension sends the name of its
+browser with each message, and the window shows a browser as connected
+once its extension has talked to ODM.
+
 Restart the browser once after registering so it re-reads the host list.
 
 Developers can load the source folder directly: *Load unpacked* on this

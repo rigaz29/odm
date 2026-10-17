@@ -10,10 +10,13 @@ package extpack
 
 import (
 	"archive/zip"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -26,7 +29,8 @@ const (
 	Firefox  = "firefox"
 )
 
-// skip lists source entries that are not part of the shipped extension.
+// skip lists source entries that are not part of the shipped extension;
+// Go files (files.go, which embeds it into ODM) are left out too.
 var skip = map[string]bool{"manifest.json": true, "README.md": true, "native": true, "test": true}
 
 var versionRe = regexp.MustCompile(`^\d+(\.\d+){0,3}$`)
@@ -82,11 +86,12 @@ func Manifest(src []byte, target, version string) ([]byte, error) {
 // odm-extension-chromium.zip and odm-extension-firefox-unsigned.xpi. It
 // returns the archive paths keyed by target.
 func Build(srcDir, outDir, version string) (map[string]string, error) {
-	src, err := os.ReadFile(filepath.Join(srcDir, "manifest.json"))
+	fsys := os.DirFS(srcDir)
+	src, err := fs.ReadFile(fsys, "manifest.json")
 	if err != nil {
 		return nil, err
 	}
-	files, err := sourceFiles(srcDir)
+	files, err := sourceFiles(fsys)
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +105,7 @@ func Build(srcDir, outDir, version string) (map[string]string, error) {
 		if err := os.RemoveAll(dir); err != nil {
 			return nil, err
 		}
-		if err := writeTree(srcDir, dir, files, man); err != nil {
+		if err := writeTree(fsys, dir, files, man); err != nil {
 			return nil, err
 		}
 		name := "odm-extension-chromium.zip"
@@ -116,25 +121,78 @@ func Build(srcDir, outDir, version string) (map[string]string, error) {
 	return out, nil
 }
 
-func sourceFiles(srcDir string) ([]string, error) {
+// Unpack writes the extension in fsys (the source folder's files, as
+// extension.Files holds them) to dir for target, as "Load unpacked" reads
+// it, with version in the manifest ("" keeps the source's). Only files
+// whose content differs are written, and files that are no longer part of
+// it are removed, so a browser that loaded dir sees a change only when
+// there is one. changed reports whether anything was written or removed.
+func Unpack(fsys fs.FS, target, dir, version string) (changed bool, err error) {
+	src, err := fs.ReadFile(fsys, "manifest.json")
+	if err != nil {
+		return false, err
+	}
+	man, err := Manifest(src, target, version)
+	if err != nil {
+		return false, err
+	}
+	files, err := sourceFiles(fsys)
+	if err != nil {
+		return false, err
+	}
+	want := map[string][]byte{"manifest.json": man}
+	for _, rel := range files {
+		if want[rel], err = fs.ReadFile(fsys, rel); err != nil {
+			return false, err
+		}
+	}
+	for rel, data := range want {
+		dst := filepath.Join(dir, filepath.FromSlash(rel))
+		if old, err := os.ReadFile(dst); err == nil && bytes.Equal(old, data) {
+			continue
+		}
+		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
+			return changed, err
+		}
+		if err := os.WriteFile(dst, data, 0o644); err != nil {
+			return changed, err
+		}
+		changed = true
+	}
+	err = filepath.WalkDir(dir, func(p string, d os.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		rel, _ := filepath.Rel(dir, p)
+		if _, ok := want[filepath.ToSlash(rel)]; !ok {
+			if err := os.Remove(p); err != nil {
+				return err
+			}
+			changed = true
+		}
+		return nil
+	})
+	return changed, err
+}
+
+func sourceFiles(fsys fs.FS) ([]string, error) {
 	var files []string
-	err := filepath.WalkDir(srcDir, func(p string, d os.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, ".", func(p string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}
-		rel, _ := filepath.Rel(srcDir, p)
-		if rel == "." {
+		if p == "." {
 			return nil
 		}
-		top := strings.SplitN(filepath.ToSlash(rel), "/", 2)[0]
+		top := strings.SplitN(p, "/", 2)[0]
 		if skip[top] {
 			if d.IsDir() {
-				return filepath.SkipDir
+				return fs.SkipDir
 			}
 			return nil
 		}
-		if !d.IsDir() {
-			files = append(files, rel)
+		if !d.IsDir() && path.Ext(p) != ".go" {
+			files = append(files, p)
 		}
 		return nil
 	})
@@ -142,7 +200,7 @@ func sourceFiles(srcDir string) ([]string, error) {
 	return files, err
 }
 
-func writeTree(srcDir, dir string, files []string, manifest []byte) error {
+func writeTree(fsys fs.FS, dir string, files []string, manifest []byte) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
@@ -150,11 +208,11 @@ func writeTree(srcDir, dir string, files []string, manifest []byte) error {
 		return err
 	}
 	for _, rel := range files {
-		data, err := os.ReadFile(filepath.Join(srcDir, rel))
+		data, err := fs.ReadFile(fsys, rel)
 		if err != nil {
 			return err
 		}
-		dst := filepath.Join(dir, rel)
+		dst := filepath.Join(dir, filepath.FromSlash(rel))
 		if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 			return err
 		}

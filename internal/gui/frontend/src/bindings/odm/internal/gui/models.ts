@@ -569,6 +569,42 @@ export class Detail {
 }
 
 /**
+ * ExtensionStep is what the Setup window needs to finish installing the
+ * extension in a Chromium browser; empty for Firefox, which asks by itself.
+ */
+export class ExtensionStep {
+    /**
+     * Page is the browser's extensions page, for its address bar.
+     */
+    "page": string;
+
+    /**
+     * Folder holds the extension, for "Load unpacked" there.
+     */
+    "folder": string;
+
+    /** Creates a new ExtensionStep instance. */
+    constructor($$source: Partial<ExtensionStep> = {}) {
+        if (!("page" in $$source)) {
+            this["page"] = "";
+        }
+        if (!("folder" in $$source)) {
+            this["folder"] = "";
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new ExtensionStep instance from a string or object.
+     */
+    static createFrom($$source: any = {}): ExtensionStep {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new ExtensionStep($$parsedSource as Partial<ExtensionStep>);
+    }
+}
+
+/**
  * GrabProgress is how far a crawl got: sent as GrabEvent while it runs,
  * and returned when it is done.
  */
@@ -930,8 +966,8 @@ export class OptionsForm {
     "ytdlpPath": string;
 
     /**
-     * YtDlpCookies is the browser yt-dlp signs in to video sites with
-     * (ytdlp.CookieBrowsers), "" for none.
+     * YtDlpCookies is how yt-dlp signs in to video sites: "extension" (the
+     * default), "none", or a browser (ytdlp.CookieBrowsers).
      */
     "ytdlpCookies": string;
 
@@ -1530,6 +1566,139 @@ export class SchedulerRefusal {
 }
 
 /**
+ * SetupBrowser is an installed browser as the Setup window lists it.
+ */
+export class SetupBrowser {
+    "key": string;
+    "name": string;
+
+    /**
+     * "chromium" or "firefox"
+     */
+    "family": string;
+
+    /**
+     * Connected: its extension has talked to this ODM.
+     */
+    "connected": boolean;
+
+    /** Creates a new SetupBrowser instance. */
+    constructor($$source: Partial<SetupBrowser> = {}) {
+        if (!("key" in $$source)) {
+            this["key"] = "";
+        }
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("family" in $$source)) {
+            this["family"] = "";
+        }
+        if (!("connected" in $$source)) {
+            this["connected"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetupBrowser instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetupBrowser {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetupBrowser($$parsedSource as Partial<SetupBrowser>);
+    }
+}
+
+/**
+ * SetupStatus is what the Setup window shows.
+ */
+export class SetupStatus {
+    "tools": SetupTool[];
+
+    /**
+     * ToolMode is Settings.ToolUpdates: "" (not asked yet), "auto" or "off".
+     */
+    "toolMode": string;
+    "browsers": SetupBrowser[];
+
+    /** Creates a new SetupStatus instance. */
+    constructor($$source: Partial<SetupStatus> = {}) {
+        if (!("tools" in $$source)) {
+            this["tools"] = [];
+        }
+        if (!("toolMode" in $$source)) {
+            this["toolMode"] = "";
+        }
+        if (!("browsers" in $$source)) {
+            this["browsers"] = [];
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetupStatus instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetupStatus {
+        const $$createField0_0 = $$createType27;
+        const $$createField2_0 = $$createType29;
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        if ("tools" in $$parsedSource) {
+            $$parsedSource["tools"] = $$createField0_0($$parsedSource["tools"]);
+        }
+        if ("browsers" in $$parsedSource) {
+            $$parsedSource["browsers"] = $$createField2_0($$parsedSource["browsers"]);
+        }
+        return new SetupStatus($$parsedSource as Partial<SetupStatus>);
+    }
+}
+
+/**
+ * SetupTool is yt-dlp or ffmpeg as the Setup window lists it: State and
+ * the rest as ToolStatus gives them.
+ */
+export class SetupTool {
+    "name": string;
+    "state": string;
+    "path": string;
+    "version": string;
+
+    /**
+     * CanInstall: ODM can download it on this system.
+     */
+    "canInstall": boolean;
+
+    /** Creates a new SetupTool instance. */
+    constructor($$source: Partial<SetupTool> = {}) {
+        if (!("name" in $$source)) {
+            this["name"] = "";
+        }
+        if (!("state" in $$source)) {
+            this["state"] = "";
+        }
+        if (!("path" in $$source)) {
+            this["path"] = "";
+        }
+        if (!("version" in $$source)) {
+            this["version"] = "";
+        }
+        if (!("canInstall" in $$source)) {
+            this["canInstall"] = false;
+        }
+
+        Object.assign(this, $$source);
+    }
+
+    /**
+     * Creates a new SetupTool instance from a string or object.
+     */
+    static createFrom($$source: any = {}): SetupTool {
+        let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
+        return new SetupTool($$parsedSource as Partial<SetupTool>);
+    }
+}
+
+/**
  * SiteLogin is a user name and password for a site.
  */
 export class SiteLogin {
@@ -1618,7 +1787,7 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField0_0 = $$createType26;
+        const $$createField0_0 = $$createType30;
         const $$createField1_0 = $$createType0;
         const $$createField2_0 = $$createType0;
         const $$createField3_0 = $$createType0;
@@ -1794,7 +1963,7 @@ export class ZipListing {
      * Creates a new ZipListing instance from a string or object.
      */
     static createFrom($$source: any = {}): ZipListing {
-        const $$createField0_0 = $$createType28;
+        const $$createField0_0 = $$createType32;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("entries" in $$parsedSource) {
             $$parsedSource["entries"] = $$createField0_0($$parsedSource["entries"]);
@@ -1830,6 +1999,10 @@ const $$createType22 = $Create.Array($$createType21);
 const $$createType23 = Schedule.createFrom;
 const $$createType24 = $Create.Map($Create.Any, $$createType23);
 const $$createType25 = Limits.createFrom;
-const $$createType26 = $Create.Array($$createType1);
-const $$createType27 = ZipEntry.createFrom;
-const $$createType28 = $Create.Array($$createType27);
+const $$createType26 = SetupTool.createFrom;
+const $$createType27 = $Create.Array($$createType26);
+const $$createType28 = SetupBrowser.createFrom;
+const $$createType29 = $Create.Array($$createType28);
+const $$createType30 = $Create.Array($$createType1);
+const $$createType31 = ZipEntry.createFrom;
+const $$createType32 = $Create.Array($$createType31);

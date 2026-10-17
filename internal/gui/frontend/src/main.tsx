@@ -1,8 +1,8 @@
 // Every ODM window loads this page; ?view= says which one it is: the main
 // window (none), New Download (add), a download's progress (progress), the
 // download complete window (complete), the Options (options), the
-// Scheduler (scheduler) or a scheduler notice (notice). See
-// internal/gui/windows.go.
+// Scheduler (scheduler), a scheduler notice (notice) or the Setup window
+// (setup). See internal/gui/windows.go.
 
 import { createRoot } from "react-dom/client";
 import { App } from "./App";
@@ -15,6 +15,7 @@ import { NoticeWindow } from "./views/NoticeWindow";
 import { OptionsWindow } from "./views/OptionsWindow";
 import { ProgressWindow } from "./views/ProgressWindow";
 import { SchedulerWindow } from "./views/SchedulerWindow";
+import { SetupWindow } from "./views/SetupWindow";
 
 const q = new URLSearchParams(location.search);
 
@@ -34,6 +35,8 @@ function Window() {
       return <SchedulerWindow newQueue={q.get("new") === "1"} />;
     case "notice":
       return <NoticeWindow q={q} />;
+    case "setup":
+      return <SetupWindow />;
   }
   return <App />;
 }

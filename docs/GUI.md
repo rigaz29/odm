@@ -193,6 +193,24 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Pemeriksaan WebView2 Runtime sebelum UI dibuka.
 - README (fitur, build, tangkapan layar) dan CHANGELOG diperbarui.
 
+**Setelah Tahap 6: jendela Persiapan.**
+- Terbuka sendiri sekali, saat ODM pertama kali dibuka (atau untuk
+  pengguna lama kalau yt-dlp atau ffmpeg belum ada); bisa dibuka lagi dari
+  ⋯ → Bantuan → Persiapan ODM… dan Opsi → Umum.
+- Memasang yt-dlp dan ffmpeg sekaligus dengan progress, plus pilihan
+  perbarui otomatis.
+- Daftar browser terpasang (`internal/browsers`, dari registry
+  `StartMenuInternet`) dengan status extension. Firefox dan turunannya
+  membuka add-on bertanda tangan dari rilis; Chromium mendapat folder
+  extension dari dalam `ODM.exe` (`extension/files.go`,
+  `extpack.Unpack`) dan langkah *Load unpacked*. Browser tidak mau
+  membuka `chrome://extensions` dari program lain, jadi alamatnya
+  disalin untuk ditempel.
+- Status "terhubung" dari native host: extension mengirim nama
+  browsernya, host meneruskannya di header `X-ODM-Browser`, dan ODM
+  menyimpannya di `extension_browsers`.
+- Daftar browser baru ada untuk Windows; Linux/macOS menyusul di Tahap 7.
+
 **Tahap 7: Linux dan macOS, penyesuaian minimal.** Belum dimulai; lihat
 [rencananya](#rencana-linux-dan-macos-penyesuaian-minimal).
 

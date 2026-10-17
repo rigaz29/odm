@@ -9,6 +9,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io/fs"
 	"log"
 	"net"
 	"net/http"
@@ -106,6 +107,10 @@ func main() {
 		log.Println("control socket:", err)
 	}
 	settingsPath := filepath.Join(baseDir, "settings.json")
+	// No settings yet: ODM's first start for this user, when the desktop
+	// UI offers its Setup window.
+	_, serr := os.Stat(settingsPath)
+	firstRun := errors.Is(serr, fs.ErrNotExist)
 	fallback := defaultDownloadDir()
 	settings := engine.LoadSettings(settingsPath, fallback)
 	// Browsers hand downloads over through the control socket, so the
@@ -138,6 +143,7 @@ func main() {
 
 	srv := server.New(mgr)
 	mgr.SetOnChange(srv.Broadcast)
+	srv.OnBrowser = mgr.NoteExtension
 	showUI := make(chan struct{}, 1)
 	srv.OnShow = func() {
 		select {
@@ -262,7 +268,7 @@ func main() {
 				return false
 			}
 		}
-		if err := ui.Run(ctx, mgr, ui.Options{Show: showUI, Prompt: promptUI, Hidden: *hidden, Tools: keeper}); err != nil {
+		if err := ui.Run(ctx, mgr, ui.Options{Show: showUI, Prompt: promptUI, Hidden: *hidden, Tools: keeper, FirstRun: firstRun}); err != nil {
 			log.Println("ui:", err)
 		}
 		stopServers()

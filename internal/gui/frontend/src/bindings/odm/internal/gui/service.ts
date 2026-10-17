@@ -148,6 +148,30 @@ export function ImportList(): $CancellablePromise<number> {
 }
 
 /**
+ * InstallExtension starts installing ODM's extension in the browser key
+ * names. Firefox gets the add-on Mozilla signed, opened in it, and asks
+ * to add it. A Chromium browser takes an extension from outside its store
+ * only through "Load unpacked": ODM writes the extension to a folder and
+ * opens the browser, and the person loads the folder on its extensions
+ * page, which the browser does not open from outside.
+ */
+export function InstallExtension(key: string): $CancellablePromise<$models.ExtensionStep> {
+    return $Call.ByID(945950808, key).then(($result: any) => {
+        return $$createType10($result);
+    });
+}
+
+/**
+ * InstallTool downloads yt-dlp or ffmpeg into ODM's folder now, as the
+ * Setup window asks, and returns how it stands after.
+ */
+export function InstallTool(name: string): $CancellablePromise<$models.SetupTool> {
+    return $Call.ByID(288491945, name).then(($result: any) => {
+        return $$createType11($result);
+    });
+}
+
+/**
  * MoveInQueue moves the download id up (delta -1) or down (+1) in its
  * queue's order.
  */
@@ -193,6 +217,13 @@ export function OpenScheduler(newQueue: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * OpenSetup opens the Setup window.
+ */
+export function OpenSetup(): $CancellablePromise<void> {
+    return $Call.ByID(3902340993);
+}
+
+/**
  * OpenURL opens a web address in the browser.
  */
 export function OpenURL(address: string): $CancellablePromise<void> {
@@ -204,7 +235,7 @@ export function OpenURL(address: string): $CancellablePromise<void> {
  */
 export function Options(): $CancellablePromise<$models.OptionsForm> {
     return $Call.ByID(582199402).then(($result: any) => {
-        return $$createType10($result);
+        return $$createType12($result);
     });
 }
 
@@ -242,7 +273,7 @@ export function PickFolder(current: string): $CancellablePromise<string> {
  */
 export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> {
     return $Call.ByID(1597545184, token).then(($result: any) => {
-        return $$createType11($result);
+        return $$createType13($result);
     });
 }
 
@@ -253,7 +284,7 @@ export function Prefill(token: string): $CancellablePromise<$models.AddPrefill> 
  */
 export function Probe(address: string, token: string): $CancellablePromise<$models.ProbeResult> {
     return $Call.ByID(3587570774, address, token).then(($result: any) => {
-        return $$createType12($result);
+        return $$createType14($result);
     });
 }
 
@@ -318,7 +349,7 @@ export function RunFinish(action: string): $CancellablePromise<void> {
  */
 export function SaveOptions(o: $models.OptionsForm): $CancellablePromise<$models.SaveResult> {
     return $Call.ByID(2725850569, o).then(($result: any) => {
-        return $$createType13($result);
+        return $$createType15($result);
     });
 }
 
@@ -329,7 +360,7 @@ export function SaveOptions(o: $models.OptionsForm): $CancellablePromise<$models
  */
 export function SaveScheduler(schedules: { [_ in string]?: $models.Schedule }, limits: $models.Limits): $CancellablePromise<$models.SchedulerRefusal | null> {
     return $Call.ByID(908211766, schedules, limits).then(($result: any) => {
-        return $$createType15($result);
+        return $$createType17($result);
     });
 }
 
@@ -338,7 +369,7 @@ export function SaveScheduler(schedules: { [_ in string]?: $models.Schedule }, l
  */
 export function Scheduler(): $CancellablePromise<$models.SchedulerData> {
     return $Call.ByID(1768662449).then(($result: any) => {
-        return $$createType16($result);
+        return $$createType18($result);
     });
 }
 
@@ -379,6 +410,34 @@ export function SetToolUpdates(on: boolean): $CancellablePromise<void> {
     return $Call.ByID(602377492, on);
 }
 
+/**
+ * SetupBrowsers lists the installed browsers and whether each one's
+ * extension has talked to ODM. The Setup window asks again every few
+ * seconds, so a browser turns connected once the extension is in.
+ */
+export function SetupBrowsers(): $CancellablePromise<$models.SetupBrowser[]> {
+    return $Call.ByID(3887833464).then(($result: any) => {
+        return $$createType20($result);
+    });
+}
+
+/**
+ * SetupStatus reports the tools and the browsers' extensions.
+ */
+export function SetupStatus(): $CancellablePromise<$models.SetupStatus> {
+    return $Call.ByID(353354275).then(($result: any) => {
+        return $$createType21($result);
+    });
+}
+
+/**
+ * ShowExtensionFolder opens the folder of the extension ODM wrote, which
+ * can also be dragged onto a browser's extensions page.
+ */
+export function ShowExtensionFolder(): $CancellablePromise<void> {
+    return $Call.ByID(2938206794);
+}
+
 export function ShowInFolder(id: string): $CancellablePromise<void> {
     return $Call.ByID(3487002806, id);
 }
@@ -388,7 +447,7 @@ export function ShowInFolder(id: string): $CancellablePromise<void> {
  */
 export function Snapshot(): $CancellablePromise<$models.Snapshot> {
     return $Call.ByID(2559731168).then(($result: any) => {
-        return $$createType17($result);
+        return $$createType22($result);
     });
 }
 
@@ -424,7 +483,7 @@ export function StopQueue(name: string): $CancellablePromise<void> {
  */
 export function ToolStatus(tool: string, typed: string): $CancellablePromise<$models.ToolStatus> {
     return $Call.ByID(1580169712, tool, typed).then(($result: any) => {
-        return $$createType18($result);
+        return $$createType23($result);
     });
 }
 
@@ -446,7 +505,7 @@ export function UpdateTools(): $CancellablePromise<void> {
  */
 export function ZipPreview(address: string, token: string): $CancellablePromise<$models.ZipListing> {
     return $Call.ByID(1010280861, address, token).then(($result: any) => {
-        return $$createType19($result);
+        return $$createType24($result);
     });
 }
 
@@ -461,13 +520,18 @@ const $$createType6 = $models.CategoryOption.createFrom;
 const $$createType7 = $Create.Array($$createType6);
 const $$createType8 = $models.Detail.createFrom;
 const $$createType9 = $models.GrabProgress.createFrom;
-const $$createType10 = $models.OptionsForm.createFrom;
-const $$createType11 = $models.AddPrefill.createFrom;
-const $$createType12 = $models.ProbeResult.createFrom;
-const $$createType13 = $models.SaveResult.createFrom;
-const $$createType14 = $models.SchedulerRefusal.createFrom;
-const $$createType15 = $Create.Nullable($$createType14);
-const $$createType16 = $models.SchedulerData.createFrom;
-const $$createType17 = $models.Snapshot.createFrom;
-const $$createType18 = $models.ToolStatus.createFrom;
-const $$createType19 = $models.ZipListing.createFrom;
+const $$createType10 = $models.ExtensionStep.createFrom;
+const $$createType11 = $models.SetupTool.createFrom;
+const $$createType12 = $models.OptionsForm.createFrom;
+const $$createType13 = $models.AddPrefill.createFrom;
+const $$createType14 = $models.ProbeResult.createFrom;
+const $$createType15 = $models.SaveResult.createFrom;
+const $$createType16 = $models.SchedulerRefusal.createFrom;
+const $$createType17 = $Create.Nullable($$createType16);
+const $$createType18 = $models.SchedulerData.createFrom;
+const $$createType19 = $models.SetupBrowser.createFrom;
+const $$createType20 = $Create.Array($$createType19);
+const $$createType21 = $models.SetupStatus.createFrom;
+const $$createType22 = $models.Snapshot.createFrom;
+const $$createType23 = $models.ToolStatus.createFrom;
+const $$createType24 = $models.ZipListing.createFrom;

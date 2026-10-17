@@ -12,6 +12,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -334,6 +335,20 @@ func (m *Manager) Settings() Settings {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	return m.settings.clone()
+}
+
+// NoteExtension records that the browser extension in browser (a name
+// such as "chrome", see Settings.ExtensionBrowsers) talked to ODM.
+func (m *Manager) NoteExtension(browser string) {
+	if browser == "" || len(browser) > 20 || strings.Trim(browser, "abcdefghijklmnopqrstuvwxyz") != "" {
+		return // not a name the extension or the native host sends
+	}
+	st := m.Settings()
+	if slices.Contains(st.ExtensionBrowsers, browser) {
+		return
+	}
+	st.ExtensionBrowsers = append(st.ExtensionBrowsers, browser)
+	m.UpdateSettings(st)
 }
 
 // UpdateSettings validates, persists and applies new settings live.

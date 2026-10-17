@@ -16,6 +16,7 @@ import {
   Globe,
   KeyRound,
   Plus,
+  Puzzle,
   RefreshCw,
   Settings2,
   Trash2,
@@ -194,7 +195,7 @@ function General({ o, set }: TabProps) {
             <p>{status?.summary ?? "…"}</p>
             <Hint>
               {state === "ok"
-                ? t("Install the ODM extension in each browser (see the README), then restart the browser once.")
+                ? t("Install the ODM extension in each browser (Install the extension…), then restart the browser once.")
                 : state === "none"
                   ? t("Register so browsers can hand downloads to ODM.")
                   : t("Register to point every browser at this ODM.")}
@@ -205,6 +206,9 @@ function General({ o, set }: TabProps) {
         <div className="flex gap-2">
           <Button variant="brand" onClick={() => act(api.registerBrowsers)}>
             {state === "ok" ? t("Register again") : t("Register")}
+          </Button>
+          <Button onClick={() => void api.openSetup()}>
+            <Puzzle /> {t("Install the extension…")}
           </Button>
           <Button
             disabled={!status?.registered}

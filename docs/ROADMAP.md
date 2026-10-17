@@ -388,7 +388,7 @@ bawaan sampai UI baru setara fiturnya.
       tetap diterjemahkan dan diperiksa tes i18n.
 - [x] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne
       tetap untuk macOS/Linux. README, CHANGELOG, tangkapan layar. **K**
-      Hasilnya (di cabang `ui-next`):
+      Hasilnya (digabung dari `ui-next` ke `main` pada 2026-10-17):
       - `scripts/build.sh windows`, CI, dan rilis membangun `ODM.exe`
         Windows dengan tag `gui` tanpa cgo dan MinGW (exe 15,6 MB,
         sebelumnya 28,6 MB); `windows-fyne` masih membangun UI Fyne untuk

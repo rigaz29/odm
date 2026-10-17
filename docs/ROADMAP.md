@@ -370,8 +370,9 @@ bawaan sampai UI baru setara fiturnya.
         baris yang dipilih, dan baris aktif keyboard, ditambah landmark,
         judul, dan nama tombol. axe bersih di semua jendela, terang dan
         gelap;
-      - daftar menjadi satu perhentian Tab (panah, Spasi, Ctrl+A), menu
-        baris lewat tombol Menu atau Shift+F10, cincin fokus keyboard,
+      - daftar menjadi satu perhentian Tab (panah dan Shift+panah memilih,
+        Ctrl+A memilih semua), menu baris lewat tombol Menu atau
+        Shift+F10, cincin fokus keyboard,
         dan kontras teks redup serta lencana dinaikkan ke 4,5:1;
       - animasi masuk dan keluar untuk menu, popover, tooltip, palet, dan
         dialog, yang mati bila Windows meminta gerak dikurangi;
@@ -385,8 +386,17 @@ bawaan sampai UI baru setara fiturnya.
       layar tetap berfungsi; snap layout di tombol Maximize (dan Win+Z)
       dilepas. Terjemahan lengkap dilewati atas permintaan; kunci baru
       tetap diterjemahkan dan diperiksa tes i18n.
-- [ ] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne
+- [x] **Tahap 6** Alih: UI baru menjadi `ODM.exe` bawaan di Windows; Fyne
       tetap untuk macOS/Linux. README, CHANGELOG, tangkapan layar. **K**
+      Hasilnya (di cabang `ui-next`):
+      - `scripts/build.sh windows`, CI, dan rilis membangun `ODM.exe`
+        Windows dengan tag `gui` tanpa cgo dan MinGW (exe 15,6 MB,
+        sebelumnya 28,6 MB); `windows-fyne` masih membangun UI Fyne untuk
+        Windows dan tetap diuji di CI;
+      - tanpa WebView2 Runtime, ODM menjelaskan apa yang kurang dan
+        menawarkan halaman unduhan Microsoft, alih-alih jendela kosong;
+      - README (fitur desktop, WebView2, build dengan Node dan Go 1.25,
+        pintasan, struktur kode, tangkapan layar UI baru) dan CHANGELOG.
 
 Nanti: halaman yang sama untuk web UI `-serve`, Wails untuk macOS/Linux.
 

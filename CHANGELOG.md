@@ -34,7 +34,9 @@ All notable changes to ODM are documented here. The format is based on
 - The hover highlight in the Fyne window's category sidebar no longer
   vanishes within a second: the sidebar's refresh every second cleared it,
   so it is now refreshed only when its entries change. (Ported from
-  upstream a218f0c8.)
+  upstream a218f0c8.) Its rows also no longer shift a few pixels when the
+  pointer touches them: they are laid out at fixed offsets instead of the
+  theme's spacing. (Ported from upstream 383e2666.)
 
 ## [0.5.0] - 2026-10-17
 

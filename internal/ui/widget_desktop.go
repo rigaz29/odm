@@ -471,44 +471,6 @@ func (r *headerRenderer) Objects() []fyne.CanvasObject { return r.objects }
 
 func (r *headerRenderer) Destroy() {}
 
-/* ---------- sidebar indent ---------- */
-
-// indentSpacer reserves horizontal space so nested sidebar rows line up.
-type indentSpacer struct {
-	widget.BaseWidget
-	w float32
-}
-
-func newIndentSpacer() *indentSpacer {
-	s := &indentSpacer{}
-	s.ExtendBaseWidget(s)
-	return s
-}
-
-func (s *indentSpacer) set(w float32) {
-	if s.w == w {
-		return
-	}
-	s.w = w
-	s.Refresh()
-}
-
-func (s *indentSpacer) MinSize() fyne.Size { return fyne.NewSize(s.w, 1) }
-
-func (s *indentSpacer) CreateRenderer() fyne.WidgetRenderer { return &spacerRenderer{s: s} }
-
-type spacerRenderer struct{ s *indentSpacer }
-
-func (r *spacerRenderer) Layout(fyne.Size) {}
-
-func (r *spacerRenderer) MinSize() fyne.Size { return r.s.MinSize() }
-
-func (r *spacerRenderer) Refresh() {}
-
-func (r *spacerRenderer) Objects() []fyne.CanvasObject { return nil }
-
-func (r *spacerRenderer) Destroy() {}
-
 /* ---------- connection strip ---------- */
 
 // chunkStrip draws one bar per connection, positioned and sized in proportion
@@ -861,3 +823,68 @@ func (r *swatchRenderer) Refresh() {
 func (r *swatchRenderer) Objects() []fyne.CanvasObject { return []fyne.CanvasObject{r.ring, r.dot} }
 
 func (r *swatchRenderer) Destroy() {}
+
+/* ---------- sidebar row ---------- */
+
+// Sidebar row metrics. Fixed rather than taken from the theme: the rows
+// used to follow the theme's padding (through a compact theme override),
+// and some rows were laid out with a different theme than others, so
+// they sat a few pixels apart and moved when the pointer touched them.
+const (
+	sideRowHeight = 20
+	sideArrowW    = 16
+	sideIconW     = 16
+	sideGap       = 6
+	sideLeft      = 4
+)
+
+// sidebarRowLayout places a sidebar row's arrow, icon and name at fixed
+// offsets from its indent, and shortens the name to fit.
+type sidebarRowLayout struct {
+	indent float32
+	full   string // the name before shortening
+}
+
+func (l *sidebarRowLayout) MinSize([]fyne.CanvasObject) fyne.Size {
+	return fyne.NewSize(sideLeft+sideArrowW+sideIconW+sideGap+40, sideRowHeight)
+}
+
+func (l *sidebarRowLayout) Layout(objs []fyne.CanvasObject, size fyne.Size) {
+	arrow, icon, text := objs[0], objs[1], objs[2].(*canvas.Text)
+	x := sideLeft + l.indent
+	place := func(o fyne.CanvasObject, x, w float32) {
+		o.Move(fyne.NewPos(x, (size.Height-w)/2))
+		o.Resize(fyne.NewSize(w, w))
+	}
+	place(arrow, x, 14)
+	x += sideArrowW
+	place(icon, x, sideIconW)
+	x += sideIconW + sideGap
+	text.Text = fitText(l.full, size.Width-x-4, text.TextSize, text.TextStyle)
+	ts := fyne.MeasureText(text.Text, text.TextSize, text.TextStyle)
+	text.Move(fyne.NewPos(x, (size.Height-ts.Height)/2))
+	text.Resize(ts)
+	text.Refresh()
+}
+
+// fitText shortens s with "…" until it fits in w.
+func fitText(s string, w, size float32, style fyne.TextStyle) string {
+	if w <= 0 || fyne.MeasureText(s, size, style).Width <= w {
+		return s
+	}
+	r := []rune(s)
+	for len(r) > 0 {
+		r = r[:len(r)-1]
+		if c := string(r) + "…"; fyne.MeasureText(c, size, style).Width <= w {
+			return c
+		}
+	}
+	return "…"
+}
+
+// newSidebarRow is the list's item template: arrow, icon, name.
+func newSidebarRow() *fyne.Container {
+	text := canvas.NewText("", theme.Color(theme.ColorNameForeground))
+	text.TextSize = theme.TextSize()
+	return container.New(&sidebarRowLayout{}, newTapIcon(), widget.NewIcon(nil), text)
+}

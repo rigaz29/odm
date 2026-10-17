@@ -19,6 +19,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -522,14 +523,7 @@ func (a *application) build() {
 			defer a.mu.Unlock()
 			return len(a.entries)
 		},
-		func() fyne.CanvasObject {
-			arrow := newTapIcon()
-			icon := widget.NewIcon(theme.FolderIcon())
-			label := widget.NewLabel("")
-			label.Truncation = fyne.TextTruncateEllipsis
-			left := container.NewHBox(newIndentSpacer(), arrow, icon)
-			return container.NewBorder(nil, nil, left, nil, label)
-		},
+		func() fyne.CanvasObject { return newSidebarRow() },
 		a.updateSidebarRow,
 	)
 	a.cats.HideSeparators = true
@@ -580,13 +574,13 @@ func (a *application) updateSidebarRow(id widget.ListItemID, o fyne.CanvasObject
 	e := a.entries[id]
 	a.mu.Unlock()
 	row := o.(*fyne.Container)
-	label := row.Objects[0].(*widget.Label)
-	left := row.Objects[1].(*fyne.Container)
-	spacer := left.Objects[0].(*indentSpacer)
-	arrow := left.Objects[1].(*tapIcon)
-	icon := left.Objects[2].(*widget.Icon)
+	lay := row.Layout.(*sidebarRowLayout)
+	arrow := row.Objects[0].(*tapIcon)
+	icon := row.Objects[1].(*widget.Icon)
+	text := row.Objects[2].(*canvas.Text)
 
-	spacer.set(float32(e.indent * 16))
+	lay.indent = float32(e.indent * 16)
+	lay.full = e.text
 	// Leaves keep an empty arrow slot so names stay aligned with branches.
 	arrow.onTap = nil
 	arrow.SetResource(nil)
@@ -599,12 +593,11 @@ func (a *application) updateSidebarRow(id widget.ListItemID, o fyne.CanvasObject
 			arrow.SetResource(theme.MenuExpandIcon())
 		}
 	}
-	// The HBox only re-reads the spacer's MinSize when laid out again;
-	// without this, recycled rows kept whatever indent they had before.
-	left.Refresh()
-	row.Refresh()
 	icon.SetResource(e.icon)
-	label.SetText(e.text)
+	// The theme of the moment: the look can change while the row lives.
+	text.Color = theme.Color(theme.ColorNameForeground)
+	// Lays the row out again for its own indent: rows are recycled.
+	row.Refresh()
 }
 
 func (a *application) toggleNode(node string) {

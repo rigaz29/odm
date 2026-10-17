@@ -680,10 +680,14 @@ func (r *gridRenderer) Layout(size fyne.Size) {
 		full += w + gap
 	}
 	if full <= size.Width+gap {
+		// Between columns only, as the table draws them: a line after the
+		// last column would stand alone at the right edge.
 		x := float32(0)
-		for _, w := range widths {
+		for i, w := range widths {
 			x += w
-			line(x+off, top, sep, size.Height-top)
+			if i < len(widths)-1 {
+				line(x+off, top, sep, size.Height-top)
+			}
 			x += gap
 		}
 	}

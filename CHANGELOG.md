@@ -23,6 +23,9 @@ All notable changes to ODM are documented here. The format is based on
   address's #hash changes (a timestamp, a section): the page stays, and
   so do the videos it loaded. A script switching to another address
   (pushState) still starts a fresh list. (Ported from upstream 7948225e.)
+- The Fyne download list's last column reaches the right edge: its header
+  and the selected row stopped a few pixels short, and a stray grid line
+  stood in the gap. (Ported from upstream 0eaeb35d.)
 
 ## [0.5.0] - 2026-10-17
 

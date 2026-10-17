@@ -118,15 +118,20 @@ internal/engine, server, native, tools …    tidak berubah
 
 - Kebutuhan: Go ≥ 1.25, Node LTS + npm, dan CLI `wails3` (untuk membuat
   binding).
-- Build: `bash scripts/build.sh gui`. Isinya `npm ci`, lalu `npm run build`
-  di `internal/gui/frontend`, lalu `go build -tags gui` tanpa CGO, dan
-  hasilnya `dist/ODM-Next.exe`.
+- Build: `bash scripts/build.sh windows`. Isinya `npm ci`, lalu `npm run
+  build` di `internal/gui/frontend`, lalu `go build -tags gui` tanpa CGO,
+  dan hasilnya `dist/ODM.exe` (sejak Tahap 6; sebelumnya pratinjau
+  `ODM-Next.exe` lewat target `gui`). UI Fyne untuk Windows tetap bisa
+  dibangun dengan `bash scripts/build.sh windows-fyne`.
 - Binding hasil generate di-commit; `frontend/dist` tidak. Build dan tes
   tanpa tag tetap jalan tanpa Node.
 - Selama transisi `ODM.exe` (Fyne) dan `ODM-Next.exe` memakai data yang
-  sama, tetapi hanya satu yang bisa berjalan sekaligus.
-- CI: job baru menjalankan `npm ci`, Vitest, `vite build`, lalu `go vet` dan
-  `go test` dengan `-tags gui`.
+  sama, tetapi hanya satu yang bisa berjalan sekaligus. Pengaturan ikut
+  pindah, termasuk tema dan bahasa dari preferensi Fyne.
+- CI: job "Windows (desktop UI)" menjalankan `npm ci`, Vitest, `vite
+  build`, lalu `go vet` dan `go test` dengan `-tags gui`, dan menghasilkan
+  `ODM.exe`. Rilis membangun `ODM.exe` Windows dengan cara yang sama; Linux
+  dan macOS tetap Fyne. Build Fyne Windows tetap diuji di CI.
 
 ## Pengujian
 
@@ -181,8 +186,12 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Terjemahan lengkap, uji 1.000+ unduhan, dan memori.
 
 **Tahap 6: alih.**
-- UI baru menjadi `ODM.exe` bawaan di Windows.
-- Fyne tetap dipakai untuk macOS/Linux sampai dievaluasi.
+- UI baru menjadi `ODM.exe` bawaan di Windows: `scripts/build.sh windows`,
+  CI, dan rilis memakai tag `gui`, tanpa MinGW.
+- Fyne tetap dipakai untuk macOS/Linux sampai dievaluasi; untuk Windows
+  masih bisa dibangun (`windows-fyne`).
+- Pemeriksaan WebView2 Runtime sebelum UI dibuka.
+- README (fitur, build, tangkapan layar) dan CHANGELOG diperbarui.
 
 ## Risiko dan penanganannya
 
@@ -194,7 +203,10 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
   bisa dikembalikan bila Wails meneruskan UI Automation dalam mode itu.
 - **Konsistensi desain shadcn/ui.** Token warna, jarak, dan set komponen
   dikunci di Tahap 1; layar baru hanya memakai komponen itu.
-- **WebView2 tidak ada** di sebagian Windows 10 lama. Wails bisa menawarkan
-  pemasangnya; hal ini dicatat di README.
+- **WebView2 tidak ada** di sebagian Windows 10 lama. Wails beta.30 tidak
+  menawarkan pemasangnya; jendelanya hanya kosong. Karena itu ODM memeriksa
+  runtime di registry sebelum membuka UI, lalu menjelaskan apa yang kurang
+  dan menawarkan halaman unduhan Microsoft (`webview2_windows.go`). Hal ini
+  juga dicatat di README.
 - **Dua UI dirawat selama transisi.** Logika bersama ada di service dan
   `internal/i18n`. Setelah Tahap 2, UI Fyne hanya menerima perbaikan bug.

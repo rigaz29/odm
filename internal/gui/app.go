@@ -5,6 +5,7 @@ package gui
 import (
 	"context"
 	"embed"
+	"errors"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
 	"odm/internal/engine"
+	"odm/internal/osutil"
 	"odm/internal/tools"
 )
 
@@ -63,6 +65,13 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		return err
 	}
 	svc := NewService(mgr)
+	// Without the WebView2 Runtime the window would be empty (webview2_windows.go).
+	if !webView2Installed() {
+		if askForWebView2(svc.translator()) {
+			_ = osutil.Open(webView2Page)
+		}
+		return errors.New("the Microsoft Edge WebView2 Runtime is not installed: " + webView2Page)
+	}
 	notes := notifications.New()
 	app := application.New(application.Options{
 		Name:        "Ochi Download Manager",

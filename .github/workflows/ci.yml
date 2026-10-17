@@ -23,7 +23,7 @@ jobs:
         run: CGO_ENABLED=0 go build -o /tmp/odm ./cmd/odm
 
   gui:
-    name: New UI preview (Windows)
+    name: Windows (desktop UI)
     runs-on: windows-latest
     defaults:
       run:
@@ -47,15 +47,17 @@ jobs:
           npm run build
       - run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
       - run: go test -tags gui ./internal/gui/ ./internal/i18n/
-      - name: Build ODM-Next.exe
+      - name: Build ODM.exe
         run: |
           CGO_ENABLED=0 go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" \
-            -o dist/ODM-Next.exe ./cmd/odm
+            -o dist/ODM.exe ./cmd/odm
       - uses: actions/upload-artifact@v4
         with:
-          name: ODM-Next-windows-amd64.exe
-          path: dist/ODM-Next.exe
+          name: ODM-windows-amd64.exe
+          path: dist/ODM.exe
 
+  # The Fyne UI: what Linux and macOS ship, and on Windows a build kept
+  # working (./scripts/build.sh windows-fyne).
   desktop:
     name: Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -70,7 +72,7 @@ jobs:
           - os: macos-latest
             artifact: odm-darwin-arm64
           - os: windows-latest
-            artifact: ODM-windows-amd64.exe
+            artifact: ODM-fyne-windows-amd64.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

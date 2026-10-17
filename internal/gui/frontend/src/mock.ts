@@ -39,6 +39,10 @@ import {
 } from "./bindings/odm/internal/gui/models";
 
 const categories = ["Video", "Audio", "Documents", "Programs", "Compressed", "Images", "Disk Images", "Other"];
+// With ?lang=en the made-up names are English too (the README's screenshot).
+const english = new URLSearchParams(location.search).get("lang") === "en";
+const say = (id: string, en: string) => (english ? en : id);
+const night = say("Malam hari", "Night");
 const GB = 1024 ** 3;
 const MB = 1024 ** 2;
 
@@ -46,14 +50,14 @@ type Seed = [name: string, category: string, size: number, status: string, progr
 const seeds: Seed[] = [
   ["ubuntu-24.04.1-desktop-amd64.iso", "Disk Images", 5.8 * GB, "downloading", 63, 12.4 * MB, "releases.ubuntu.com"],
   ["Blender-4.5-windows-x64.msi", "Programs", 412 * MB, "downloading", 27, 6.1 * MB, "download.blender.org"],
-  ["Siaran NASA — ISS Earth View (live)", "Video", 0, "downloading", 0, 0.9 * MB, "youtube.com", { live: true, stream: "hls", done: 248 * MB }],
+  [say("Siaran NASA — ISS Earth View (live)", "NASA — ISS Earth View (live)"), "Video", 0, "downloading", 0, 0.9 * MB, "youtube.com", { live: true, stream: "hls", done: 248 * MB }],
   ["Interstellar.2014.2160p.UHD.mkv", "Video", 21.4 * GB, "paused", 41, 0, "cdn.example.net"],
-  ["Figma-Desktop-Setup-x64.exe", "Programs", 98 * MB, "queued", 0, 0, "desktop.figma.com", { queue: "Malam hari" }],
-  ["foto-liburan-bali-2026.zip", "Compressed", 1.3 * GB, "error", 32, 0, "drive.example.com", { error: "403 Forbidden" }],
-  ["dataset-iklim-indonesia-2010-2026.csv", "Documents", 640 * MB, "queued", 0, 0, "data.bmkg.go.id", { queue: "Malam hari", description: "Data untuk skripsi" }],
-  ["podcast-teknologi-eps-112.mp3", "Audio", 86 * MB, "complete", 100, 0, "anchor.fm"],
-  ["laporan-keuangan-Q3-2026.pdf", "Documents", 3.2 * MB, "complete", 100, 0, "intranet.example.co.id"],
-  ["Kuliah-Umum-AI-2026.mp4", "Video", 1.8 * GB, "complete", 100, 0, "vod.kampus.ac.id"],
+  ["Figma-Desktop-Setup-x64.exe", "Programs", 98 * MB, "queued", 0, 0, "desktop.figma.com", { queue: night }],
+  [say("foto-liburan-bali-2026.zip", "bali-holiday-photos-2026.zip"), "Compressed", 1.3 * GB, "error", 32, 0, "drive.example.com", { error: "403 Forbidden" }],
+  [say("dataset-iklim-indonesia-2010-2026.csv", "climate-dataset-2010-2026.csv"), "Documents", 640 * MB, "queued", 0, 0, "data.bmkg.go.id", { queue: night, description: say("Data untuk skripsi", "Data for the thesis") }],
+  [say("podcast-teknologi-eps-112.mp3", "tech-podcast-ep-112.mp3"), "Audio", 86 * MB, "complete", 100, 0, "anchor.fm"],
+  [say("laporan-keuangan-Q3-2026.pdf", "financial-report-Q3-2026.pdf"), "Documents", 3.2 * MB, "complete", 100, 0, "intranet.example.co.id"],
+  [say("Kuliah-Umum-AI-2026.mp4", "AI-public-lecture-2026.mp4"), "Video", 1.8 * GB, "complete", 100, 0, "vod.kampus.ac.id"],
   ["node-v24.14.1-x64.msi", "Programs", 31 * MB, "complete", 100, 0, "nodejs.org"],
   ["wallpaper-aurora-8k.png", "Images", 24 * MB, "complete", 100, 0, "unsplash.com"],
   ["android-studio-2026.1-windows.exe", "Programs", 1.4 * GB, "complete", 100, 0, "dl.google.com"],
@@ -105,7 +109,7 @@ export function mockApi(): Api {
   const n = Number(q.get("n") || seeds.length);
   let items = makeItems(n);
   let running: string[] = [];
-  const queues = ["Main", "Malam hari"];
+  const queues = ["Main", night];
   const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
   const limits = new Map<string, number>();
@@ -115,7 +119,7 @@ export function mockApi(): Api {
     openEnabled: false, openPath: "", finish: "", parallel: 1,
   });
   const schedules: Record<string, Schedule> = {
-    "Malam hari": new Schedule({ ...newSchedule(), startEnabled: true, startAt: "23:30", stopEnabled: true, finish: "shutdown", parallel: 2 }),
+    [night]: new Schedule({ ...newSchedule(), startEnabled: true, startAt: "23:30", stopEnabled: true, finish: "shutdown", parallel: 2 }),
   };
   let limitsState = new Limits({ on: false, mb: 200, hours: 5, warning: true });
   const grabSubs = new Set<(p: GrabProgress) => void>();

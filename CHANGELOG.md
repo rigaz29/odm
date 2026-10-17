@@ -198,6 +198,31 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Changed
 
+- Windows builds have a new desktop UI (`internal/gui`, see
+  `docs/GUI.md`): a page drawn by Microsoft Edge WebView2 through Wails,
+  built with React and shadcn/ui, in place of the Fyne UI, which Linux and
+  macOS keep. It does all the Fyne UI did, in the same windows (New
+  Download, progress, download complete, Options, Scheduler), and adds:
+  - a main window with a card for each running download (speed over the
+    last minute, connections, time left), a list that sorts by its
+    headers, resizes, hides and restores columns, and stays quick with
+    thousands of downloads, and a search box (Ctrl+K) that also takes a
+    pasted address and runs any command by name;
+  - light and dark themes that follow Windows or are chosen in Options;
+  - Narrator and other screen readers, which read every window, and a
+    keyboard that reaches all of it (the Menu key or Shift+F10 opens a
+    download's menu);
+  - menus and dialogs that come and go smoothly (and stay still with
+    Windows' "reduce motion"), and windows fitted to small screens and
+    large scales.
+
+  Settings carry over, the Fyne UI's theme and language included. The
+  exe carries ODM's icon and name, which Explorer, the taskbar, Task
+  Manager and the Windows notifications now show. The Windows build needs
+  no cgo (Node.js builds the page) and needs the Microsoft Edge WebView2
+  Runtime, which Windows 11 and updated Windows 10 have; where it is
+  missing, ODM says so and offers Microsoft's download page.
+  `./scripts/build.sh windows-fyne` still builds the Fyne UI for Windows.
 - The Options window fits small laptops and tablets. It was as tall as its
   longest page (Downloads), taller than a 1080p screen at 125% with its
   OK button off the bottom. Pages now scroll instead, also by dragging

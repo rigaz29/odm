@@ -279,6 +279,7 @@
   "ODM Options": "Opsi ODM",
   "ODM Site Grabber": "Site Grabber ODM",
   "ODM will exit": "ODM akan ditutup",
+  "ODM's window needs the Microsoft Edge WebView2 Runtime, which this computer does not have. It comes with Windows 11 and updated Windows 10, and Microsoft offers it as a free download.\n\nOpen the download page now?": "Jendela ODM memerlukan Microsoft Edge WebView2 Runtime, yang belum ada di komputer ini. Runtime ini sudah ada di Windows 11 dan Windows 10 yang diperbarui, dan bisa diunduh gratis dari Microsoft.\n\nBuka halaman unduhannya sekarang?",
   "OK": "OK",
   "On": "Aktif",
   "Once at": "Sekali pada",

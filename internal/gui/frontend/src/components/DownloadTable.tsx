@@ -11,9 +11,9 @@
 // the menu opens. To Narrator it is a grid: the header's cells and each
 // row's, the row count of the whole list though only those in view exist,
 // and the row the keyboard is on. The list is one stop for Tab: the arrows
-// move through the rows, Space ticks one, and the Menu key or Shift+F10
-// opens the row menu, so the rows' own checkboxes and menu buttons are
-// left out of the Tab order.
+// move the selection through the rows (Shift extends it, Ctrl+A takes
+// them all), and the Menu key or Shift+F10 opens the row menu, so the
+// rows' own checkboxes and menu buttons are left out of the Tab order.
 
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Columns3, MoreHorizontal } from "lucide-react";

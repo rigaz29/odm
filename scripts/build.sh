@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Build ODM.
 #
-# Desktop builds use the Fyne UI (build tag "fyne") and therefore need cgo:
-#   Windows  -> mingw-w64            (CC_WINDOWS, default x86_64-w64-mingw32-gcc)
+# Windows builds the desktop UI of internal/gui (build tag "gui", see
+# docs/GUI.md): the page first (needs Node and npm), then the exe, with no
+# cgo. Linux and macOS build the Fyne UI (build tag "fyne"), which needs cgo:
 #   Linux    -> libgl1-mesa-dev xorg-dev
 #   macOS    -> Xcode command line tools
+# The "windows-fyne" target builds the Fyne UI for Windows too, with
+# mingw-w64 (CC_WINDOWS, default x86_64-w64-mingw32-gcc).
 # The "cli" target builds the engine + web UI with no cgo and no desktop UI.
-# The "gui" target builds the preview of the new UI (internal/gui, see
-# docs/GUI.md) as ODM-Next.exe: the page first (needs Node and npm), then
-# the exe, with no cgo.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -61,24 +61,25 @@ cli() {
 }
 
 gui() {
-  echo "building gui windows/amd64 -> $OUT/ODM-Next.exe"
+  local name="$1"
+  echo "building gui windows/amd64 -> $OUT/$name"
   (cd internal/gui/frontend && npm ci --no-audit --no-fund && npm run build)
   CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-    go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/ODM-Next.exe" ./cmd/odm
-  echo "built $OUT/ODM-Next.exe"
+    go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/$name" ./cmd/odm
+  echo "built $OUT/$name"
 }
 
 case "${1:-windows}" in
-  windows) desktop windows amd64 ODM.exe ;;
+  windows) gui ODM.exe ;;
+  windows-fyne) desktop windows amd64 ODM.exe ;;
   linux) desktop linux amd64 odm ;;
   darwin) desktop darwin arm64 odm ;;
   darwin-intel) desktop darwin amd64 odm ;;
   cli) cli linux amd64 odm-cli ;;
-  gui) gui ;;
   all)
-    desktop windows amd64 ODM.exe
+    gui ODM.exe
     desktop linux amd64 odm
     desktop darwin arm64 odm
     ;;
-  *) echo "usage: $0 [windows|linux|darwin|darwin-intel|cli|gui|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [windows|windows-fyne|linux|darwin|darwin-intel|cli|all]" >&2; exit 2 ;;
 esac

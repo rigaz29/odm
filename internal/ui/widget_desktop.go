@@ -214,6 +214,26 @@ type tableCell struct {
 	onSecondary func(row int, pos fyne.Position)
 	onPress     func(row int, mods fyne.KeyModifier)
 	onDoubleTap func(row int)
+	// hovered paints the hover colour behind the cell. onHover is told of
+	// the pointer entering the cell (its row) or leaving it (-1), so the
+	// whole row under the pointer is highlighted, not the one cell Fyne's
+	// table marks.
+	hovered bool
+	onHover func(row int)
+}
+
+func (c *tableCell) MouseIn(*desktop.MouseEvent) {
+	if c.onHover != nil {
+		c.onHover(c.row)
+	}
+}
+
+func (c *tableCell) MouseMoved(*desktop.MouseEvent) {}
+
+func (c *tableCell) MouseOut() {
+	if c.onHover != nil {
+		c.onHover(-1)
+	}
 }
 
 func newTableCell() *tableCell {
@@ -250,10 +270,11 @@ func (c *tableCell) showIcon(on bool) {
 }
 
 // setSelected paints the whole row: widget.Table only highlights the one
-// clicked cell, so every cell of the selected row draws its own background.
-func (c *tableCell) setSelected(on bool) {
-	if c.selected != on {
-		c.selected = on
+// clicked cell, so every cell of the selected row draws its own background,
+// and so does every cell of the row under the pointer (hovered).
+func (c *tableCell) setSelected(on, hovered bool) {
+	if c.selected != on || c.hovered != hovered {
+		c.selected, c.hovered = on, hovered
 		c.Refresh()
 	}
 }
@@ -308,8 +329,11 @@ func (r *cellRenderer) MinSize() fyne.Size { return fyne.NewSize(20, rowHeight()
 func (r *cellRenderer) Refresh() {
 	r.c.text.Color = theme.ForegroundColor()
 	r.c.bg.FillColor = color.Transparent
-	if r.c.selected {
+	switch {
+	case r.c.selected:
 		r.c.bg.FillColor = theme.SelectionColor()
+	case r.c.hovered:
+		r.c.bg.FillColor = theme.HoverColor()
 	}
 	r.c.bg.Refresh()
 	r.Layout(r.c.Size())

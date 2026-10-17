@@ -252,8 +252,11 @@ type application struct {
 	selected    map[string]bool
 	focusID     string
 	selectedRow int // index of focusID in items, kept in step by refresh
-	sortCol     int
-	sortAsc     bool
+	// hoverRow is the list row under the pointer (-1: none), painted
+	// across all its cells.
+	hoverRow int
+	sortCol  int
+	sortAsc  bool
 	// The shown columns in order, those hidden, the widths the user
 	// dragged, and the list width they were last laid out for.
 	visibleCols []int
@@ -340,6 +343,7 @@ func newDownloadTable(a *application) *downloadTable {
 				a.openProgressWindow(d.ID)
 			}
 		}
+		c.onHover = a.setHoverRow
 		return c
 	}
 	t.UpdateCell = a.updateCell
@@ -438,6 +442,7 @@ func (t *downloadTable) TappedSecondary(e *fyne.PointEvent) {
 func (a *application) build() {
 	a.loadColumns()
 	a.hoverGrip = -1
+	a.hoverRow = -1
 	tint := func(icon fyne.Resource, c fyne.ThemeColorName) fyne.Resource {
 		return theme.NewColoredResource(icon, c)
 	}
@@ -926,7 +931,7 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 		c.row = -1
 		c.setText("")
 		c.showIcon(false)
-		c.setSelected(false)
+		c.setSelected(false, false)
 		return
 	}
 	d := a.items[id.Row]
@@ -942,9 +947,10 @@ func (a *application) updateCell(id widget.TableCellID, o fyne.CanvasObject) {
 	c.showIcon(col == colName)
 	a.mu.Lock()
 	selected := a.selected[d.ID]
+	hovered := a.hoverRow == id.Row
 	a.rowH = rowHeight()
 	a.mu.Unlock()
-	c.setSelected(selected)
+	c.setSelected(selected, hovered)
 
 	switch col {
 	case colName:
@@ -1418,6 +1424,26 @@ func currentModifiers() fyne.KeyModifier {
 		return drv.CurrentKeyModifiers()
 	}
 	return 0
+}
+
+// setHoverRow repaints the rows the pointer left and entered.
+func (a *application) setHoverRow(row int) {
+	a.mu.Lock()
+	old := a.hoverRow
+	a.hoverRow = row
+	cols := len(a.visibleCols)
+	a.mu.Unlock()
+	if old == row || a.table == nil {
+		return
+	}
+	for _, r := range []int{old, row} {
+		if r < 0 {
+			continue
+		}
+		for col := 0; col < cols; col++ {
+			a.table.RefreshItem(widget.TableCellID{Row: r, Col: col})
+		}
+	}
 }
 
 // clickRow applies a click on row: plain selects only it, Ctrl (Cmd on macOS)

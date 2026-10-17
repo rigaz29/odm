@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 
 	"odm/internal/engine"
 )
@@ -220,5 +221,71 @@ func TestToolbarHoverAndPress(t *testing.T) {
 	a.tools["delete"].MouseDown(&desktop.MouseEvent{Button: desktop.MouseButtonPrimary})
 	if a.tools["delete"].pressed {
 		t.Fatal("a disabled button looks pressed")
+	}
+}
+
+// Removing runs off the UI thread: a removal that takes long (Windows
+// deleting a large file took seconds) leaves the window responsive, and
+// the download is hidden at once rather than when the removal ends.
+func TestDeleteDoesNotBlockUI(t *testing.T) {
+	a := newListApp(t, "a.zip", "b.zip")
+	release := make(chan struct{})
+	finished := make(chan struct{})
+	a.removeFn = func(id string, withFile bool) bool {
+		<-release // a slow DeleteFile
+		ok := a.mgr.RemoveWithFile(id, withFile)
+		close(finished)
+		return ok
+	}
+	a.table.OnSelected(widget.TableCellID{Row: 0, Col: 0})
+	returned := make(chan struct{})
+	go func() {
+		a.removeSelected(false)
+		for _, o := range a.win.Canvas().Overlays().List() {
+			tapYes(t, o)
+		}
+		close(returned)
+	}()
+	select {
+	case <-returned:
+	case <-time.After(3 * time.Second):
+		close(release)
+		t.Fatal("the UI waited for the removal")
+	}
+	a.mu.Lock()
+	n := len(a.items)
+	a.mu.Unlock()
+	if n != 1 {
+		t.Fatalf("%d rows while removing, want the removed one hidden", n)
+	}
+	close(release)
+	select {
+	case <-finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("removal never ran")
+	}
+	if len(a.mgr.List()) != 1 {
+		t.Fatalf("manager still has %d downloads", len(a.mgr.List()))
+	}
+}
+
+// tapYes taps the dialog button labelled Yes under o.
+func tapYes(t *testing.T, o fyne.CanvasObject) {
+	t.Helper()
+	if b, ok := o.(*widget.Button); ok && b.Text == "Yes" {
+		test.Tap(b)
+		return
+	}
+	if c, ok := o.(*fyne.Container); ok {
+		for _, k := range c.Objects {
+			tapYes(t, k)
+		}
+	}
+	if w, ok := o.(fyne.Widget); ok {
+		if r := test.WidgetRenderer(w); r != nil {
+			for _, k := range r.Objects() {
+				tapYes(t, k)
+			}
+		}
 	}
 }

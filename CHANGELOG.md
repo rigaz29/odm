@@ -49,6 +49,11 @@ All notable changes to ODM are documented here. The format is based on
 - Fyne toolbar buttons look pushed in while held: a darker background,
   the icon a little smaller and a pixel lower. (Ported from upstream
   0f6ae194.)
+- Deleting downloads in the Fyne window no longer freezes it: removing
+  can wait for a transfer to stop and for Windows to delete a large file,
+  which took seconds, and ran on the UI thread. It now runs in the
+  background; the downloads leave the list at once. (Ported from upstream
+  c15037d6.)
 
 ## [0.5.0] - 2026-10-17
 

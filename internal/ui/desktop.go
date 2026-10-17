@@ -256,6 +256,11 @@ type application struct {
 	// hoverRow is the list row under the pointer (-1: none), painted
 	// across all its cells.
 	hoverRow int
+	// removing holds downloads being removed in the background; they are
+	// left out of the list and the counts until the removal is done.
+	// removeFn replaces Manager.RemoveWithFile in tests.
+	removing map[string]bool
+	removeFn func(id string, deleteFile bool) bool
 	sortCol  int
 	sortAsc  bool
 	// The shown columns in order, those hidden, the widths the user
@@ -1099,9 +1104,22 @@ func (a *application) refresh() {
 	col, asc := a.sortCol, a.sortAsc
 	kind, value := a.filter.kind, a.filter.value
 	terms := a.query
+	removing := make(map[string]bool, len(a.removing))
+	for id := range a.removing {
+		removing[id] = true
+	}
 	a.mu.Unlock()
 
 	all := a.mgr.List()
+	if len(removing) > 0 {
+		kept := all[:0:0]
+		for _, d := range all {
+			if !removing[d.ID] {
+				kept = append(kept, d)
+			}
+		}
+		all = kept
+	}
 	queues := a.mgr.Queues()
 	limit := a.mgr.Settings().EffectiveSpeedLimit()
 	filtered := make([]engine.Info, 0, len(all))
@@ -1599,10 +1617,37 @@ func (a *application) removeSelected(withFile bool) {
 		if !yes {
 			return
 		}
-		for _, d := range sel {
-			a.mgr.RemoveWithFile(d.ID, withFile)
+		// Off the UI thread: removing can wait for a transfer to stop
+		// (up to 10 s) and for Windows to delete large files, which took
+		// long enough to freeze the window ("Not Responding"). Meanwhile
+		// the downloads are hidden, so they cannot be removed twice.
+		a.mu.Lock()
+		if a.removing == nil {
+			a.removing = map[string]bool{}
 		}
+		for _, d := range sel {
+			a.removing[d.ID] = true
+			delete(a.selected, d.ID)
+		}
+		a.mu.Unlock()
 		a.refresh()
+		go func() {
+			remove := a.mgr.RemoveWithFile
+			if a.removeFn != nil {
+				remove = a.removeFn
+			}
+			for _, d := range sel {
+				remove(d.ID, withFile)
+			}
+			fyne.Do(func() {
+				a.mu.Lock()
+				for _, d := range sel {
+					delete(a.removing, d.ID)
+				}
+				a.mu.Unlock()
+				a.refresh()
+			})
+		}()
 	})
 }
 

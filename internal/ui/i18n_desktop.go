@@ -4,17 +4,19 @@ package ui
 
 import (
 	"embed"
-	"encoding/json"
 	"fmt"
 	"strings"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
+
+	"odm/internal/i18n"
 )
 
-// The desktop UI is written in English; translations/id.json holds its text
-// in Indonesian, keyed by the English. fyne.id.json translates the text of
-// Fyne's own widgets (dialog buttons, the file dialog, the entry menu).
+// The desktop UI is written in English; internal/i18n's id.json holds its
+// text in Indonesian, keyed by the English (shared with the new UI).
+// translations/fyne.id.json translates the text of Fyne's own widgets
+// (dialog buttons, the file dialog, the entry menu).
 //
 //go:embed translations/*.json
 var translationFS embed.FS
@@ -85,7 +87,7 @@ func setLanguage(language string) error {
 	if language != langIndonesian {
 		return nil
 	}
-	m, err := readTranslations("translations/id.json")
+	m, err := i18n.Indonesian()
 	if err != nil {
 		return err
 	}
@@ -104,18 +106,6 @@ func setLanguage(language string) error {
 		}
 	}
 	return nil
-}
-
-func readTranslations(name string) (map[string]string, error) {
-	data, err := translationFS.ReadFile(name)
-	if err != nil {
-		return nil, err
-	}
-	m := map[string]string{}
-	if err := json.Unmarshal(data, &m); err != nil {
-		return nil, fmt.Errorf("%s: %w", name, err)
-	}
-	return m, nil
 }
 
 // applyLanguage sets the language saved in the preferences.

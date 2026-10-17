@@ -152,6 +152,11 @@ type Settings struct {
 	// ToolUpdates says whether ODM may download yt-dlp and ffmpeg itself
 	// and keep them updated: "" (not asked yet), "auto" or "off".
 	ToolUpdates string `json:"tool_updates,omitempty"`
+	// Theme ("light", "dark", "system") and Language ("en", "id",
+	// "system") are the new UI's (internal/gui) look; empty until chosen
+	// there. The Fyne UI keeps its own in its preferences.
+	Theme    string `json:"theme,omitempty"`
+	Language string `json:"language,omitempty"`
 }
 
 // DefaultQueue is the queue used when none is specified.

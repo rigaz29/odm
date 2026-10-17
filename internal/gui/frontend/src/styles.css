@@ -1,0 +1,184 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* The design (docs/GUI.md): shadcn/ui's zinc theme, with ODM's
+   violet-to-cyan accent. Every colour the page uses is one of these. */
+@theme {
+  --font-sans: "Inter Variable", "Segoe UI", system-ui, sans-serif;
+  --color-background: #ffffff;
+  --color-foreground: #09090b;
+  --color-card: #ffffff;
+  --color-popover: #ffffff;
+  --color-muted: #f4f4f5;
+  --color-muted-foreground: #6b6b74; /* zinc-500 darkened to 4.5:1 on muted */
+  --color-border: #e4e4e7;
+  --color-input: #e4e4e7;
+  --color-ring: #a78bfa;
+  --color-primary: #18181b;
+  --color-primary-foreground: #fafafa;
+  --color-accent: #f4f4f5;
+  --color-destructive: #dc2626;
+  --color-brand: #7c3aed;
+}
+
+.dark {
+  --color-background: #09090b;
+  --color-foreground: #fafafa;
+  --color-card: #0c0c0f;
+  --color-popover: #111114;
+  --color-muted: #18181b;
+  --color-muted-foreground: #a1a1aa;
+  --color-border: #27272a;
+  --color-input: #27272a;
+  --color-ring: #8b5cf6;
+  --color-primary: #fafafa;
+  --color-primary-foreground: #18181b;
+  --color-accent: #1f1f23;
+  --color-destructive: #dc2626; /* white text on it: 4.5:1 */
+  --color-brand: #a78bfa;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--color-background);
+  color: var(--color-foreground);
+  font-feature-settings: "cv11", "ss01";
+  -webkit-font-smoothing: antialiased;
+  /* An application, not a document: text is chosen only where typed. */
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
+}
+
+input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* The accent: violet to cyan. Utilities, so variants apply to them
+   (data-[state=checked]:accent-gradient). */
+@utility accent-gradient {
+  background-image: linear-gradient(110deg, #8b5cf6 0%, #6366f1 45%, #22d3ee 100%);
+}
+@utility accent-text {
+  background-image: linear-gradient(110deg, #8b5cf6, #22d3ee);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  @variant dark {
+    background-image: linear-gradient(110deg, #a78bfa, #67e8f9);
+  }
+}
+
+/* A faint aurora at the top of the window. background-image, not
+   background: the shorthand would drop the colour. */
+.aurora {
+  background-image:
+    radial-gradient(600px 220px at 18% -60px, rgba(139, 92, 246, 0.1), transparent 70%),
+    radial-gradient(560px 200px at 85% -70px, rgba(34, 211, 238, 0.1), transparent 70%);
+}
+.dark .aurora {
+  background-image:
+    radial-gradient(640px 240px at 18% -60px, rgba(139, 92, 246, 0.16), transparent 70%),
+    radial-gradient(600px 220px at 85% -70px, rgba(34, 211, 238, 0.11), transparent 70%);
+}
+
+/* Thin scrollbars that show while the pointer is over the area. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: transparent;
+  border: 3px solid transparent;
+  border-radius: 5px;
+  background-clip: content-box;
+}
+:hover::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-muted-foreground) 45%, transparent);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Menus, popovers, tooltips and the command palette come with a short fade
+   and grow from where they open (Radix gives the origin), and go with a
+   shorter fade; Radix keeps them until the way out ends. Dialogs fade their
+   backdrop and grow from the middle. Tailwind places things with the
+   translate property, so these transforms do not move them. Nothing moves
+   for those who ask Windows for less motion. */
+@keyframes odm-pop-in {
+  from {
+    opacity: 0;
+    transform: translate(var(--odm-from-x, 0), var(--odm-from-y, 0)) scale(0.96);
+  }
+}
+@keyframes odm-pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes odm-fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes odm-fade-out {
+  to {
+    opacity: 0;
+  }
+}
+.pop {
+  transform-origin: var(
+    --radix-dropdown-menu-content-transform-origin,
+    var(--radix-context-menu-content-transform-origin, var(--radix-popover-content-transform-origin, var(--radix-tooltip-content-transform-origin, top center)))
+  );
+  animation: odm-pop-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.pop[data-side="bottom"] {
+  --odm-from-y: -4px;
+}
+.pop[data-side="top"] {
+  --odm-from-y: 4px;
+}
+.pop[data-side="right"] {
+  --odm-from-x: -4px;
+}
+.pop[data-side="left"] {
+  --odm-from-x: 4px;
+}
+.pop[data-state="closed"] {
+  animation: odm-pop-out 90ms ease-in forwards;
+}
+.dialog-fade[data-state="open"] {
+  animation: odm-fade-in 160ms ease-out;
+}
+.dialog-fade[data-state="closed"] {
+  animation: odm-fade-out 120ms ease-in forwards;
+}
+.dialog-pop[data-state="open"] {
+  animation: odm-pop-in 180ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.dialog-pop[data-state="closed"] {
+  animation: odm-pop-out 120ms ease-in forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pop,
+  .pop[data-state="closed"],
+  .dialog-fade[data-state],
+  .dialog-pop[data-state] {
+    animation: none;
+  }
+}

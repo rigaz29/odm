@@ -5,7 +5,7 @@ in Go. ODM opens several connections per file, resumes at the exact byte where
 a transfer stopped, and organizes downloads into categories and scheduled
 queues. It runs as a desktop app, or headless with a JSON API.
 
-![ODM main window with a download in progress](docs/screenshot.png)
+![ODM on Windows: the main window with downloads running, and one download's progress window](docs/screenshot.png)
 
 ## Features
 
@@ -38,8 +38,9 @@ queues. It runs as a desktop app, or headless with a JSON API.
   already stored. The remainder is fetched on one connection.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
-  window. The global limit is switched off and on from the Downloads menu
-  or the tray, and keeps its value while off.
+  window. The global limit is switched off and on from the status bar (the
+  Downloads menu on Linux and macOS) or the tray, and keeps its value while
+  off.
 - HTTP and SOCKS5 proxies, or the system proxy (the default).
 
 **Organizing**
@@ -66,14 +67,27 @@ queues. It runs as a desktop app, or headless with a JSON API.
   first, or follows a setting for the browser, clipboard and grabber.
 
 **Desktop**
-- A main window with a toolbar, category and queue tree, sortable list and
-  multi-select.
+- A main window with categories and queues at the side, a card for each
+  running download (speed over the last minute, its connections, time
+  left), and a list that sorts, resizes and hides its columns, selects
+  several rows, and stays quick with thousands of downloads. The search box
+  (Ctrl+K) filters the list, takes a pasted address, and runs any command
+  by name.
 - A progress window per download that shows each connection, and a dialog when
   a download completes.
-- Runs from the system tray. ODM can launch at login, and starting it again
-  brings the running window forward.
+- Light and dark themes that follow Windows or are chosen in Options, in
+  English or Indonesian.
+- Narrator and other screen readers read every part of the windows, and
+  the keyboard reaches all of it (in the list: the arrows to move and
+  select, the Menu key for a download's menu).
+- Runs from the system tray, with Windows notifications when a download
+  finishes or fails. ODM can launch at login, and starting it again brings
+  the running window forward.
 - Checks GitHub Releases for new versions. It only notifies; it never updates
   itself.
+- On Windows the windows are a page drawn by Microsoft Edge WebView2
+  ([Wails](https://wails.io)); on Linux and macOS they are built with
+  [Fyne](https://fyne.io), with the same features.
 
 **Integration**
 - A browser extension (Chrome, Edge, Firefox) hands downloads to ODM through
@@ -135,28 +149,42 @@ Once a version is tagged, prebuilt archives are attached to
 | macOS (Intel) | `odm-darwin-amd64.tar.gz` |
 
 Unpack the archive and run `ODM.exe` (Windows) or `./odm` (Linux, macOS).
+
+On Windows ODM needs the Microsoft Edge WebView2 Runtime. It comes with
+Windows 11 and with Windows 10 kept up to date; where it is missing, ODM
+says so and offers Microsoft's
+[download page](https://developer.microsoft.com/microsoft-edge/webview2/).
 Settings and download state are stored in `<config>/odm/`. `<config>` is
 `%AppData%` on Windows, `~/Library/Application Support` on macOS and `~/.config`
 on Linux.
 
 ### Build from source
 
-ODM needs Go 1.23 or later. The engine uses only the standard library. The
-desktop UI is built with [Fyne](https://fyne.io) behind the `fyne` build tag,
-so it needs cgo.
+ODM needs Go 1.25 or later. The engine uses only the standard library. The
+Windows desktop UI (`internal/gui`, the `gui` build tag) is a React page
+embedded in the exe, so its page is built first with Node.js 22 or later;
+it needs no cgo. The Linux and macOS desktop UI is built with Fyne behind
+the `fyne` build tag, so it needs cgo.
 
 | Target | Command | Requirements |
 | ------ | ------- | ------------ |
-| Windows | `./scripts/build.sh windows` | mingw-w64 (`CC_WINDOWS`, default `x86_64-w64-mingw32-gcc`) |
+| Windows | `./scripts/build.sh windows` | Node.js and npm |
+| Windows, Fyne UI | `./scripts/build.sh windows-fyne` | mingw-w64 (`CC_WINDOWS`, default `x86_64-w64-mingw32-gcc`) |
 | Linux | `./scripts/build.sh linux` | `libgl1-mesa-dev xorg-dev libxkbcommon-dev` |
 | macOS | `./scripts/build.sh darwin` (or `darwin-intel`) | Xcode command line tools |
 | Headless | `./scripts/build.sh cli` | none |
 
 ```bash
-go test ./...                          # engine tests, no UI needed
-go test -tags fyne ./internal/ui       # UI tests (cgo)
-go build -tags fyne -o odm ./cmd/odm   # desktop build for the current OS
+go test ./...                                    # engine tests, no UI needed
+(cd internal/gui/frontend && npm ci && npm test && npm run build)  # the Windows UI's page
+go test -tags gui ./internal/gui ./internal/i18n # the Windows UI's Go side
+go build -tags gui -ldflags -H=windowsgui -o ODM.exe ./cmd/odm  # Windows desktop build
+go test -tags fyne ./internal/ui                 # Fyne UI tests (cgo)
+go build -tags fyne -o odm ./cmd/odm             # Fyne desktop build for the current OS
 ```
+
+`scripts/winres.sh` rebuilds the Windows resources linked into every
+Windows build (manifest, icon, name) when one of them changes.
 
 ## Usage
 
@@ -180,10 +208,14 @@ ODM.exe -add https://host/big.iso -no-ui # fetch one URL in the terminal, then e
 select several downloads, <kbd>Ctrl</kbd>+<kbd>A</kbd> to select all,
 <kbd>Del</kbd> to remove, <kbd>Enter</kbd> to open the progress window, arrow
 keys to move, <kbd>Ctrl</kbd>+<kbd>N</kbd> to add a URL, and
-<kbd>Ctrl</kbd>+<kbd>F</kbd> to search. The search box next to the toolbar
-keeps the downloads whose file name, address or description contains every
-word typed; <kbd>Esc</kbd> clears it. On macOS, use <kbd>Cmd</kbd> instead of
-<kbd>Ctrl</kbd>.
+<kbd>Ctrl</kbd>+<kbd>F</kbd> to search. The search box keeps the downloads
+whose file name, address or description contains every word typed;
+<kbd>Esc</kbd> clears it. On Windows, also <kbd>Ctrl</kbd>+<kbd>K</kbd> for the
+search box, which runs commands by name as well, <kbd>Space</kbd> to pause or
+resume, <kbd>Shift</kbd>+<kbd>Del</kbd> to remove and delete the files,
+<kbd>Ctrl</kbd>+<kbd>C</kbd> to copy the addresses, and the Menu key or
+<kbd>Shift</kbd>+<kbd>F10</kbd> for the selected download's menu. On macOS,
+use <kbd>Cmd</kbd> instead of <kbd>Ctrl</kbd>.
 
 **Notifications.** A system notification says when a download finishes or
 fails, unless its complete dialog was just shown while ODM is in front. On
@@ -294,7 +326,9 @@ download-manager techniques. ODM implements them in its own code.
 ```
 cmd/odm             entry point: desktop app, native-messaging relay, headless mode
 internal/engine     probe, chunk planner, transfers, queues, scheduler, settings, state
-internal/ui         desktop UI (Fyne): main window, progress, Scheduler, Options
+internal/gui        desktop UI on Windows (Wails, WebView2): the service, tray and windows; the React page in frontend/
+internal/ui         desktop UI on Linux and macOS (Fyne): main window, progress, Scheduler, Options
+internal/i18n       the translations both desktop UIs share
 internal/server     JSON + SSE API, token guard, embedded web UI
 internal/ipc        Unix-socket control channel and single-instance lock
 internal/native     native-messaging framing and browser-launch detection

@@ -95,13 +95,17 @@ internal/engine, server, native, tools …    tidak berubah
   - riwayat kecepatan per unduhan dan total, sebagai cincin sampel tiap
     detik;
   - lama rekaman siaran live.
-- **Title bar**: jendela `Frameless`, ditambah `NonClientRegionSupport` dan
-  properti CSS `--wails-non-client-region` (`caption`, `minimize`,
-  `maximize`, `close`). Dengan begitu menyeret jendela, klik ganda untuk
-  maximize, dan snap layout Windows 11 tetap dikerjakan Windows sendiri.
-  Di Wails beta.30 wilayah itu baru dibaca jika WebView2 di-host lewat
-  composition (`WebView2CompositionHosting`). Tanpa itu halaman berada di
-  jendela anak, dan bingkai jendela tidak pernah menerima kursor.
+- **Title bar**: jendela `Frameless`. Area kosongnya `--wails-draggable`,
+  sehingga jendela dipindah oleh Windows sendiri (diseret ke tepi layar
+  tetap snap), dan klik ganda me-maximize lewat runtime. WebView2 di-host
+  di jendela anak, bukan lewat composition (`WebView2CompositionHosting`).
+  Composition sempat dipakai di Tahap 1 agar Windows menangani bagian
+  title bar lewat `--wails-non-client-region`, termasuk snap layout di
+  tombol Maximize. Namun di Tahap 5 ternyata dalam mode itu UI Automation
+  halaman hanya sampai ke Windows lewat jendela induk, dan Wails beta.30
+  tidak meneruskannya, sehingga Narrator tidak bisa membaca jendela utama.
+  Pembaca layar diutamakan; snap layout di tombol Maximize (dan Win+Z)
+  dilepas.
 - **Terjemahan**: satu katalog `id.json` di `internal/i18n`, dipakai Fyne
   dan halaman. Tes memastikan setiap teks `t("…")` di halaman punya
   terjemahan.
@@ -114,15 +118,20 @@ internal/engine, server, native, tools …    tidak berubah
 
 - Kebutuhan: Go ≥ 1.25, Node LTS + npm, dan CLI `wails3` (untuk membuat
   binding).
-- Build: `bash scripts/build.sh gui`. Isinya `npm ci`, lalu `npm run build`
-  di `internal/gui/frontend`, lalu `go build -tags gui` tanpa CGO, dan
-  hasilnya `dist/ODM-Next.exe`.
+- Build: `bash scripts/build.sh windows`. Isinya `npm ci`, lalu `npm run
+  build` di `internal/gui/frontend`, lalu `go build -tags gui` tanpa CGO,
+  dan hasilnya `dist/ODM.exe` (sejak Tahap 6; sebelumnya pratinjau
+  `ODM-Next.exe` lewat target `gui`). UI Fyne untuk Windows tetap bisa
+  dibangun dengan `bash scripts/build.sh windows-fyne`.
 - Binding hasil generate di-commit; `frontend/dist` tidak. Build dan tes
   tanpa tag tetap jalan tanpa Node.
 - Selama transisi `ODM.exe` (Fyne) dan `ODM-Next.exe` memakai data yang
-  sama, tetapi hanya satu yang bisa berjalan sekaligus.
-- CI: job baru menjalankan `npm ci`, Vitest, `vite build`, lalu `go vet` dan
-  `go test` dengan `-tags gui`.
+  sama, tetapi hanya satu yang bisa berjalan sekaligus. Pengaturan ikut
+  pindah, termasuk tema dan bahasa dari preferensi Fyne.
+- CI: job "Windows (desktop UI)" menjalankan `npm ci`, Vitest, `vite
+  build`, lalu `go vet` dan `go test` dengan `-tags gui`, dan menghasilkan
+  `ODM.exe`. Rilis membangun `ODM.exe` Windows dengan cara yang sama; Linux
+  dan macOS tetap Fyne. Build Fyne Windows tetap diuji di CI.
 
 ## Pengujian
 
@@ -144,7 +153,7 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Cabang `ui-next` dari `ui-fluent`, dengan `internal/fluent` diganti nama
   menjadi `internal/gui` dan tag menjadi `gui`.
 - Tailwind 4, komponen shadcn/ui yang dibutuhkan, dan token tema A+D.
-- Title bar buatan sendiri dengan wilayah non-client.
+- Title bar buatan sendiri (wilayah non-client, dilepas di Tahap 5).
 - Katalog terjemahan bersama `internal/i18n`.
 - Service ditambah data koneksi, riwayat kecepatan, dan lama rekaman.
 - Jendela utama pertama sesuai mockup dengan data engine sungguhan.
@@ -177,21 +186,27 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Terjemahan lengkap, uji 1.000+ unduhan, dan memori.
 
 **Tahap 6: alih.**
-- UI baru menjadi `ODM.exe` bawaan di Windows.
-- Fyne tetap dipakai untuk macOS/Linux sampai dievaluasi.
+- UI baru menjadi `ODM.exe` bawaan di Windows: `scripts/build.sh windows`,
+  CI, dan rilis memakai tag `gui`, tanpa MinGW.
+- Fyne tetap dipakai untuk macOS/Linux sampai dievaluasi; untuk Windows
+  masih bisa dibangun (`windows-fyne`).
+- Pemeriksaan WebView2 Runtime sebelum UI dibuka.
+- README (fitur, build, tangkapan layar) dan CHANGELOG diperbarui.
 
 ## Risiko dan penanganannya
 
 - **Wails v3 masih beta.** Versinya dipatok dan lapisan `internal/gui`
   dibuat tipis.
-- **Title bar buatan sendiri.** Seret jendela, klik ganda, dan snap layout
-  diserahkan ke Windows lewat wilayah non-client. Sudah dicek di Tahap 1
-  dan berfungsi dengan composition hosting. Untuk WebView2 tanpa wilayah
-  non-client, halaman memakai `--wails-draggable` dan memanggil jendela
-  sendiri.
+- **Title bar buatan sendiri.** Seret jendela memakai `--wails-draggable`
+  (gerak jendela bawaan Windows), klik ganda dan tombol memanggil jendela.
+  Snap layout di tombol Maximize tidak tersedia tanpa composition hosting;
+  bisa dikembalikan bila Wails meneruskan UI Automation dalam mode itu.
 - **Konsistensi desain shadcn/ui.** Token warna, jarak, dan set komponen
   dikunci di Tahap 1; layar baru hanya memakai komponen itu.
-- **WebView2 tidak ada** di sebagian Windows 10 lama. Wails bisa menawarkan
-  pemasangnya; hal ini dicatat di README.
+- **WebView2 tidak ada** di sebagian Windows 10 lama. Wails beta.30 tidak
+  menawarkan pemasangnya; jendelanya hanya kosong. Karena itu ODM memeriksa
+  runtime di registry sebelum membuka UI, lalu menjelaskan apa yang kurang
+  dan menawarkan halaman unduhan Microsoft (`webview2_windows.go`). Hal ini
+  juga dicatat di README.
 - **Dua UI dirawat selama transisi.** Logika bersama ada di service dan
   `internal/i18n`. Setelah Tahap 2, UI Fyne hanya menerima perbaikan bug.

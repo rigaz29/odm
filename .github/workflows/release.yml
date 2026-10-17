@@ -55,9 +55,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
-      - name: Install MinGW (Windows)
+      # Windows ships the desktop UI of internal/gui (docs/GUI.md): its page
+      # is built first and embedded in the exe.
+      - uses: actions/setup-node@v4
         if: runner.os == 'Windows'
-        run: choco install mingw --no-progress -y
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: internal/gui/frontend/package-lock.json
+
+      - name: Build the page (Windows)
+        if: runner.os == 'Windows'
+        working-directory: internal/gui/frontend
+        shell: bash
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
 
       - name: Build
         shell: bash
@@ -65,10 +78,12 @@ jobs:
           VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X odm/internal/version.Version=${VERSION}"
           if [ "${{ matrix.goos }}" = "windows" ]; then
-            CGO_ENABLED=1 GOOS=windows GOARCH=${{ matrix.goarch }} \
-              go build -tags fyne -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
+            # The desktop UI of internal/gui: no cgo.
+            CGO_ENABLED=0 GOOS=windows GOARCH=${{ matrix.goarch }} \
+              go build -tags gui -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
               -o "dist/${{ matrix.name }}" ./cmd/odm
           else
+            # Linux and macOS: the Fyne UI, with cgo.
             if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
               export CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
             fi

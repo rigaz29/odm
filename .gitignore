@@ -6,6 +6,6 @@
 RE-*.md
 .omc/
 
-# The Fluent UI page (internal/fluent/frontend): npm packages and the build
+# The new UI's page (internal/gui/frontend): npm packages and the build
 node_modules/
-internal/fluent/frontend/dist/
+internal/gui/frontend/dist/

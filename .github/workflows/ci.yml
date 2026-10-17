@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, ui-next]
   pull_request:
 
 jobs:
@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.23"
+          go-version: "1.25"
           cache: true
       - run: go vet ./...
       - name: Extension tests
@@ -22,6 +22,42 @@ jobs:
       - name: Build CLI
         run: CGO_ENABLED=0 go build -o /tmp/odm ./cmd/odm
 
+  gui:
+    name: Windows (desktop UI)
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: internal/gui/frontend/package-lock.json
+      - name: Page tests and build
+        working-directory: internal/gui/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm test
+          npm run build
+      - run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
+      - run: go test -tags gui ./internal/gui/ ./internal/i18n/
+      - name: Build ODM.exe
+        run: |
+          CGO_ENABLED=0 go build -tags gui -trimpath -ldflags "-s -w -H=windowsgui" \
+            -o dist/ODM.exe ./cmd/odm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ODM-windows-amd64.exe
+          path: dist/ODM.exe
+
+  # The Fyne UI: what Linux and macOS ship, and on Windows a build kept
+  # working (./scripts/build.sh windows-fyne).
   desktop:
     name: Desktop (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
@@ -36,7 +72,7 @@ jobs:
           - os: macos-latest
             artifact: odm-darwin-arm64
           - os: windows-latest
-            artifact: ODM-windows-amd64.exe
+            artifact: ODM-fyne-windows-amd64.exe
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5

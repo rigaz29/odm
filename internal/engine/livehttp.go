@@ -202,7 +202,7 @@ func (d *Download) copyHTTPLive(ctx context.Context, address, path string) (int6
 		return 0, 0, false, err
 	}
 	d.decorate(req)
-	resp, err := d.authorizer().do(req, d.streamClient().Do)
+	resp, err := d.authorizer().do(req, d.guardedClient().Do)
 	if err != nil {
 		return 0, 0, false, err
 	}

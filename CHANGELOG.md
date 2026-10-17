@@ -6,6 +6,13 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- When the Fyne window stops responding for 5 seconds, ODM writes the
+  stacks of all its goroutines to `odm-hang-<time>.txt` in the config
+  folder, once per hang, for reports of freezes that cannot be
+  reproduced. (Ported from upstream f1d1287a.)
+
 ### Changed
 
 - The Fyne main window's title shows the version ("Ochi Download Manager

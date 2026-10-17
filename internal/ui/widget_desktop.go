@@ -28,6 +28,7 @@ type toolButton struct {
 	text     string
 	onTap    func()
 	hover    bool
+	pressed  bool // the mouse button is down on it
 	disabled bool
 }
 
@@ -39,7 +40,7 @@ func (b *toolButton) setEnabled(on bool) {
 	}
 	b.disabled = !on
 	if b.disabled {
-		b.hover = false
+		b.hover, b.pressed = false, false
 	}
 	b.Refresh()
 }
@@ -67,7 +68,23 @@ func (b *toolButton) MouseIn(*desktop.MouseEvent) {
 
 func (b *toolButton) MouseMoved(*desktop.MouseEvent) {}
 
-func (b *toolButton) MouseOut() { b.hover = false; b.Refresh() }
+func (b *toolButton) MouseOut() { b.hover, b.pressed = false, false; b.Refresh() }
+
+// MouseDown and MouseUp show the button pushed in while it is held, like a
+// native toolbar; the action runs on Tapped (released over the button).
+func (b *toolButton) MouseDown(e *desktop.MouseEvent) {
+	if !b.disabled && e.Button == desktop.MouseButtonPrimary {
+		b.pressed = true
+		b.Refresh()
+	}
+}
+
+func (b *toolButton) MouseUp(*desktop.MouseEvent) {
+	if b.pressed {
+		b.pressed = false
+		b.Refresh()
+	}
+}
 
 type toolButtonRenderer struct {
 	btn     *toolButton
@@ -125,9 +142,14 @@ func (b *toolButton) CreateRenderer() fyne.WidgetRenderer {
 func (r *toolButtonRenderer) Layout(size fyne.Size) {
 	r.bg.Resize(size)
 	const pad, iconSize = float32(4), float32(30)
-	r.icon.Move(fyne.NewPos(size.Width/2-iconSize/2, pad))
-	r.icon.Resize(fyne.NewSize(iconSize, iconSize))
-	top := pad + iconSize + 3
+	// Held down: the icon shrinks a little and the content sinks a pixel.
+	icon, sink := iconSize, float32(0)
+	if r.btn.pressed {
+		icon, sink = iconSize-2, 1
+	}
+	r.icon.Move(fyne.NewPos(size.Width/2-icon/2, pad+(iconSize-icon)/2+sink))
+	r.icon.Resize(fyne.NewSize(icon, icon))
+	top := pad + iconSize + 3 + sink
 	lh := r.lines[0].MinSize().Height
 	for i, l := range r.lines {
 		l.Move(fyne.NewPos(0, top+float32(i)*lh))
@@ -151,6 +173,8 @@ func (r *toolButtonRenderer) Refresh() {
 	case r.btn.disabled:
 		r.bg.FillColor = color.Transparent
 		fg = theme.DisabledColor()
+	case r.btn.pressed:
+		r.bg.FillColor = theme.PressedColor()
 	case r.btn.hover:
 		r.bg.FillColor = theme.HoverColor()
 	default:
@@ -169,6 +193,7 @@ func (r *toolButtonRenderer) Refresh() {
 		l.Color = fg
 		l.Refresh()
 	}
+	r.Layout(r.btn.Size()) // a press moves the icon and the label
 	r.bg.Refresh()
 	r.icon.Refresh()
 }
@@ -757,6 +782,7 @@ func (r *frameRenderer) Destroy() {}
 
 var (
 	_ desktop.Hoverable      = (*toolButton)(nil)
+	_ desktop.Mouseable      = (*toolButton)(nil)
 	_ desktop.Hoverable      = (*headerLabel)(nil)
 	_ fyne.SecondaryTappable = (*headerLabel)(nil)
 	_ desktop.Cursorable     = (*headerGrips)(nil)

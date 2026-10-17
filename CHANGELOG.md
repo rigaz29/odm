@@ -39,6 +39,9 @@ All notable changes to ODM are documented here. The format is based on
   theme's spacing. (Ported from upstream 383e2666.)
 - The Fyne download list highlights the whole row under the pointer, not
   just the one cell under it. (Ported from upstream 06648f0d.)
+- Fyne toolbar buttons look pushed in while held: a darker background,
+  the icon a little smaller and a pixel lower. (Ported from upstream
+  0f6ae194.)
 
 ## [0.5.0] - 2026-10-17
 

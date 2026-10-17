@@ -9,6 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/theme"
 
@@ -194,5 +195,30 @@ func TestListHoverWholeRow(t *testing.T) {
 	}
 	if got, want := pixel(far, rowY(2)), before; got != want {
 		t.Fatalf("a row not under the pointer is highlighted: %v vs %v", got, want)
+	}
+}
+
+// A toolbar button lights up under the pointer and looks pushed in while
+// it is held.
+func TestToolbarHoverAndPress(t *testing.T) {
+	a := newListApp(t, "a.zip")
+	btn := a.tools["options"]
+	pos := a.fyneApp.Driver().AbsolutePositionForObject(btn).Add(fyne.NewPos(btn.Size().Width/2, 10))
+	test.MoveMouse(a.win.Canvas(), pos)
+	if !btn.hover {
+		t.Fatal("toolbar button not hovered by the pointer")
+	}
+	btn.MouseDown(&desktop.MouseEvent{Button: desktop.MouseButtonPrimary})
+	if !btn.pressed {
+		t.Fatal("no pressed state")
+	}
+	btn.MouseUp(&desktop.MouseEvent{Button: desktop.MouseButtonPrimary})
+	if btn.pressed {
+		t.Fatal("pressed state stuck after release")
+	}
+	a.tools["delete"].setEnabled(false)
+	a.tools["delete"].MouseDown(&desktop.MouseEvent{Button: desktop.MouseButtonPrimary})
+	if a.tools["delete"].pressed {
+		t.Fatal("a disabled button looks pressed")
 	}
 }

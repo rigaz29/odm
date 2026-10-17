@@ -398,7 +398,14 @@ bawaan sampai UI baru setara fiturnya.
       - README (fitur desktop, WebView2, build dengan Node dan Go 1.25,
         pintasan, struktur kode, tangkapan layar UI baru) dan CHANGELOG.
 
-Nanti: halaman yang sama untuk web UI `-serve`, Wails untuk macOS/Linux.
+- [ ] **Tahap 7** Linux dan macOS, penyesuaian minimal: UI baru bisa jalan
+      di sana tanpa dipoles (notifikasi "kalau bisa", target build
+      `linux-gui`/`darwin-gui` dan artefak pratinjau CI, bingkai jendela
+      sistem, clipboard lewat Wails). Fyne tetap jadi rilis sampai UI baru
+      dicoba. Rencana dan keputusan yang masih terbuka: `docs/GUI.md`,
+      "Rencana Linux dan macOS". **S**
+
+Nanti: halaman yang sama untuk web UI `-serve`.
 
 ## Catatan kerja
 

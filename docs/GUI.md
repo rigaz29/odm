@@ -193,6 +193,90 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Pemeriksaan WebView2 Runtime sebelum UI dibuka.
 - README (fitur, build, tangkapan layar) dan CHANGELOG diperbarui.
 
+**Tahap 7: Linux dan macOS, penyesuaian minimal.** Belum dimulai; lihat
+[rencananya](#rencana-linux-dan-macos-penyesuaian-minimal).
+
+## Rencana Linux dan macOS (penyesuaian minimal)
+
+Status: **rencana, belum dikerjakan** (dicatat 2026-10-17). Tujuannya UI
+baru *bisa jalan* di Linux dan macOS dengan penyesuaian sekecil mungkin,
+ibarat mesin yang dipindah ke mobil lain: bautnya disesuaikan, bodinya
+tidak dipoles. Kerapian per platform menyusul bila diperlukan.
+
+**Temuan** (Wails v3.0.0-beta.30, sudah dicek di kodenya):
+- Linux memakai GTK3 + WebKitGTK 4.1 (GTK4 + WebKitGTK 6.0 lewat tag
+  build). Tray dan notifikasi lewat DBus.
+- macOS memakai WKWebView. Bila aplikasi tidak memasang menu, Wails
+  memasang menu bawaannya (Edit dengan ⌘C/⌘V, Quit dengan ⌘Q).
+- Service notifikasi gagal start di macOS bila ODM bukan `.app` (butuh
+  bundle identifier), dan di Linux bila tidak ada session DBus. Bila
+  sebuah service gagal start, Wails membatalkan start seluruh aplikasi.
+- Pemantau clipboard di luar Windows (`internal/clipmon/clipmon_other.go`)
+  selama ini dipoll lewat Fyne; tanpa Fyne ia diam.
+- Di luar Windows, `systemDark()` selalu false, `workArea()` tidak tahu
+  ukuran layar, dan suara selesai/gagal tidak ada (`*_other.go` di
+  `internal/gui`). Semuanya aman, hanya kurang rapi.
+- yt-dlp diunduh otomatis juga untuk macOS dan Linux; ffmpeg hanya untuk
+  Windows. Ini urusan engine, sama untuk kedua UI.
+
+**Wajib**, supaya bisa start:
+1. Notifikasi "kalau bisa": service notifikasi dibungkus supaya gagal start
+   tidak membatalkan ODM, dan `desk.notify` diam bila notifikasi tidak
+   tersedia (`app.go`, `tray.go`). Binding halaman untuk service itu
+   dibuat ulang bila namanya berubah.
+2. Cara build: `scripts/build.sh` mendapat `linux-gui` dan `darwin-gui`
+   (halaman dulu, lalu `go build -tags gui` dengan cgo). Kebutuhan build:
+   Linux `libgtk-3-dev libwebkit2gtk-4.1-dev`, macOS Xcode command line
+   tools (sudah dipakai untuk Fyne). CI mendapat job yang menghasilkan
+   artefak pratinjau. Pengguna Linux butuh `libwebkit2gtk-4.1`, yang ada di
+   Ubuntu 22.04+ dan Fedora versi desktop.
+
+**Disarankan**, juga kecil:
+3. Bingkai jendela bawaan sistem di Linux/macOS (`Frameless` hanya di
+   Windows); halaman menyembunyikan tombol jendelanya di sana, jadi perlu
+   tahu platformnya (misalnya lewat `Appearance`). Hasilnya dua baris di
+   atas, bingkai sistem dan bar pencarian: tidak dipoles, tetapi seret,
+   ubah ukuran, dan tutup jendela pasti jalan.
+4. Pemantau clipboard lewat polling clipboard Wails (sekitar 20 baris), atau
+   dibiarkan mati di Linux/macOS dan dicatat di README.
+
+**Dibiarkan** (tetap jalan, hanya kurang rapi):
+- label "Ctrl" dan "Same as Windows", suara, ukuran jendela ke layar, dan
+  kilatan putih saat jendela dibuka;
+- macOS tanpa `.app`, ikon `.icns`, maupun codesign/notarisasi: dibuka
+  dengan klik kanan → Open seperti binary Fyne sekarang, dan tanpa
+  notifikasi;
+- Linux tanpa berkas `.desktop` atau paket; tray di GNOME butuh ekstensi
+  AppIndicator, sama seperti Fyne.
+
+**Rilis:** Fyne tetap menjadi rilis Linux/macOS. UI baru keluar sebagai
+artefak pratinjau CI (misalnya `odm-next-linux-amd64` dan
+`odm-next-darwin-arm64`). Setelah dicoba dan cocok, rilisnya dialihkan
+seperti Tahap 6.
+
+**Pengujian:**
+- Linux: WSL Ubuntu di komputer pengembang, lewat WSLg. Perlu memasang Go,
+  `libgtk-3-dev`, dan `libwebkit2gtk-4.1-dev` di WSL; minta izin pemiliknya
+  dulu. Yang diuji: start, jendela utama, menambah unduhan, tray,
+  notifikasi, dan Opsi.
+- macOS: CI membangun dan menjalankan tes; uji jalan dilakukan di Mac
+  pemiliknya.
+
+**Keputusan yang masih terbuka:**
+- butir 3 dan 4 dipakai atau tidak;
+- izin memasang paket build di WSL Ubuntu;
+- rilis Linux/macOS tetap Fyne dulu dengan UI baru sebagai pratinjau, atau
+  langsung diganti.
+
+**Perkiraan:** setengah tahap UI: sekitar 3–5 berkas Go, sedikit di halaman,
+`build.sh`, dan `ci.yml`.
+
+**Kelanjutan**, di luar rencana minimal: `.app` dengan ikon dan
+codesign/notarisasi (syarat notifikasi macOS; Apple Developer ID
+berbayar), menu aplikasi sendiri, title bar *inset* di macOS, label ⌘,
+bingkai Linux yang rapi, `.desktop`/AppImage, suara, tema awal jendela,
+dan ukuran jendela ke layar.
+
 ## Risiko dan penanganannya
 
 - **Wails v3 masih beta.** Versinya dipatok dan lapisan `internal/gui`

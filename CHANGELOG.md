@@ -14,6 +14,14 @@ All notable changes to ODM are documented here. The format is based on
   Paste.
 - A long file name no longer runs out of the box of the question before
   removing a download (or of any other dialog): it wraps inside it.
+- A TikTok live recording whose connection dropped and was opened again
+  no longer comes out hours long, mostly still picture: a few minutes
+  showed as four hours. Each part's timestamps run on from the
+  broadcast's start, and ffmpeg's join took that for the length of the
+  part before; the parts are now copied one by one before they are
+  joined. Once a broadcast is over, TikTok's server keeps sending its
+  last seconds on every connection: those repeats are dropped, so the
+  recording ends instead of adding the same seconds again and again.
 
 ### Added
 

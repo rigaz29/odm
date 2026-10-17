@@ -3,10 +3,13 @@ package ffmpeg
 import (
 	"context"
 	"errors"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"runtime"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -175,5 +178,54 @@ func TestRealFFmpeg(t *testing.T) {
 		if s := string(probe); !strings.Contains(s, "Video: h264") || !strings.Contains(s, "Audio: aac") {
 			t.Fatalf("merged file: %v\n%s", err, s)
 		}
+	}
+}
+
+// Parts of a live FLV whose timestamps run on from the broadcast's start
+// (TikTok's), written as a live server sends them (no duration in the
+// file), are joined back to back: joined as they came, each was moved on
+// by its first timestamp, and three seconds of picture lasted over an hour.
+func TestRealConcatLiveParts(t *testing.T) {
+	bin, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		t.Skip("no ffmpeg on PATH")
+	}
+	dir := t.TempDir()
+	var parts []string
+	for i, at := range []string{"1500", "3100", "3100"} {
+		p := filepath.Join(dir, fmt.Sprintf("p%d.flv", i+1))
+		f, err := os.Create(p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		cmd := exec.Command(bin, "-hide_banner", "-loglevel", "error",
+			"-f", "lavfi", "-i", "testsrc=duration=1:size=160x120:rate=10",
+			"-f", "lavfi", "-i", "sine=duration=1",
+			"-c:v", "libx264", "-g", "10", "-c:a", "aac", "-output_ts_offset", at, "-f", "flv", "pipe:1")
+		cmd.Stdout = f // a pipe: no duration written, as from a live server
+		err = cmd.Run()
+		f.Close()
+		if err != nil {
+			t.Skipf("cannot generate test input: %v", err)
+		}
+		parts = append(parts, p)
+	}
+	out := filepath.Join(dir, "joined.mp4")
+	if err := Concat(context.Background(), bin, parts, out, "mp4"); err != nil {
+		t.Fatal(err)
+	}
+	probe, _ := exec.Command(bin, "-hide_banner", "-i", out).CombinedOutput()
+	m := regexp.MustCompile(`Duration: (\d+):(\d+):(\d+\.\d+)`).FindStringSubmatch(string(probe))
+	if m == nil {
+		t.Fatalf("no duration in:\n%s", probe)
+	}
+	h, _ := strconv.Atoi(m[1])
+	mins, _ := strconv.Atoi(m[2])
+	secs, _ := strconv.ParseFloat(m[3], 64)
+	if total := float64(h*3600+mins*60) + secs; total < 2.5 || total > 4 {
+		t.Fatalf("three one-second parts last %.1fs", total)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "*.mkv")); len(left) != 0 {
+		t.Fatalf("copies left behind: %v", left)
 	}
 }

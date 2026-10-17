@@ -1,7 +1,9 @@
 package engine
 
 import (
+	"bufio"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -38,6 +40,12 @@ import (
 //     opening it again would record it again, so the recording ends.
 //   - Without ffmpeg the parts cannot be joined: the first becomes the
 //     file as it came, the others are kept next to it.
+//   - Once a broadcast is over, TikTok's server goes on answering with its
+//     last seconds, the same ones on every connection. An FLV part that
+//     brings nothing past what is recorded (isReplay, by the timestamps of
+//     its frames) is dropped and counts as no data, so the recording ends.
+//     Its timestamps run on from the broadcast's start, which is also why
+//     ffmpeg.Concat copies each part on its own before joining them.
 
 // httpLiveExt is the container a part is saved as: what the response's
 // URL ends in, FLV by default (TikTok's).
@@ -111,10 +119,27 @@ func (d *Download) recordHTTPLive(ctx context.Context) error {
 	next := len(parts) + 1
 	address := job.Manifest
 	lastData := time.Now()
+	// recorded is the furthest frame of the last part kept, in the
+	// stream's own clock (an FLV's milliseconds); -1 while not known.
+	recorded := int64(-1)
+	for _, p := range parts {
+		if _, last, ok := flvSpan(p); ok {
+			recorded = last
+		}
+	}
 	var stopErr error
 	for failures := 0; ctx.Err() == nil; {
 		part := filepath.Join(work, "p"+strconv.Itoa(next)+httpLiveExt(address))
 		n, status, whole, err := d.copyHTTPLive(ctx, address, part)
+		if first, last, ok := flvSpan(part); n > 0 && ok {
+			if isReplay(first, last, recorded) {
+				// The server's last seconds again: nothing new came.
+				d.uncount(n)
+				n = 0
+			} else {
+				recorded = last // a clock that started over goes on from here
+			}
+		}
 		if n > 0 {
 			next++
 			lastData, failures = time.Now(), 0
@@ -151,7 +176,7 @@ func (d *Download) recordHTTPLive(ctx context.Context) error {
 	if d.isRemoved() {
 		return errRemoved
 	}
-	parts = d.httpLiveParts()
+	parts = freshParts(d.httpLiveParts())
 	if len(parts) == 0 {
 		if stopErr != nil {
 			return stopErr
@@ -179,6 +204,115 @@ func (d *Download) recordHTTPLive(ctx context.Context) error {
 		d.mu.Unlock()
 	}
 	return nil
+}
+
+// uncount takes a dropped part's n bytes off the recording's size.
+func (d *Download) uncount(n int64) {
+	d.mu.Lock()
+	d.streamDone -= n
+	d.Total = d.streamDone
+	d.mu.Unlock()
+	d.notify(false)
+}
+
+// replayWindow is how far before the furthest frame recorded a part may
+// start and still be the server's last seconds sent again; a part that
+// starts earlier is a broadcast whose clock started over, which is kept.
+const replayWindow = 2 * time.Minute
+
+// isReplay reports whether a part whose frames run from first to last (in
+// the stream's milliseconds) brings nothing past recorded, the furthest
+// frame of the part kept before it (-1: none).
+func isReplay(first, last, recorded int64) bool {
+	return recorded >= 0 && last <= recorded && first >= recorded-replayWindow.Milliseconds()
+}
+
+// freshParts leaves out the parts that only repeat what the parts before
+// them recorded (isReplay), as a recording made before ODM told them apart
+// can have.
+func freshParts(parts []string) []string {
+	recorded := int64(-1)
+	var out []string
+	for _, p := range parts {
+		if first, last, ok := flvSpan(p); ok {
+			if isReplay(first, last, recorded) {
+				continue
+			}
+			recorded = last
+		}
+		out = append(out, p)
+	}
+	return out
+}
+
+// flvSpan reads the timestamps of an FLV file's frames, in milliseconds of
+// the stream's own clock: the first and the furthest. The codecs'
+// configuration (sent first, at 0, by TikTok's server) is no frame and is
+// left out. It reads only the tags' headers, and stops at a cut-off tag.
+// ok is false for a file that is not FLV or has no frames.
+func flvSpan(path string) (first, last int64, ok bool) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, 0, false
+	}
+	defer f.Close()
+	r := bufio.NewReaderSize(f, 64<<10)
+	var header [9]byte
+	if _, err := io.ReadFull(r, header[:]); err != nil || string(header[:3]) != "FLV" {
+		return 0, 0, false
+	}
+	if skip := int(binary.BigEndian.Uint32(header[5:])) - len(header); skip < 0 || skip > 1<<16 {
+		return 0, 0, false
+	} else if _, err := r.Discard(skip); err != nil {
+		return 0, 0, false
+	}
+	first = -1
+	// Each tag follows the size of the one before: 4 bytes, then its type,
+	// data size (3), timestamp (3, then its high byte) and stream ID (3).
+	var tag [15]byte
+	for {
+		if _, err := io.ReadFull(r, tag[:]); err != nil {
+			break
+		}
+		kind := tag[4] & 0x1f
+		size := int(tag[5])<<16 | int(tag[6])<<8 | int(tag[7])
+		ts := int64(tag[11])<<24 | int64(tag[8])<<16 | int64(tag[9])<<8 | int64(tag[10])
+		body, err := r.Peek(min(size, 2))
+		if err != nil {
+			break
+		}
+		if (kind == 8 || kind == 9) && !flvConfig(kind, body) {
+			if first < 0 {
+				first = ts
+			}
+			last = max(last, ts)
+		}
+		if _, err := r.Discard(size); err != nil {
+			break
+		}
+	}
+	return first, last, first >= 0
+}
+
+// flvConfig reports whether an audio (8) or video (9) tag whose body starts
+// with body is a codec's configuration rather than a frame: an AAC, AVC or
+// HEVC (12, as TikTok sends it) sequence header, or an enhanced FLV
+// sequence start.
+func flvConfig(kind byte, body []byte) bool {
+	if len(body) < 2 {
+		return len(body) == 0
+	}
+	switch kind {
+	case 8:
+		return body[0]>>4 == 10 && body[1] == 0
+	case 9:
+		if body[0]&0x80 != 0 {
+			return body[0]&0x0f == 0
+		}
+		codec := body[0] & 0x0f
+		return (codec == 7 || codec == 12) && body[1] == 0
+	}
+	return false
 }
 
 // closeFile closes the target a claim opened: assembly writes it anew.

@@ -135,11 +135,31 @@ func Remux(ctx context.Context, bin, in, out, format string) error {
 // Concat joins the parts (pieces of one recording, each with its own
 // header, as a live stream reconnected) into out, in the container named by
 // format, copying their video and audio. ffmpeg's concat demuxer moves each
-// part's timestamps on after the one before.
+// part's timestamps on by the length of the parts before it.
+//
+// Each part is first copied into Matroska on its own, which starts its
+// timestamps at 0 and records its true length. Joined as they came, the
+// parts of a live FLV (TikTok's) left gaps of hours: their timestamps run
+// on from the broadcast's start, and an FLV without a duration is taken to
+// last until its last timestamp counted from 0, so each part was moved on
+// by the age of the broadcast.
 func Concat(ctx context.Context, bin string, parts []string, out, format string) error {
+	var even []string
+	defer func() {
+		for _, p := range even {
+			os.Remove(p)
+		}
+	}()
+	for i, p := range parts {
+		mkv := fmt.Sprintf("%s.part%d.mkv", out, i+1)
+		if err := Remux(ctx, bin, p, mkv, "matroska"); err != nil {
+			return fmt.Errorf("part %d: %w", i+1, err)
+		}
+		even = append(even, mkv)
+	}
 	list := out + ".list.txt"
 	var b strings.Builder
-	for _, p := range parts {
+	for _, p := range even {
 		// The list's own quoting: a ' is closed, escaped and reopened.
 		b.WriteString("file '" + strings.ReplaceAll(filepath.ToSlash(p), "'", `'\''`) + "'\n")
 	}

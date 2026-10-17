@@ -2,6 +2,7 @@ package engine
 
 import (
 	"context"
+	"encoding/binary"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -118,7 +119,7 @@ func TestHTTPLiveReconnectsAndJoins(t *testing.T) {
 	t.Cleanup(srv.Close)
 	d := newHTTPLiveDownload(t, srv.Client(), srv.URL+"/live.flv", "")
 	d.Start(context.Background())
-	if got := string(readResult(t, d)); got != "joined:[c0][c1][c2][c3][c4][c5]" {
+	if got := string(readResult(t, d)); got != "joined:remuxed:[c0][c1][c2]remuxed:[c3][c4][c5]" {
 		t.Fatalf("recording %q", got)
 	}
 }
@@ -169,7 +170,7 @@ func TestHTTPLiveAsksYtDlpForAFreshAddress(t *testing.T) {
 
 	d := newHTTPLiveDownload(t, srv.Client(), srv.URL+"/old.flv", "https://www.tiktok.com/@someone/live")
 	d.Start(context.Background())
-	if got := string(readResult(t, d)); got != "joined:[c0][c1][c2][c3][c4][c5]" {
+	if got := string(readResult(t, d)); got != "joined:remuxed:[c0][c1]remuxed:[c2][c3]remuxed:[c4][c5]" {
 		t.Fatalf("recording %q", got)
 	}
 	st := d.State()
@@ -218,5 +219,167 @@ func TestProbeSiteLiveKinds(t *testing.T) {
 	t.Setenv("FAKE_LIVE_MANIFEST", "https://fb.example/live.mpd")
 	if c, err = m.ProbeSite(context.Background(), "https://www.facebook.com/x/videos/1"); err != nil || c.Kind != media.KindDASH || c.Manifest != "https://fb.example/live.mpd" {
 		t.Fatalf("dash: %+v %v", c, err)
+	}
+}
+
+type flvTag struct {
+	kind byte
+	ts   int64
+	body []byte
+}
+
+// flvBytes is an FLV file of tags.
+func flvBytes(tags ...flvTag) []byte {
+	b := []byte{'F', 'L', 'V', 1, 5, 0, 0, 0, 9}
+	prev := uint32(0)
+	for _, t := range tags {
+		b = binary.BigEndian.AppendUint32(b, prev)
+		n := len(t.body)
+		b = append(b, t.kind, byte(n>>16), byte(n>>8), byte(n), byte(t.ts>>16), byte(t.ts>>8), byte(t.ts), byte(t.ts>>24), 0, 0, 0)
+		b = append(b, t.body...)
+		prev = uint32(11 + n)
+	}
+	return binary.BigEndian.AppendUint32(b, prev)
+}
+
+// flvFrames is an FLV as TikTok's server sends one: its metadata and the
+// codecs' configuration (HEVC, AAC) at 0, then a video and an audio frame
+// every 40 ms from from to to, in the broadcast's milliseconds.
+func flvFrames(from, to int64) []byte {
+	tags := []flvTag{{18, 0, []byte("onMetaData")}, {9, 0, []byte{0x1c, 0, 0}}, {8, 0, []byte{0xaf, 0, 0x12}}}
+	for ts := from; ts <= to; ts += 40 {
+		tags = append(tags, flvTag{9, ts, []byte{0x2c, 1, 0, 0, 0}}, flvTag{8, ts, []byte{0xaf, 1, 0x21}})
+	}
+	return flvBytes(tags...)
+}
+
+func TestFLVSpan(t *testing.T) {
+	dir := t.TempDir()
+	write := func(name string, data []byte) string {
+		p := filepath.Join(dir, name)
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	data := flvFrames(1500000, 1500400)
+	// A cut-off tag at the end, as a part being written has.
+	if first, last, ok := flvSpan(write("p.flv", data[:len(data)-6])); !ok || first != 1500000 || last != 1500400 {
+		t.Fatalf("span %d..%d %v", first, last, ok)
+	}
+	// Timestamps past 2^24 ms (4.6 hours) use the extended byte.
+	if first, last, ok := flvSpan(write("long.flv", flvFrames(20000000, 20000040))); !ok || first != 20000000 || last != 20000040 {
+		t.Fatalf("long span %d..%d %v", first, last, ok)
+	}
+	// An enhanced FLV's sequence start is configuration too.
+	if first, _, ok := flvSpan(write("enh.flv", flvBytes(flvTag{9, 0, []byte{0x90, 'h', 'v', 'c', '1'}}, flvTag{9, 700, []byte{0x91, 'h', 'v', 'c', '1'}}))); !ok || first != 700 {
+		t.Fatalf("enhanced first %d %v", first, ok)
+	}
+	if _, _, ok := flvSpan(write("config.flv", flvBytes(flvTag{9, 0, []byte{0x1c, 0}}))); ok {
+		t.Fatal("configuration alone counted as frames")
+	}
+	if _, _, ok := flvSpan(write("c.flv", []byte("[c0][c1]"))); ok {
+		t.Fatal("not an FLV, but a span")
+	}
+}
+
+func TestIsReplay(t *testing.T) {
+	cases := []struct {
+		first, last, recorded int64
+		want                  bool
+	}{
+		{1000, 2000, -1, false},         // the first part
+		{1000, 2000, 2000, true},        // the same seconds again
+		{1500, 1990, 2000, true},        // some of them
+		{1960, 3000, 2000, false},       // overlaps, then goes on
+		{0, 1000, 500000, false},        // the broadcast's clock started over
+		{380000, 400000, 400000, true},  // the last 20 s again
+		{200000, 400000, 400000, false}, // starts long before: not a repeat
+	}
+	for _, c := range cases {
+		if got := isReplay(c.first, c.last, c.recorded); got != c.want {
+			t.Errorf("isReplay(%d, %d, %d) = %v", c.first, c.last, c.recorded, got)
+		}
+	}
+}
+
+func TestFreshParts(t *testing.T) {
+	dir := t.TempDir()
+	var parts []string
+	for i, data := range [][]byte{flvFrames(1000, 2000), flvFrames(1000, 2000), flvFrames(1960, 3000), []byte("[c0]")} {
+		p := filepath.Join(dir, fmt.Sprintf("p%d.flv", i+1))
+		if err := os.WriteFile(p, data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		parts = append(parts, p)
+	}
+	got := freshParts(parts)
+	if len(got) != 3 || got[0] != parts[0] || got[1] != parts[2] || got[2] != parts[3] {
+		t.Fatalf("fresh parts %v", got)
+	}
+}
+
+// replayServer answers each connection with the next of its bodies, then
+// with the last one again and again, as TikTok's server sends a
+// broadcast's last seconds once it is over. Responses have no length.
+type replayServer struct {
+	mu     sync.Mutex
+	bodies [][]byte
+	served int
+}
+
+func (s *replayServer) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	s.mu.Lock()
+	body := s.bodies[min(s.served, len(s.bodies)-1)]
+	s.served++
+	s.mu.Unlock()
+	w.Header().Set("Content-Type", "video/x-flv")
+	w.Write(body)
+	w.(http.Flusher).Flush()
+}
+
+// Parts that only repeat the seconds already recorded are dropped and do
+// not count as data, so the recording ends once the broadcast is over;
+// a part that goes on, or a broadcast whose clock started over, is kept.
+func TestHTTPLiveDropsReplayedSeconds(t *testing.T) {
+	cases := []struct {
+		name   string
+		bodies [][]byte
+		want   string
+	}{
+		{"over", [][]byte{flvFrames(1000, 2000)}, "remuxed:" + string(flvFrames(1000, 2000))},
+		{"goes on", [][]byte{flvFrames(1000, 2000), flvFrames(1960, 3000)},
+			"joined:remuxed:" + string(flvFrames(1000, 2000)) + "remuxed:" + string(flvFrames(1960, 3000))},
+		{"started over", [][]byte{flvFrames(500000, 501000), flvFrames(0, 1000)},
+			"joined:remuxed:" + string(flvFrames(500000, 501000)) + "remuxed:" + string(flvFrames(0, 1000))},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			fastLive(t)
+			fakeFFmpeg(t, "copy")
+			rs := &replayServer{bodies: c.bodies}
+			srv := httptest.NewServer(rs)
+			t.Cleanup(srv.Close)
+			d := newHTTPLiveDownload(t, srv.Client(), srv.URL+"/live.flv", "")
+			done := make(chan struct{})
+			go func() {
+				d.Start(context.Background())
+				close(done)
+			}()
+			select {
+			case <-done:
+			case <-time.After(10 * time.Second):
+				t.Fatal("the recording did not end on repeated seconds")
+			}
+			if got := string(readResult(t, d)); got != c.want {
+				t.Fatalf("recording %d bytes, want %d", len(got), len(c.want))
+			}
+			rs.mu.Lock()
+			served := rs.served
+			rs.mu.Unlock()
+			if served <= len(c.bodies) {
+				t.Fatalf("served %d connections: the repeats were not asked for", served)
+			}
+		})
 	}
 }

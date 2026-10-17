@@ -137,6 +137,9 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	if len(headers) > 0 {
 		payload["headers"] = headers
 	}
+	if len(m.SiteCookies) > 0 {
+		payload["site_cookies"] = m.SiteCookies
+	}
 	if m.Kind == "live" {
 		// One endless response (FLV): recorded as it comes, from the
 		// click until Stop.
@@ -243,7 +246,7 @@ func relaySite(client *http.Client, m native.Message) native.Reply {
 	if m.URL == "" {
 		return native.Reply{Error: "missing url"}
 	}
-	body, _ := json.Marshal(map[string]string{"url": m.URL})
+	body, _ := json.Marshal(map[string]any{"url": m.URL, "cookies": m.SiteCookies})
 	resp, err := client.Post(ipc.BaseURL+"/api/probe/site", "application/json", bytes.NewReader(body))
 	if err != nil {
 		return native.Reply{Error: errNotRunning}

@@ -142,7 +142,10 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	if err != nil {
 		return nil, err
 	}
-	v, err := ytdlp.Probe(ctx, bin, strings.TrimSpace(page), cookiesFrom())
+	page = strings.TrimSpace(page)
+	cookies, done := siteCookieArgs(page)
+	defer done()
+	v, err := ytdlp.Probe(ctx, bin, page, cookies)
 	if err != nil {
 		return nil, err
 	}
@@ -171,7 +174,9 @@ func resolveSiteLive(ctx context.Context, page string, kind media.Kind) (string,
 	if err != nil {
 		return "", nil, err
 	}
-	v, err := ytdlp.Probe(ctx, bin, page, cookiesFrom())
+	cookies, done := siteCookieArgs(page)
+	defer done()
+	v, err := ytdlp.Probe(ctx, bin, page, cookies)
 	if err != nil {
 		return "", nil, err
 	}
@@ -308,7 +313,9 @@ func (d *Download) nameFromSite(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	v, err := ytdlp.Probe(ctx, bin, page, cookiesFrom())
+	cookies, done := siteCookieArgs(page)
+	defer done()
+	v, err := ytdlp.Probe(ctx, bin, page, cookies)
 	if err != nil {
 		return
 	}
@@ -347,9 +354,14 @@ func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
 		ff, _ = locateFFmpeg(ctx)
 	}
 	d.mu.Lock()
+	page := d.URL
+	d.mu.Unlock()
+	cookies, forget := siteCookieArgs(page)
+	defer forget()
+	d.mu.Lock()
 	o := ytdlp.Options{
-		Page: d.URL, Format: d.Site.Format, Out: filepath.Join(work, "media"),
-		FFmpeg: ff, RateLimit: d.SpeedLimit, Fragments: d.Connections, Cookies: cookiesFrom(),
+		Page: page, Format: d.Site.Format, Out: filepath.Join(work, "media"),
+		FFmpeg: ff, RateLimit: d.SpeedLimit, Fragments: d.Connections, Cookies: cookies,
 	}
 	if o.RateLimit <= 0 && d.shared != nil {
 		o.RateLimit = d.shared.Rate() // the limit for all downloads, as yt-dlp's own

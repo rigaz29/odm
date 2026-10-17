@@ -164,7 +164,18 @@
     if (r.missing) return [{ text: `${name} · needs yt-dlp (see ODM's Options)`, at: it.at }];
     if (r.refused) return [{ text: `${name} · ${r.error}`, at: it.at }];
     // ODM could not ask yt-dlp just now; it picks the quality when it runs.
-    return [{ text: `${name} · best quality`, item: it, at: it.at }];
+    // Why it could not shows, so one row reads as what it is.
+    const why = shortError(r.error);
+    return [{ text: `${name} · best quality${why ? ` (${why})` : ""}`, item: it, at: it.at }];
+  }
+
+  // shortError is the gist of an error ODM passed on from yt-dlp: without
+  // the "yt-dlp: " it starts with, the help it points to, or more than a
+  // line's worth.
+  function shortError(error) {
+    let s = String(error || "").replace(/^yt-dlp:\s*/, "").replace(/^\[[^\]]*\]\s*(\S+:\s*)?/, "");
+    s = s.split(/\s+(See|Use|Also see)\s+/)[0].replace(/https?:\/\/\S+/g, "").replace(/[\s.]+$/, "").trim();
+    return s.length > 80 ? s.slice(0, 79).trimEnd() + "…" : s;
   }
 
   // liveEntries are a broadcast's rows: ODM records the playlist or stream
@@ -208,7 +219,7 @@
     return `${Math.round(s / 3600)} h ago`;
   }
 
-  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, anyLive, sitePage, siteName, siteTitle, ago };
+  const api = { fmtSize, orderMedia, mediaLabel, qualityLabel, menuEntries, anyLive, sitePage, siteName, siteTitle, shortError, ago };
   // Always set: in a content script, a page element with id="module"
   // makes the global "module" look defined.
   root.odmMediaList = api;

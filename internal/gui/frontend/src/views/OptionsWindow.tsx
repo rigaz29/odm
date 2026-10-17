@@ -489,7 +489,8 @@ function useToolStatus(tool: string, typed: string, again: number): ToolStatus |
   return s;
 }
 
-// The browsers yt-dlp can take cookies from (ytdlp.CookieBrowsers).
+// The browsers yt-dlp can take cookies from itself (ytdlp.CookieBrowsers);
+// "extension" (engine.CookiesFromExtension) comes before them.
 const COOKIE_BROWSERS: [string, string][] = [
   ["firefox", "Firefox"],
   ["chrome", "Chrome"],
@@ -529,6 +530,7 @@ function Programs({ o, set }: TabProps) {
         </label>
         <Select id="opt-cookies" className="w-56" value={o.ytdlpCookies} onChange={(e) => set({ ytdlpCookies: e.target.value })}>
           <option value="">{t("No browser (the default)")}</option>
+          <option value="extension">{t("The browser you download from (ODM's extension)")}</option>
           {COOKIE_BROWSERS.map(([id, name]) => (
             <option key={id} value={id}>
               {name}
@@ -536,7 +538,7 @@ function Programs({ o, set }: TabProps) {
           ))}
         </Select>
         <p className="text-xs text-muted-foreground">
-          {t("yt-dlp then reads that browser's cookies itself, and the site sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. Firefox works best; Chrome, Edge and other Chromium browsers may have to be closed first, and recent versions of Chrome keep their cookies where yt-dlp cannot read them.")}
+          {t("The site then sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. “The browser you download from” works in every browser with ODM's extension, Chrome included: the extension sends the site's cookies along with the video. For a browser named here, yt-dlp reads its cookies itself, which works with Firefox; Chrome, Edge and other Chromium browsers lock their cookies while open, and recent Chrome encrypts them.")}
         </p>
       </div>
       <div className="space-y-2 border-t border-border pt-3">

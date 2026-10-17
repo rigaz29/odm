@@ -193,7 +193,7 @@ func TestDownload(t *testing.T) {
 	var reports []Progress
 	file, err := Download(context.Background(), bin, Options{
 		Page: "https://www.youtube.com/watch?v=abc", Format: "137+140",
-		Out: filepath.Join(dir, "media"), FFmpeg: "C:/ff/ffmpeg.exe", RateLimit: 5000, Fragments: 4, Cookies: "firefox",
+		Out: filepath.Join(dir, "media"), FFmpeg: "C:/ff/ffmpeg.exe", RateLimit: 5000, Fragments: 4, Cookies: Cookies{Browser: "firefox"},
 	}, func(p Progress) { reports = append(reports, p) })
 	if err != nil {
 		t.Fatal(err)
@@ -252,7 +252,7 @@ func TestDownloadStops(t *testing.T) {
 
 func TestProbe(t *testing.T) {
 	bin := fakeBin(t, "ok")
-	v, err := Probe(context.Background(), bin, "https://www.youtube.com/watch?v=jNQXAC9IVRw", "")
+	v, err := Probe(context.Background(), bin, "https://www.youtube.com/watch?v=jNQXAC9IVRw", Cookies{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -315,5 +315,19 @@ func TestLiveDASHAndHTTP(t *testing.T) {
 	}
 	if _, _, ok := v.LiveDASH(); ok {
 		t.Fatal("FLV taken for DASH")
+	}
+}
+
+func TestCookieArgs(t *testing.T) {
+	bin := fakeBin(t, "ok")
+	ctx := context.Background()
+	if a := baseArgs(ctx, bin, Cookies{}); contains(a, "--cookies") || contains(a, "--cookies-from-browser") {
+		t.Errorf("cookies unasked: %q", a)
+	}
+	if a := baseArgs(ctx, bin, Cookies{Browser: "edge"}); !contains(a, "--cookies-from-browser") || !contains(a, "edge") {
+		t.Errorf("browser: %q", a)
+	}
+	if a := baseArgs(ctx, bin, Cookies{File: "C:/t/cookies.txt"}); !contains(a, "--cookies") || !contains(a, "C:/t/cookies.txt") {
+		t.Errorf("file: %q", a)
 	}
 }

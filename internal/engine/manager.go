@@ -368,6 +368,9 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	setFFmpegPath(next.FFmpegPath)
 	setYtDlpPath(next.YtDlpPath)
 	setYtDlpCookies(next.YtDlpCookies)
+	if next.YtDlpCookies != CookiesFromExtension {
+		forgetSiteCookies()
+	}
 	m.saveSettings()
 	m.fire()
 	return next.clone()

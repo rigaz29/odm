@@ -46,6 +46,10 @@ type Message struct {
 	// Page is the video site's page a live stream's playlist (URL) was
 	// found on, as a "site-formats" reply gave it.
 	Page string `json:"page"`
+	// SiteCookies are a video site page's cookies, as the extension's
+	// browser holds them, for yt-dlp when ODM's Options say to sign in
+	// with them; passed on as they came.
+	SiteCookies json.RawMessage `json:"siteCookies,omitempty"`
 }
 
 // Reply is the response sent back to the extension.

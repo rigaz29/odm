@@ -5,6 +5,9 @@ import (
 	"os/exec"
 	"strconv"
 	"syscall"
+	"unicode/utf8"
+
+	"golang.org/x/sys/windows"
 )
 
 // createNoWindow keeps the console of a console program from appearing
@@ -27,4 +30,26 @@ func killTree(p *os.Process) error {
 		return p.Kill()
 	}
 	return nil
+}
+
+// cpACP is the system's ANSI code page, for MultiByteToWideChar.
+const cpACP = 0
+
+// localText is what yt-dlp wrote to its error output. The standalone
+// yt-dlp.exe ignores PYTHONIOENCODING and writes in the ANSI code page
+// ("youre" in Western Europe), which is read as such when it is not
+// UTF-8.
+func localText(b []byte) string {
+	if utf8.Valid(b) || len(b) == 0 {
+		return string(b)
+	}
+	n, err := windows.MultiByteToWideChar(cpACP, 0, &b[0], int32(len(b)), nil, 0)
+	if err != nil || n <= 0 {
+		return string(b)
+	}
+	wide := make([]uint16, n)
+	if _, err := windows.MultiByteToWideChar(cpACP, 0, &b[0], int32(len(b)), &wide[0], n); err != nil {
+		return string(b)
+	}
+	return windows.UTF16ToString(wide)
 }

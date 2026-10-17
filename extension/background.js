@@ -260,6 +260,23 @@ async function cookieHeader(url) {
   }
 }
 
+// siteCookies are a video site page's cookies, structured as yt-dlp's
+// cookie file needs them. They go to the local ODM with the page, which
+// gives them to yt-dlp when its Options say to sign in to video sites with
+// the browser's cookies (YouTube asks some visitors to) and drops them
+// otherwise: yt-dlp cannot read Chrome's cookies itself.
+async function siteCookies(url) {
+  try {
+    const cookies = await chrome.cookies.getAll({ url });
+    return cookies.map((c) => ({
+      name: c.name, value: c.value, domain: c.domain, path: c.path, secure: c.secure,
+      httpOnly: c.httpOnly, hostOnly: c.hostOnly, expires: Math.floor(c.expirationDate || 0),
+    }));
+  } catch {
+    return [];
+  }
+}
+
 async function handOff(fields) {
   return askOdm({
     type: "download",
@@ -286,7 +303,7 @@ function mediaInfo(item, referrer) {
   if (hit) return hit.reply;
   // yt-dlp reads a site's page itself, without the browser's cookies.
   const reply = item.kind === "site"
-    ? askOdm({ type: "site-formats", url })
+    ? siteCookies(url).then((cookies) => askOdm({ type: "site-formats", url, siteCookies: cookies }))
     : cookieHeader(url).then((cookies) =>
       askOdm({ type: "streams", url, referrer, cookies, userAgent: navigator.userAgent }));
   mediaInfos.set(url, { at: now, reply });
@@ -299,14 +316,16 @@ function mediaInfo(item, referrer) {
 // grab sends one detected media item to ODM. The referrer is the page (or
 // frame) it was found on; streams get the page title as their name, and
 // the quality picked in a menu, if any.
-function grab(item, referrer, title) {
+async function grab(item, referrer, title) {
   if (item.kind === "site") {
-    // yt-dlp reads the page itself: no cookies or user agent go with it.
-    // The item's title is yt-dlp's or the page's without the site's name;
-    // with none, ODM asks yt-dlp (the tab's title can be just the site's).
+    // yt-dlp reads the page itself: no Cookie header or user agent go with
+    // it, only the page's cookies for ODM's Options to use or drop. The
+    // item's title is yt-dlp's or the page's without the site's name; with
+    // none, ODM asks yt-dlp (the tab's title can be just the site's).
     return askOdm({
       type: "download", kind: "site", url: item.url, title: item.title || "",
       format: item.format || "", ext: item.ext || "", estimate: item.estimate || 0,
+      siteCookies: await siteCookies(item.url),
     });
   }
   return handOff({
@@ -320,6 +339,9 @@ function grab(item, referrer, title) {
     // frame a response came from, which yt-dlp is not asked about.)
     headers: item.headers || undefined,
     page: item.sitePage || "",
+    // A broadcast's page, for yt-dlp to find its new address when the old
+    // one expires, signed in as the site's page is.
+    siteCookies: item.sitePage ? await siteCookies(item.sitePage) : undefined,
   });
 }
 

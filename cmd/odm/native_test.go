@@ -211,3 +211,30 @@ func TestRelayLivePage(t *testing.T) {
 		t.Fatalf("headers %v", got["headers"])
 	}
 }
+
+// A site page's cookies from the extension go on to ODM as they came, for
+// it to keep or drop as its Options say; the Cookie header still does not.
+func TestRelaySiteCookies(t *testing.T) {
+	cookies := json.RawMessage(`[{"name":"SID","value":"s1","domain":".youtube.com","path":"/","secure":true}]`)
+	got, reply := relayed(t, native.Message{
+		Kind: "site", URL: "https://www.youtube.com/watch?v=abc", Title: "A talk", Ext: "mp4",
+		Cookies: "SID=s1", SiteCookies: cookies,
+	})
+	list, _ := got["site_cookies"].([]any)
+	if !reply.OK || len(list) != 1 || list[0].(map[string]any)["name"] != "SID" {
+		t.Fatalf("posted %v", got)
+	}
+	if _, ok := got["headers"]; ok {
+		t.Fatalf("headers went with a site page: %v", got["headers"])
+	}
+
+	var body map[string]any
+	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(`{"title":"A talk","qualities":[]}`))}, nil
+	})}
+	relaySite(client, native.Message{URL: "https://www.youtube.com/watch?v=abc", SiteCookies: cookies})
+	if list, _ := body["cookies"].([]any); len(list) != 1 {
+		t.Fatalf("site-formats posted %v", body)
+	}
+}

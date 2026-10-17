@@ -8,15 +8,24 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
-- yt-dlp can sign in to video sites with a browser's cookies, chosen
-  under Options → Programs ("Sign in to video sites with the cookies of":
-  Firefox, Chrome, Edge, Brave, Opera, Vivaldi or Chromium; none by
-  default). YouTube asks some visitors to "sign in to confirm you're not
-  a bot", and then lists no qualities: the menu offered only "best
-  quality", and the download failed. yt-dlp reads the browser's cookies
-  itself (`--cookies-from-browser`) for the page's qualities, the
-  download, and a live recording's fresh address. The setting is
-  `ytdlp_cookies` in the settings and the API.
+- yt-dlp can sign in to video sites, chosen under Options → Programs
+  ("Sign in to video sites with the cookies of"; none by default).
+  YouTube asks some visitors to "sign in to confirm you're not a bot",
+  and then lists no qualities: the menu offered only "best quality", and
+  the download failed. "The browser you download from (ODM's extension)"
+  works in Chrome too: the extension sends the site's cookies with the
+  page (`siteCookies` in its messages, `cookies` for `POST
+  /api/probe/site`, `site_cookies` for `POST /api/downloads`), ODM keeps
+  them in memory per site, and yt-dlp gets them in a cookie file removed
+  after the run (`--cookies`). Firefox, Chrome, Edge, Brave, Opera,
+  Vivaldi or Chromium instead have yt-dlp read the browser's cookies
+  itself (`--cookies-from-browser`), which Chrome does not allow: it
+  locks its cookies while open and, since version 127, encrypts them. Used
+  for the page's qualities, the download, and a live recording's fresh
+  address. The setting is `ytdlp_cookies` (`extension` or a browser).
+- When yt-dlp cannot list a video's qualities, the extension's menu says
+  why next to its one "best quality" row ("Could not copy Chrome cookie
+  database", "Sign in to confirm you're not a bot").
 - Live broadcasts on video sites can be recorded: YouTube Live, Twitch,
   and others yt-dlp reads, where they come as HLS. yt-dlp finds the
   broadcast's playlist and the headers it needs; ODM records it with its

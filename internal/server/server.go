@@ -177,6 +177,10 @@ type addRequest struct {
 	Site     bool   `json:"site"`
 	Format   string `json:"format"`
 	Estimate int64  `json:"estimate"`
+	// SiteCookies are the video site page's cookies (URL's, or Page's),
+	// from the browser extension: kept for yt-dlp when the Options say to
+	// sign in with them, never saved.
+	SiteCookies []engine.BrowserCookie `json:"site_cookies"`
 }
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -194,6 +198,13 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
+	}
+	if len(req.SiteCookies) > 0 {
+		page := req.URL
+		if req.Page != "" {
+			page = req.Page
+		}
+		s.mgr.SetSiteCookies(page, req.SiteCookies)
 	}
 	start := true
 	if req.Start != nil {
@@ -334,6 +345,9 @@ func newStreamInfo(c *engine.StreamChoices) streamInfo {
 func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		URL string `json:"url"`
+		// Cookies are the page's, from the browser extension: kept for
+		// yt-dlp when the Options say to sign in with them.
+		Cookies []engine.BrowserCookie `json:"cookies"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
@@ -344,6 +358,7 @@ func (s *Server) handleProbeSite(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "an http(s) page address is required"})
 		return
 	}
+	s.mgr.SetSiteCookies(req.URL, req.Cookies)
 	// Room for ODM to download yt-dlp first, when it may.
 	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Minute)
 	defer cancel()

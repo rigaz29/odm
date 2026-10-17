@@ -5,6 +5,7 @@ package ytdlp
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"syscall"
 )
 
@@ -23,3 +24,6 @@ func killTree(p *os.Process) error {
 	}
 	return nil
 }
+
+// localText is what yt-dlp wrote to its error output: UTF-8 here.
+func localText(b []byte) string { return strings.ToValidUTF8(string(b), "�") }

@@ -450,6 +450,7 @@
   "Teal": "Hijau toska",
   "That queue already exists.": "Antrean itu sudah ada.",
   "The browser extension leaves downloads from these sites alone:": "Ekstensi browser tidak mengambil alih unduhan dari situs-situs ini:",
+  "The browser you download from (ODM's extension)": "Browser tempat Anda mengunduh (ekstensi ODM)",
   "The computer will go to sleep": "Komputer akan masuk mode tidur",
   "The computer will hibernate": "Komputer akan hibernasi",
   "The computer will shut down": "Komputer akan dimatikan",
@@ -458,6 +459,7 @@
   "The new copy replaces the local file once it is complete. With \"Start the queue again\" below, the check runs every so many minutes.": "Salinan baru menggantikan file lokal setelah lengkap. Dengan \"Mulai antrean lagi\" di bawah, pemeriksaan berjalan tiap sekian menit.",
   "The new language shows after ODM is started again.": "Bahasa baru tampil setelah ODM dijalankan ulang.",
   "The playlist could not be read just now": "Playlist belum bisa dibaca saat ini",
+  "The site then sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. “The browser you download from” works in every browser with ODM's extension, Chrome included: the extension sends the site's cookies along with the video. For a browser named here, yt-dlp reads its cookies itself, which works with Firefox; Chrome, Edge and other Chromium browsers lock their cookies while open, and recent Chrome encrypts them.": "Situs lalu melihat Anda sudah masuk: YouTube meminta sebagian pengunjung masuk untuk memastikan mereka bukan bot. “Browser tempat Anda mengunduh” bekerja di setiap browser yang memasang ekstensi ODM, termasuk Chrome: ekstensi mengirim cookie situs itu bersama videonya. Untuk browser yang disebut di sini, yt-dlp membaca sendiri cookie-nya, yang berhasil untuk Firefox; Chrome, Edge, dan browser Chromium lain mengunci cookie-nya selama terbuka, dan Chrome versi baru mengenkripsinya.",
   "Theme": "Tema",
   "There is already a category named %s.": "Sudah ada kategori bernama %s.",
   "These settings do not apply to queue processing.": "Pengaturan ini tidak berlaku untuk pemrosesan antrean.",
@@ -512,6 +514,5 @@
   "You are running the latest version (%s).": "Anda sudah memakai versi terbaru (%s).",
   "YouTube videos need yt-dlp, and joining a video with its audio needs ffmpeg. ODM can download both from their official releases (about 20 MB), check their checksums, and keep them up to date by itself. Download them now?": "Video YouTube membutuhkan yt-dlp, dan menggabungkan video dengan audionya membutuhkan ffmpeg. ODM bisa mengunduh keduanya dari rilis resminya (sekitar 20 MB), memeriksa checksum-nya, dan memperbaruinya sendiri. Unduh sekarang?",
   "yt-dlp (downloads videos from YouTube and similar sites):": "yt-dlp (mengunduh video dari YouTube dan situs serupa):",
-  "yt-dlp could not read the page just now": "yt-dlp belum bisa membaca halaman ini saat ini",
-  "yt-dlp then reads that browser's cookies itself, and the site sees you signed in: YouTube asks some visitors to sign in to confirm they are not a bot. Firefox works best; Chrome, Edge and other Chromium browsers may have to be closed first, and recent versions of Chrome keep their cookies where yt-dlp cannot read them.": "yt-dlp lalu membaca sendiri cookie browser itu, dan situs melihat Anda sudah masuk: YouTube meminta sebagian pengunjung masuk untuk memastikan mereka bukan bot. Firefox paling andal; Chrome, Edge, dan browser Chromium lain mungkin harus ditutup dulu, dan Chrome versi baru menyimpan cookie di tempat yang tidak bisa dibaca yt-dlp."
+  "yt-dlp could not read the page just now": "yt-dlp belum bisa membaca halaman ini saat ini"
 }

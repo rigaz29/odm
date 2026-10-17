@@ -99,6 +99,10 @@ func TestSaveOptions(t *testing.T) {
 	case st.YtDlpCookies != "firefox" || svc.Options().YtDlpCookies != "firefox":
 		t.Fatalf("yt-dlp's browser %q", st.YtDlpCookies)
 	}
+	o.YtDlpCookies = engine.CookiesFromExtension
+	if r := svc.SaveOptions(o); r.Refused != nil || mgr.Settings().YtDlpCookies != engine.CookiesFromExtension {
+		t.Fatalf("the extension's cookies: %+v, %q", r, mgr.Settings().YtDlpCookies)
+	}
 	mu.Lock()
 	if len(looks) != 1 || looks[0].Theme != "dark" {
 		t.Fatalf("windows were told %+v", looks)

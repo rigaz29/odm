@@ -143,14 +143,25 @@ var CookieBrowsers = []string{"firefox", "chrome", "edge", "brave", "opera", "vi
 // CookieBrowser reports whether b is one of CookieBrowsers.
 func CookieBrowser(b string) bool { return slices.Contains(CookieBrowsers, b) }
 
-func baseArgs(ctx context.Context, bin, cookies string) []string {
+// Cookies is how yt-dlp signs in to a video site: with the cookies of a
+// browser it reads itself (one of CookieBrowsers), or with a cookie file
+// in the Netscape format. The zero Cookies is none.
+type Cookies struct {
+	Browser string
+	File    string
+}
+
+func baseArgs(ctx context.Context, bin string, cookies Cookies) []string {
 	// --ignore-config: a user's yt-dlp config could change the output
 	// name or format ODM asks for.
 	args := []string{"--ignore-config", "--no-playlist", "--color", "never"}
-	if cookies != "" {
-		// Chosen in the Options: the site sees the person signed in, as
-		// YouTube asks of some ("Sign in to confirm you're not a bot").
-		args = append(args, "--cookies-from-browser", cookies)
+	// Chosen in the Options: the site sees the person signed in, as
+	// YouTube asks of some ("Sign in to confirm you're not a bot").
+	switch {
+	case cookies.Browser != "":
+		args = append(args, "--cookies-from-browser", cookies.Browser)
+	case cookies.File != "":
+		args = append(args, "--cookies", cookies.File)
 	}
 	if version(ctx, bin) >= "2025.11" {
 		if _, err := exec.LookPath("deno"); err != nil {
@@ -284,14 +295,13 @@ type Format struct {
 	Headers     map[string]string `json:"http_headers"`
 }
 
-// Probe asks yt-dlp what the page offers, signed in with the cookies of
-// the browser cookies names ("" for none; see CookieBrowsers).
-func Probe(ctx context.Context, bin, page, cookies string) (*Video, error) {
+// Probe asks yt-dlp what the page offers, signed in with cookies.
+func Probe(ctx context.Context, bin, page string, cookies Cookies) (*Video, error) {
 	cmd := command(ctx, bin, append(baseArgs(ctx, bin, cookies), "-J", "--", page)...)
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout, cmd.Stderr = &stdout, &stderr
 	if err := cmd.Run(); err != nil {
-		return nil, failure(ctx, err, stderr.String())
+		return nil, failure(ctx, err, localText(stderr.Bytes()))
 	}
 	var v Video
 	if err := json.Unmarshal(stdout.Bytes(), &v); err != nil {
@@ -598,10 +608,10 @@ type Options struct {
 	// Out is the file to write without its extension; yt-dlp adds the
 	// container's. Its folder holds yt-dlp's partial files.
 	Out       string
-	FFmpeg    string // "" lets yt-dlp look for ffmpeg itself
-	RateLimit int64  // bytes per second, 0 for none
-	Fragments int    // pieces fetched at once for formats that come in pieces
-	Cookies   string // the browser to sign in with (CookieBrowsers), "" for none
+	FFmpeg    string  // "" lets yt-dlp look for ffmpeg itself
+	RateLimit int64   // bytes per second, 0 for none
+	Fragments int     // pieces fetched at once for formats that come in pieces
+	Cookies   Cookies // how to sign in to the site; none when zero
 }
 
 // Progress is yt-dlp's report on the format it is fetching.
@@ -680,7 +690,7 @@ func Download(ctx context.Context, bin string, o Options, progress func(Progress
 	}
 	_, _ = io.Copy(io.Discard, stdout)
 	if err := cmd.Wait(); err != nil {
-		return "", failure(ctx, err, stderr.String())
+		return "", failure(ctx, err, localText(stderr.Bytes()))
 	}
 	return result(o.Out)
 }

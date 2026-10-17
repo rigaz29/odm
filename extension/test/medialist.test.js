@@ -153,7 +153,12 @@ test("menuEntries lists a site video's qualities from yt-dlp", () => {
   assert.deepEqual(say({ ok: false, missing: true, error: "yt-dlp not found" }), [["YouTube video · needs yt-dlp (see ODM's Options)", false]]);
   assert.deepEqual(say({ ok: false, refused: true, error: "live streams on video sites are not supported" }),
     [["YouTube video · live streams on video sites are not supported", false]]);
-  assert.deepEqual(say({ ok: false, error: "ODM is not running" }), [["YouTube video · best quality", true]]);
+  assert.deepEqual(say({ ok: false, error: "ODM is not running" }), [["YouTube video · best quality (ODM is not running)", true]]);
+  // Why yt-dlp could not list the qualities shows, in short.
+  assert.deepEqual(say({ ok: false, error: "yt-dlp: Could not copy Chrome cookie database. See  https://github.com/yt-dlp/yt-dlp/issues/7271  for more info" }),
+    [["YouTube video · best quality (Could not copy Chrome cookie database)", true]]);
+  assert.deepEqual(say({ ok: false, error: "yt-dlp: [youtube] aqz-KE-bpKQ: Sign in to confirm you’re not a bot. Use --cookies-from-browser or --cookies for the authentication." }),
+    [["YouTube video · best quality (Sign in to confirm you’re not a bot)", true]]);
 });
 
 test("menuEntries offers to record a broadcast yt-dlp found on a page", () => {
@@ -222,4 +227,11 @@ test("menuEntries marks a live stream the page's player loaded", () => {
   const one = { ok: true, stream: { kind: "hls", live: true, single: true, qualities: [{ label: "As found (one quality)" }] } };
   assert.deepEqual(ml.menuEntries([s], new Map([[s.url, one]])).map((e) => e.text), ["HLS stream · ● Record live"]);
   assert.ok(!ml.anyLive([s], new Map()));
+});
+
+test("shortError keeps an error's gist", () => {
+  assert.equal(ml.shortError(""), "");
+  assert.equal(ml.shortError(undefined), "");
+  assert.equal(ml.shortError("yt-dlp: [youtube] abc: Video unavailable"), "Video unavailable");
+  assert.equal(ml.shortError("x".repeat(100)).length, 80);
 });

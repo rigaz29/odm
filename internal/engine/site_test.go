@@ -345,3 +345,45 @@ func TestSiteDownloadSignsInWhenAsked(t *testing.T) {
 		t.Fatalf("an unknown browser was kept: %q", got)
 	}
 }
+
+// With the extension's cookies chosen, yt-dlp gets the ones it sent for
+// the page's site, in a cookie file.
+func TestSiteDownloadUsesTheExtensionsCookies(t *testing.T) {
+	m := fakeYtDlp(t, "slow")
+	t.Cleanup(func() {
+		setYtDlpCookies("")
+		forgetSiteCookies()
+	})
+	st := m.Settings()
+	st.YtDlpCookies = CookiesFromExtension
+	m.UpdateSettings(st)
+	m.SetSiteCookies("https://www.youtube.com/watch?v=other", []BrowserCookie{{Name: "SID", Value: "s1", Domain: ".youtube.com", Path: "/", Secure: true}})
+	dir := t.TempDir()
+	info := m.Create(AddOptions{
+		URL: "https://www.youtube.com/watch?v=abc", Dir: dir, FileName: "A talk.mp4", Start: true,
+		Site: &SiteJob{Format: "137+140"},
+	})
+	waitFor(t, "progress", func() bool {
+		i, _ := m.Get(info.ID)
+		return i.Done == 1200
+	})
+	data, _ := os.ReadFile(filepath.Join(dir, "A talk.mp4.odmparts", "args.txt"))
+	args := strings.Split(string(data), "\n")
+	file := ""
+	for i, a := range args {
+		if a == "--cookies" && i+1 < len(args) {
+			file = args[i+1]
+		}
+	}
+	if cookies, err := os.ReadFile(file); err != nil || !strings.Contains(string(cookies), "\tSID\ts1\n") {
+		t.Fatalf("cookie file %q: %q %v\nargs:\n%s", file, cookies, err, data)
+	}
+	m.Pause(info.ID)
+	waitFor(t, "the pause", func() bool {
+		i, _ := m.Get(info.ID)
+		return i.Status == StatusPaused
+	})
+	if _, err := os.Stat(file); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("the cookie file outlived yt-dlp")
+	}
+}

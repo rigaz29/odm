@@ -454,8 +454,8 @@ anacrolix/torrent):
     kodenya di repo (`helper/libtorrent/`, CMake + vcpkg, dibangun
     statis);
   - ODM berbicara dengannya lewat baris JSON di stdin/stdout, tanpa port
-    kontrol. Program itu berhenti saat stdin tertutup. Di Windows ia juga
-    diikat ke job object ODM, supaya ikut mati saat ODM crash;
+    kontrol. Program itu berhenti saat stdin tertutup, termasuk saat ODM
+    crash. Di Windows ODM juga mengikatnya ke job object;
   - alasannya: libtorrent butuh C++, Boost, dan OpenSSL. Kalau ditanam,
     ketujuh build rilis ODM butuh cgo dan toolchain C++, padahal
     `ODM.exe` Windows sekarang dibangun tanpa cgo. Crash di kode C++ juga
@@ -495,8 +495,10 @@ anacrolix/torrent):
   - ODM yang menentukan jalur setiap file, lalu memberikannya ke
     libtorrent;
   - kategori dipilih dari ekstensi file terbesar;
-  - file yang tidak dicentang tetapi ikut tertulis karena berbagi piece di
-    batasnya dihapus setelah selesai.
+  - bagian piece yang berbagi batas dengan file yang tidak dicentang
+    disimpan libtorrent di `.<info-hash>.parts` di folder torrent, dan
+    ikut dipindah bersama file-filenya (libtorrent tidak menerima folder
+    lain untuknya). ODM menghapusnya setelah torrent keluar dari sesi.
 - Status menjadi `complete` begitu semua file yang dipilih selesai dan
   terverifikasi. Seeding ditandai terpisah (`Seeding` di `Info`). Jadi
   filter Selesai, notifikasi, dan aksi selesai (buka file, matikan
@@ -566,7 +568,7 @@ Tahap 1: program `odm-libtorrent` dan rilisnya
       berjalan lewat Rosetta. Uji unduh di Windows ditunda ke Tahap 6,
       karena memicu dialog firewall. Build Linux paling besar; nanti
       bisa dicoba dikecilkan dengan `--gc-sections` atau LTO.
-- [ ] Program `odm-libtorrent` (C++, `helper/libtorrent/`). **B** Isinya:
+- [x] Program `odm-libtorrent` (C++, `helper/libtorrent/`). **B** Isinya:
       - perintah dan kejadian dalam baris JSON di stdin/stdout, dengan
         versi protokol. Perintahnya: tambah torrent (metainfo atau
         magnet, jalur file dari ODM, pilihan file), tunggu metadata,
@@ -578,13 +580,59 @@ Tahap 1: program `odm-libtorrent` dan rilisnya
         torrent berlanjut tanpa diperiksa ulang setelah ODM dibuka lagi;
       - masa hidupnya terikat ke ODM: berhenti saat stdin tertutup, dan
         di Windows ikut job object ODM.
-- [ ] Workflow `odm-libtorrent.yml` untuk kelima target. **S** Isinya:
+
+      Selesai 2026-10-18. Protokolnya ditulis di
+      `helper/libtorrent/PROTOCOL.md`. Selain yang direncanakan, ada:
+      - `inspect`, yang membaca `.torrent` atau magnet tanpa
+        menambahkannya, supaya ODM tidak perlu membaca bencode sendiri;
+      - `hold`: magnet tidak mengunduh file apa pun sampai ODM memberi
+        pilihan file, jadi file tidak sempat ditulis dengan nama aslinya;
+      - `create`, yang membuat `.torrent` untuk test;
+      - `--state`, yang menyimpan node DHT antar-run supaya magnet lebih
+        cepat menemukan peer.
+
+      Temuan saat diuji:
+      - libtorrent 2.1 menahan data di cache tulis. Di Windows, file yang
+        dibaca tepat setelah libtorrent menyatakan selesai masih
+        terpotong. Karena itu `finished` baru dikirim setelah cache
+        torrent ditulis ke disk, dan saat keluar cache juga ditulis dulu
+        sebelum resume data disimpan;
+      - libtorrent menunggu 60 detik sebelum menghubungi lagi peer yang
+        baru putus, jadi Pause lalu Resume sempat diam lama. Waktunya
+        diturunkan ke 10 detik;
+      - magnet yang ditahan sempat memutus seeder-nya, karena torrent yang
+        tidak menginginkan apa pun dianggap selesai. Pemutusan koneksi
+        "tidak berguna" itu dimatikan;
+      - `part_file_dir` harus di dalam `save_path` (lihat rancangan), jadi
+        tidak dipakai;
+      - job object dipasang oleh ODM saat menjalankan program (Tahap 2).
+        Program sendiri sudah berhenti saat stdin tertutup, termasuk saat
+        ODM crash.
+- [x] Workflow `odm-libtorrent.yml` untuk kelima target. **S** Isinya:
       - dipicu tag `odm-libtorrent-p<protokol>-<versi>-<n>`;
       - dirilis sebagai pre-release yang bukan terbaru, dengan SHA-256,
         lisensi, dan README di paketnya;
       - vcpkg di-cache;
       - CI biasa membangun versi Linux (dengan cache), supaya test Go di
         Tahap 2 bisa memakainya.
+
+      Selesai 2026-10-18. Workflow juga berjalan untuk setiap perubahan di
+      `helper/libtorrent` dan menjalankan test Go-nya
+      (`helper/libtorrent/helper_test.go`) di kelima target. Tiap test
+      memakai dua `odm-libtorrent` di 127.0.0.1, tanpa internet. Yang
+      diuji:
+      - unduh, ganti nama, dan resume data;
+      - pilih file dan pindah folder;
+      - jeda, lanjut, dan restart;
+      - magnet yang ditahan;
+      - hapus beserta file;
+      - pengaturan dan perintah yang salah.
+
+      Semua lolos di Windows, Linux x64/ARM64, dan macOS Apple
+      silicon/Intel, dengan build bercache 1–3 menit. Ukuran arsip: 3,7 MB
+      (Windows) sampai 5,5 MB (Linux ARM64). Tag pertama belum di-push;
+      itu menunggu izin pemilik. Test Go ODM di Tahap 2 akan memakai
+      artefak build Linux ini.
 
 Tahap 2: engine
 

@@ -412,6 +412,21 @@ bawaan sampai UI baru setara fiturnya.
       memakai GTK 4 + WebKitGTK 6.0, dan uji jalan di WSL Ubuntu 26.04
       lolos (X11 dan Wayland), lalu nama ikon tray di Linux dibetulkan.
       macOS hanya dibangun dan diuji di CI.
+- [x] **Tahap 8** Alih di Linux dan macOS: UI baru menjadi rilis bawaan
+      di sana, atas permintaan pemilik setelah uji jalan Tahap 7. **K**
+      Selesai 2026-10-18:
+      - `scripts/build.sh linux`, `darwin`, dan `darwin-intel` membangun UI
+        baru; `linux-fyne`, `darwin-fyne`, dan `windows-fyne` membangun UI
+        Fyne;
+      - rilis memakai tag `gui` untuk Linux (amd64, arm64) dan macOS (Apple
+        silicon, Intel); UI Fyne tetap dirilis untuk Linux tanpa WebKitGTK
+        6.0 (misalnya Ubuntu 22.04) sebagai `odm-linux-*-fyne`, dibangun di
+        Ubuntu 22.04;
+      - CI membangun UI baru persis seperti rilis, termasuk Linux ARM dan
+        Intel Mac, dan UI Fyne sebagai cadangan;
+      - tema dan bahasa pilihan di UI Fyne ikut terbawa di start pertama,
+        kini juga di Linux dan macOS (sebelumnya hanya jalur Windows);
+      - README dan CHANGELOG.
 
 Nanti: halaman yang sama untuk web UI `-serve`.
 

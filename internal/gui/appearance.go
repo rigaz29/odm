@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"odm/internal/engine"
@@ -35,13 +36,13 @@ func appearanceFor(st engine.Settings) Appearance {
 }
 
 // fynePreferences reads the Fyne UI's preferences file, nil when there is
-// none. Fyne keeps it under the user profile, not %APPDATA%.
+// none.
 func fynePreferences() map[string]string {
-	home, err := os.UserHomeDir()
-	if err != nil {
+	dir := fyneConfigDir()
+	if dir == "" {
 		return nil
 	}
-	data, err := os.ReadFile(filepath.Join(home, "AppData", "Roaming", "fyne", "com.ochi.odm", "preferences.json"))
+	data, err := os.ReadFile(filepath.Join(dir, "com.ochi.odm", "preferences.json"))
 	if err != nil {
 		return nil
 	}
@@ -56,6 +57,28 @@ func fynePreferences() map[string]string {
 		}
 	}
 	return out
+}
+
+// fyneConfigDir is where Fyne keeps its apps' preferences, as Fyne's own
+// rootConfigDir: under the user profile on Windows (not %APPDATA%),
+// ~/Library/Preferences on macOS, and the XDG config folder on Linux.
+func fyneConfigDir() string {
+	switch runtime.GOOS {
+	case "windows", "darwin":
+		home, err := os.UserHomeDir()
+		if err != nil {
+			return ""
+		}
+		if runtime.GOOS == "darwin" {
+			return filepath.Join(home, "Library", "Preferences", "fyne")
+		}
+		return filepath.Join(home, "AppData", "Roaming", "fyne")
+	}
+	cfg, err := os.UserConfigDir()
+	if err != nil {
+		return ""
+	}
+	return filepath.Join(cfg, "fyne")
 }
 
 // resolveLanguage picks "id" or "en" from the Options choice ("en", "id",

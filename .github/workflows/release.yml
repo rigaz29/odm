@@ -13,6 +13,9 @@ jobs:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
+      # ui: gui is the desktop UI of internal/gui (docs/GUI.md); fyne is the
+      # previous one, for Linux without WebKitGTK 6.0 (Ubuntu 22.04,
+      # Debian 11), built on Ubuntu 22.04 so that it runs there.
       matrix:
         include:
           - os: ubuntu-latest
@@ -20,16 +23,31 @@ jobs:
             goos: linux
             goarch: amd64
             name: odm
+            ui: gui
           - os: ubuntu-24.04-arm
             label: linux-arm64
             goos: linux
             goarch: arm64
             name: odm
+            ui: gui
+          - os: ubuntu-22.04
+            label: linux-amd64-fyne
+            goos: linux
+            goarch: amd64
+            name: odm
+            ui: fyne
+          - os: ubuntu-22.04-arm
+            label: linux-arm64-fyne
+            goos: linux
+            goarch: arm64
+            name: odm
+            ui: fyne
           - os: macos-latest
             label: darwin-arm64
             goos: darwin
             goarch: arm64
             name: odm
+            ui: gui
           # Intel Macs: cross-compiled on the arm64 runner; Apple's clang and
           # SDK build x86_64 with -arch.
           - os: macos-latest
@@ -37,11 +55,13 @@ jobs:
             goos: darwin
             goarch: amd64
             name: odm
+            ui: gui
           - os: windows-latest
             label: windows-amd64
             goos: windows
             goarch: amd64
             name: ODM.exe
+            ui: gui
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -49,23 +69,28 @@ jobs:
           go-version: stable # macos-latest (macOS 26) failed to link with Go 1.23
           cache: true
 
+      - name: Install GTK 4 and WebKitGTK 6.0
+        if: runner.os == 'Linux' && matrix.ui == 'gui'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+
       - name: Install Linux GL/X11 deps
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && matrix.ui == 'fyne'
         run: |
           sudo apt-get update
           sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
-      # Windows ships the desktop UI of internal/gui (docs/GUI.md): its page
-      # is built first and embedded in the exe.
+      # The desktop UI's page is built first and embedded in the program.
       - uses: actions/setup-node@v4
-        if: runner.os == 'Windows'
+        if: matrix.ui == 'gui'
         with:
           node-version: 24
           cache: npm
           cache-dependency-path: internal/gui/frontend/package-lock.json
 
-      - name: Build the page (Windows)
-        if: runner.os == 'Windows'
+      - name: Build the page
+        if: matrix.ui == 'gui'
         working-directory: internal/gui/frontend
         shell: bash
         run: |
@@ -77,21 +102,25 @@ jobs:
         run: |
           VERSION="${GITHUB_REF_NAME#v}"
           LDFLAGS="-s -w -X odm/internal/version.Version=${VERSION}"
-          if [ "${{ matrix.goos }}" = "windows" ]; then
-            # The desktop UI of internal/gui: no cgo. production is Wails'
-            # release mode (no WebView2 right-click menu or developer tools).
-            CGO_ENABLED=0 GOOS=windows GOARCH=${{ matrix.goarch }} \
-              go build -tags gui,production -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
-              -o "dist/${{ matrix.name }}" ./cmd/odm
-          else
-            # Linux and macOS: the Fyne UI, with cgo.
-            if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
-              export CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
-            fi
-            CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
-              go build -tags fyne -trimpath -ldflags "${LDFLAGS}" \
-              -o "dist/${{ matrix.name }}" ./cmd/odm
+          if [ "${{ matrix.goos }}" = "darwin" ] && [ "${{ matrix.goarch }}" = "amd64" ]; then
+            export CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
           fi
+          # production is Wails' release mode (no right-click menu of the web
+          # view or developer tools). Windows needs no cgo; the rest does.
+          case "${{ matrix.goos }}/${{ matrix.ui }}" in
+            windows/gui)
+              CGO_ENABLED=0 GOOS=windows GOARCH=${{ matrix.goarch }} \
+                go build -tags gui,production -trimpath -ldflags "${LDFLAGS} -H=windowsgui" \
+                -o "dist/${{ matrix.name }}" ./cmd/odm ;;
+            */gui)
+              CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+                go build -tags gui,production -trimpath -ldflags "${LDFLAGS}" \
+                -o "dist/${{ matrix.name }}" ./cmd/odm ;;
+            *)
+              CGO_ENABLED=1 GOOS=${{ matrix.goos }} GOARCH=${{ matrix.goarch }} \
+                go build -tags fyne -trimpath -ldflags "${LDFLAGS}" \
+                -o "dist/${{ matrix.name }}" ./cmd/odm ;;
+          esac
 
       - name: Package
         shell: bash

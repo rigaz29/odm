@@ -33,15 +33,6 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Added
 
-- A preview of the new desktop UI for Linux (GTK 4, WebKitGTK 6.0) and
-  macOS, built by CI on every push as `odm-next-linux-amd64` and
-  `odm-next-darwin-arm64`, or with `./scripts/build.sh linux-gui` and
-  `darwin-gui`. It runs as it is, not polished: the system's window frame,
-  the clipboard monitor read every second, and the Setup window pointing to
-  the releases page for the extension. The releases there stay the Fyne UI
-  until the preview has been tried. ODM also starts now where the system's
-  notifications cannot be set up (on macOS outside an `.app`, on Linux
-  without a session bus), without them.
 - A Setup window on Windows, opened at ODM's first start (and once for
   someone who used ODM before when yt-dlp or ffmpeg is missing), or from
   ⋯ → Help → Set up ODM… and Options → General → Install the extension….
@@ -56,6 +47,23 @@ All notable changes to ODM are documented here. The format is based on
   folder up to date at every start, so the extension follows ODM's
   releases after a browser restart. Browsers take no extension from
   outside their store by themselves, so these steps stay the person's.
+
+### Changed
+
+- Linux and macOS get the new desktop UI too, as Windows did in 0.5.0:
+  the same windows, drawn by WebKitGTK on Linux and WebKit on macOS. On
+  Linux it needs GTK 4 and WebKitGTK 6.0 (`libwebkitgtk-6.0-4`: Ubuntu
+  24.04, Debian 12, Fedora 39 or later); older distributions, such as
+  Ubuntu 22.04 or Linux Mint 21, take the new `odm-linux-amd64-fyne` and
+  `odm-linux-arm64-fyne` archives, with the Fyne UI as before. The new UI
+  runs there as it is, not polished yet: it keeps the system's window
+  frame, the clipboard monitor reads the clipboard every second, and the
+  Setup window points to the releases page for the extension. Its first
+  start takes the theme and language chosen in the Fyne UI. ODM also
+  starts now where the system's notifications cannot be set up (on macOS
+  outside an `.app`, on Linux without a session bus), without them.
+  `./scripts/build.sh linux`, `darwin` and `darwin-intel` build the new
+  UI; `linux-fyne` and `darwin-fyne` build the Fyne one.
 
 ## [0.5.0] - 2026-10-17
 

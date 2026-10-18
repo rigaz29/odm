@@ -123,6 +123,10 @@ internal/engine, server, native, tools …    tidak berubah
   tanpa CGO, dan hasilnya `dist/ODM.exe` (sejak Tahap 6; sebelumnya
   pratinjau `ODM-Next.exe` lewat target `gui`). UI Fyne untuk Windows tetap
   bisa dibangun dengan `bash scripts/build.sh windows-fyne`.
+- Linux dan macOS (sejak Tahap 8): `bash scripts/build.sh linux`, `darwin`,
+  atau `darwin-intel`, dengan CGO (GTK 4 + WebKitGTK 6.0 di Linux, Xcode
+  command line tools di macOS); hasilnya `dist/odm`. UI Fyne di sana:
+  `linux-fyne` dan `darwin-fyne`.
 - Tag `production` adalah mode rilis Wails: menu klik kanan bawaan WebView2
   (Back, Refresh, Print, Inspect) disembunyikan kecuali di kolom teks dan
   teks yang diseleksi, dan DevTools mati. Build uji yang perlu DevTools atau
@@ -220,6 +224,20 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 lihat [rencananya](#rencana-linux-dan-macos-penyesuaian-minimal) dan hasil
 ujinya.
 
+**Tahap 8: alih di Linux dan macOS.** Selesai 2026-10-18, atas permintaan
+pemilik setelah uji jalan Tahap 7.
+- UI baru menjadi rilis bawaan Linux (amd64, arm64) dan macOS (Apple
+  silicon, Intel): `scripts/build.sh linux`/`darwin`/`darwin-intel`, CI,
+  dan rilis memakai tag `gui`.
+- UI Fyne tetap dirilis untuk Linux tanpa WebKitGTK 6.0 (Ubuntu 22.04,
+  Linux Mint 21, Debian 11) sebagai `odm-linux-amd64-fyne` dan
+  `odm-linux-arm64-fyne`, dibangun di Ubuntu 22.04 supaya jalan di sana.
+  macOS tidak butuh cadangan: WebKit selalu ada.
+- Tema dan bahasa dari preferensi Fyne kini dibaca dari tempat Fyne
+  menyimpannya di tiap sistem (`~/.config/fyne` di Linux,
+  `~/Library/Preferences/fyne` di macOS), tidak hanya di Windows.
+- README (instal, kebutuhan Linux, build) dan CHANGELOG diperbarui.
+
 ## Rencana Linux dan macOS (penyesuaian minimal)
 
 Status: **selesai 2026-10-18** (rencana dicatat 2026-10-17): butir 1–5
@@ -288,10 +306,11 @@ tidak dipoles. Kerapian per platform menyusul bila diperlukan.
 - Linux tanpa berkas `.desktop` atau paket; tray di GNOME butuh ekstensi
   AppIndicator, sama seperti Fyne.
 
-**Rilis:** Fyne tetap menjadi rilis Linux/macOS. UI baru keluar sebagai
-artefak pratinjau CI (misalnya `odm-next-linux-amd64` dan
-`odm-next-darwin-arm64`). Setelah dicoba dan cocok, rilisnya dialihkan
-seperti Tahap 6.
+**Rilis:** awalnya Fyne tetap menjadi rilis Linux/macOS dan UI baru hanya
+artefak pratinjau CI (`odm-next-linux-amd64`, `odm-next-darwin-arm64`).
+Setelah uji jalan, rilisnya dialihkan di Tahap 8 (2026-10-18): UI baru
+menjadi `odm`, dan Fyne tetap ada sebagai `odm-linux-*-fyne` untuk Linux
+tanpa WebKitGTK 6.0.
 
 **Pengujian:**
 - Linux: WSL Ubuntu di komputer pengembang (26.04). Paket build

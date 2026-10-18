@@ -21,7 +21,7 @@ import (
 	"odm/internal/tools"
 )
 
-// desk is ODM on the Windows desktop, as the Fyne UI's (internal/ui/
+// desk is ODM on the desktop, as the Fyne UI's (internal/ui/
 // desktop.go, setupTray; notify_desktop.go): the tray icon and its menu,
 // closing the main window into the tray, and the system notifications and
 // sounds for finished and failed downloads.

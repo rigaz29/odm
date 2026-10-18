@@ -56,20 +56,25 @@ jobs:
           name: ODM-windows-amd64.exe
           path: dist/ODM.exe
 
-  # The desktop UI on Linux (GTK 4, WebKitGTK 6.0) and macOS, a preview:
-  # the releases there stay the Fyne UI until it has been tried
-  # (docs/GUI.md, "Rencana Linux dan macOS").
-  gui-preview:
-    name: Desktop UI preview (${{ matrix.os }})
+  # The desktop UI on Linux (GTK 4, WebKitGTK 6.0) and macOS, built as the
+  # releases build it. Intel Macs are cross-compiled on the arm64 runner,
+  # so only the native builds run the tests.
+  gui-unix:
+    name: Desktop UI (${{ matrix.label }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - os: ubuntu-latest
-            artifact: odm-next-linux-amd64
+            label: linux-amd64
+          - os: ubuntu-24.04-arm
+            label: linux-arm64
           - os: macos-latest
-            artifact: odm-next-darwin-arm64
+            label: darwin-arm64
+          - os: macos-latest
+            label: darwin-amd64
+            cross: true
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
@@ -91,32 +96,38 @@ jobs:
         run: |
           npm ci --no-audit --no-fund
           npm run build
-      - run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
-      - run: go test -tags gui ./internal/gui/ ./internal/i18n/
-      - name: Build the preview
+      - if: ${{ !matrix.cross }}
+        run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
+      - if: ${{ !matrix.cross }}
+        run: go test -tags gui ./internal/gui/ ./internal/i18n/
+      - name: Build
         run: |
+          if [ "${{ matrix.cross }}" = "true" ]; then
+            export GOARCH=amd64 CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
+          fi
           CGO_ENABLED=1 go build -tags gui,production -trimpath -ldflags "-s -w" \
-            -o "dist/${{ matrix.artifact }}" ./cmd/odm
+            -o "dist/odm-${{ matrix.label }}" ./cmd/odm
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}
+          name: odm-${{ matrix.label }}
+          path: dist/odm-${{ matrix.label }}
 
-  # The Fyne UI: what Linux and macOS ship, and on Windows a build kept
-  # working (./scripts/build.sh windows-fyne).
+  # The Fyne UI, the previous one: what Linux without WebKitGTK 6.0 ships,
+  # built on Ubuntu 22.04 as the releases build it, and elsewhere a build
+  # kept working (./scripts/build.sh linux-fyne, darwin-fyne, windows-fyne).
   desktop:
-    name: Desktop (${{ matrix.os }})
+    name: Fyne UI (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: ubuntu-latest
-            artifact: odm-linux-amd64
-          - os: ubuntu-24.04-arm
-            artifact: odm-linux-arm64
+          - os: ubuntu-22.04
+            artifact: odm-fyne-linux-amd64
+          - os: ubuntu-22.04-arm
+            artifact: odm-fyne-linux-arm64
           - os: macos-latest
-            artifact: odm-darwin-arm64
+            artifact: odm-fyne-darwin-arm64
           - os: windows-latest
             artifact: ODM-fyne-windows-amd64.exe
     steps:

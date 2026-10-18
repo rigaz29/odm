@@ -80,15 +80,16 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - Narrator and other screen readers read every part of the windows, and
   the keyboard reaches all of it (in the list: the arrows to move and
   select, the Menu key for a download's menu).
-- Runs from the system tray, with Windows notifications when a download
-  finishes or fails. ODM can launch at login, and starting it again brings
+- Runs from the system tray, with the system's notifications when a
+  download finishes or fails. ODM can launch at login, and starting it again brings
   the running window forward.
 - Checks GitHub Releases for new versions. It only notifies; it never updates
   itself.
-- On Windows the windows are a page drawn by Microsoft Edge WebView2
-  ([Wails](https://wails.io)); on Linux and macOS they are built with
-  [Fyne](https://fyne.io), with the same features. The new windows have a
-  preview for Linux and macOS too (see Build from source).
+- The windows are a page drawn by the system's web view
+  ([Wails](https://wails.io)): Microsoft Edge WebView2 on Windows,
+  WebKitGTK on Linux and WebKit on macOS. ODM's previous windows, built
+  with [Fyne](https://fyne.io) and with the same features, remain as a
+  build for older Linux distributions.
 
 **Integration**
 - A browser extension (Chrome, Edge, Firefox) hands downloads to ODM through
@@ -156,6 +157,8 @@ Once a version is tagged, prebuilt archives are attached to
 | Windows x64 | `odm-windows-amd64.zip` |
 | Linux x64 | `odm-linux-amd64.tar.gz` |
 | Linux ARM64 | `odm-linux-arm64.tar.gz` |
+| Linux x64, older distributions | `odm-linux-amd64-fyne.tar.gz` |
+| Linux ARM64, older distributions | `odm-linux-arm64-fyne.tar.gz` |
 | macOS (Apple silicon) | `odm-darwin-arm64.tar.gz` |
 | macOS (Intel) | `odm-darwin-amd64.tar.gz` |
 
@@ -165,6 +168,19 @@ On Windows ODM needs the Microsoft Edge WebView2 Runtime. It comes with
 Windows 11 and with Windows 10 kept up to date; where it is missing, ODM
 says so and offers Microsoft's
 [download page](https://developer.microsoft.com/microsoft-edge/webview2/).
+
+On Linux ODM needs GTK 4 and WebKitGTK 6.0 (the `libwebkitgtk-6.0-4`
+package on Debian and Ubuntu, `webkitgtk6.0` on Fedora), which Ubuntu
+24.04, Debian 12, Fedora 39 and later have. On older distributions, such
+as Ubuntu 22.04 or Linux Mint 21, take the `-fyne` archive: ODM's previous
+windows, built with Fyne, with the same features. On GNOME the tray icon
+needs the AppIndicator extension.
+
+On macOS open ODM the first time with right-click → Open, since it is not
+signed. It shows no notifications there, since it is not an `.app`.
+
+On Linux and macOS the windows run as they are, not polished yet: they
+keep the system's window frame and label shortcuts Ctrl.
 Settings and download state are stored in `<config>/odm/`. `<config>` is
 `%AppData%` on Windows, `~/Library/Application Support` on macOS and `~/.config`
 on Linux.
@@ -172,35 +188,27 @@ on Linux.
 ### Build from source
 
 ODM needs Go 1.25 or later. The engine uses only the standard library. The
-Windows desktop UI (`internal/gui`, the `gui` build tag) is a React page
-embedded in the exe, so its page is built first with Node.js 22 or later;
-it needs no cgo. The Linux and macOS desktop UI is built with Fyne behind
-the `fyne` build tag, so it needs cgo.
+desktop UI (`internal/gui`, the `gui` build tag) is a React page embedded
+in the program, so its page is built first with Node.js 22 or later. On
+Windows it needs no cgo; on Linux and macOS it does. The previous UI,
+built with Fyne behind the `fyne` build tag, needs cgo everywhere.
 
 | Target | Command | Requirements |
 | ------ | ------- | ------------ |
 | Windows | `./scripts/build.sh windows` | Node.js and npm |
+| Linux | `./scripts/build.sh linux` | Node.js and npm, `libgtk-4-dev libwebkitgtk-6.0-dev` |
+| macOS | `./scripts/build.sh darwin` (or `darwin-intel`) | Node.js and npm, Xcode command line tools |
+| Linux, Fyne UI | `./scripts/build.sh linux-fyne` | `libgl1-mesa-dev xorg-dev libxkbcommon-dev` |
+| macOS, Fyne UI | `./scripts/build.sh darwin-fyne` | Xcode command line tools |
 | Windows, Fyne UI | `./scripts/build.sh windows-fyne` | mingw-w64 (`CC_WINDOWS`, default `x86_64-w64-mingw32-gcc`) |
-| Linux | `./scripts/build.sh linux` | `libgl1-mesa-dev xorg-dev libxkbcommon-dev` |
-| macOS | `./scripts/build.sh darwin` (or `darwin-intel`) | Xcode command line tools |
-| Linux, new UI (preview) | `./scripts/build.sh linux-gui` | Node.js and npm, `libgtk-4-dev libwebkitgtk-6.0-dev` |
-| macOS, new UI (preview) | `./scripts/build.sh darwin-gui` | Node.js and npm, Xcode command line tools |
 | Headless | `./scripts/build.sh cli` | none |
-
-The new UI's preview for Linux and macOS (`odm-next`) runs as it is, not
-polished: it keeps the system's window frame and labels shortcuts Ctrl. On
-Linux it needs WebKitGTK 6.0 (Ubuntu 24.04, Debian 12, Fedora 39 or later)
-and, on GNOME, the AppIndicator extension for its tray icon. On macOS it
-shows no notifications, since it is not an `.app`; open it with right-click
-→ Open. CI builds it on every push, as the `odm-next-linux-amd64` and
-`odm-next-darwin-arm64` artifacts; the releases there stay the Fyne UI for
-now.
 
 ```bash
 go test ./...                                    # engine tests, no UI needed
-(cd internal/gui/frontend && npm ci && npm test && npm run build)  # the Windows UI's page
-go test -tags gui ./internal/gui ./internal/i18n # the Windows UI's Go side
+(cd internal/gui/frontend && npm ci && npm test && npm run build)  # the desktop UI's page
+go test -tags gui ./internal/gui ./internal/i18n # the desktop UI's Go side (cgo on Linux and macOS)
 go build -tags gui,production -ldflags -H=windowsgui -o ODM.exe ./cmd/odm  # Windows desktop build
+go build -tags gui,production -o odm ./cmd/odm   # Linux or macOS desktop build
 go test -tags fyne ./internal/ui                 # Fyne UI tests (cgo)
 go build -tags fyne -o odm ./cmd/odm             # Fyne desktop build for the current OS
 ```
@@ -352,8 +360,8 @@ download-manager techniques. ODM implements them in its own code.
 ```
 cmd/odm             entry point: desktop app, native-messaging relay, headless mode
 internal/engine     probe, chunk planner, transfers, queues, scheduler, settings, state
-internal/gui        desktop UI on Windows (Wails, WebView2), a preview on Linux and macOS: the service, tray and windows; the React page in frontend/
-internal/ui         desktop UI on Linux and macOS (Fyne): main window, progress, Scheduler, Options
+internal/gui        desktop UI (Wails: WebView2, WebKitGTK, WebKit): the service, tray and windows; the React page in frontend/
+internal/ui         previous desktop UI (Fyne), kept for older Linux: main window, progress, Scheduler, Options
 internal/i18n       the translations both desktop UIs share
 internal/server     JSON + SSE API, token guard, embedded web UI
 internal/ipc        Unix-socket control channel and single-instance lock

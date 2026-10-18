@@ -1,17 +1,16 @@
 #!/usr/bin/env bash
 # Build ODM.
 #
-# Windows builds the desktop UI of internal/gui (build tag "gui", see
-# docs/GUI.md): the page first (needs Node and npm), then the exe, with no
-# cgo. Linux and macOS build the Fyne UI (build tag "fyne"), which needs cgo:
-#   Linux    -> libgl1-mesa-dev xorg-dev
-#   macOS    -> Xcode command line tools
-# The "linux-gui" and "darwin-gui" targets build the new UI there as a
-# preview (odm-next), with cgo too:
+# Every system builds the desktop UI of internal/gui (build tag "gui", see
+# docs/GUI.md): the page first (needs Node and npm), then the program. On
+# Windows it needs no cgo; on Linux and macOS it does:
 #   Linux    -> libgtk-4-dev libwebkitgtk-6.0-dev (GTK 4, WebKitGTK 6.0)
 #   macOS    -> Xcode command line tools
-# The "windows-fyne" target builds the Fyne UI for Windows too, with
-# mingw-w64 (CC_WINDOWS, default x86_64-w64-mingw32-gcc).
+# The "-fyne" targets build the previous UI, Fyne's (build tag "fyne"),
+# which needs cgo everywhere; it stays for Linux without WebKitGTK 6.0:
+#   Linux    -> libgl1-mesa-dev xorg-dev
+#   macOS    -> Xcode command line tools
+#   Windows  -> mingw-w64 (CC_WINDOWS, default x86_64-w64-mingw32-gcc)
 # The "cli" target builds the engine + web UI with no cgo and no desktop UI.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -64,11 +63,24 @@ cli() {
   echo "built $OUT/$name"
 }
 
+# page builds the desktop UI's page once, for every gui build after it.
+page_built=""
+page() {
+  [ -n "$page_built" ] && return 0
+  (cd internal/gui/frontend && npm ci --no-audit --no-fund && npm run build)
+  page_built=1
+}
+
 gui() {
   local goos="$1" goarch="$2" name="$3" ldflags="-s -w" cgo=1
   [ "$goos" = "windows" ] && ldflags="-s -w -H=windowsgui" && cgo=0
   echo "building gui $goos/$goarch -> $OUT/$name"
-  (cd internal/gui/frontend && npm ci --no-audit --no-fund && npm run build)
+  page
+  # Intel Macs from an Apple silicon one: Apple's clang builds x86_64 with
+  # -arch (and on an Intel Mac it is what it builds anyway).
+  if [ "$goos" = "darwin" ] && [ "$goarch" = "amd64" ]; then
+    export CGO_CFLAGS="-arch x86_64" CGO_LDFLAGS="-arch x86_64"
+  fi
   # production: Wails' release mode, without the web view's own right-click
   # menu (Back, Refresh, Print, Inspect) and its developer tools.
   CGO_ENABLED=$cgo GOOS="$goos" GOARCH="$goarch" \
@@ -79,16 +91,16 @@ gui() {
 case "${1:-windows}" in
   windows) gui windows amd64 ODM.exe ;;
   windows-fyne) desktop windows amd64 ODM.exe ;;
-  linux) desktop linux amd64 odm ;;
-  linux-gui) gui linux amd64 odm-next ;;
-  darwin) desktop darwin arm64 odm ;;
-  darwin-gui) gui darwin arm64 odm-next ;;
-  darwin-intel) desktop darwin amd64 odm ;;
+  linux) gui linux amd64 odm ;;
+  linux-fyne) desktop linux amd64 odm ;;
+  darwin) gui darwin arm64 odm ;;
+  darwin-intel) gui darwin amd64 odm ;;
+  darwin-fyne) desktop darwin arm64 odm ;;
   cli) cli linux amd64 odm-cli ;;
   all)
     gui windows amd64 ODM.exe
-    desktop linux amd64 odm
-    desktop darwin arm64 odm
+    gui linux amd64 odm
+    gui darwin arm64 odm
     ;;
-  *) echo "usage: $0 [windows|windows-fyne|linux|linux-gui|darwin|darwin-gui|darwin-intel|cli|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [windows|windows-fyne|linux|linux-fyne|darwin|darwin-intel|darwin-fyne|cli|all]" >&2; exit 2 ;;
 esac

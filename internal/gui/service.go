@@ -31,20 +31,20 @@ type Item struct {
 	Category string  `json:"category"`
 	Queue    string  `json:"queue"`
 	// Order is the place in its queue's run order: lower runs first.
-	Order       int       `json:"order"`
-	Description string    `json:"description"`
-	Live        bool      `json:"live"`
-	Site        bool      `json:"site"`
-	Stream      string    `json:"stream"`
-	Verifying   bool      `json:"verifying"`
+	Order       int    `json:"order"`
+	Description string `json:"description"`
+	Live        bool   `json:"live"`
+	Site        bool   `json:"site"`
+	Stream      string `json:"stream"`
+	Verifying   bool   `json:"verifying"`
 	// A torrent: Seeding while it uploads after finishing, at UploadSpeed;
 	// Uploaded in all; Peers and Seeds connected.
-	Torrent     bool  `json:"torrent"`
-	Seeding     bool  `json:"seeding"`
-	Uploaded    int64 `json:"uploaded"`
-	UploadSpeed int64 `json:"uploadSpeed"`
-	Peers       int   `json:"peers"`
-	Seeds       int   `json:"seeds"`
+	Torrent     bool      `json:"torrent"`
+	Seeding     bool      `json:"seeding"`
+	Uploaded    int64     `json:"uploaded"`
+	UploadSpeed int64     `json:"uploadSpeed"`
+	Peers       int       `json:"peers"`
+	Seeds       int       `json:"seeds"`
 	CreatedAt   time.Time `json:"createdAt"`
 	// UpdatedAt is the last attempt: when the download last started,
 	// stopped or failed.

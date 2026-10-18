@@ -435,76 +435,65 @@ Nanti: halaman yang sama untuk web UI `-serve`.
 Tujuan: ODM bisa mengunduh dari file `.torrent` dan tautan magnet seperti
 unduhan lain: masuk antrean, terlihat progresnya, bisa dijeda dan
 dilanjutkan, lalu ikut mengunggah (seeding) secukupnya setelah selesai.
-Mesin torrentnya bisa dipilih di Options: anacrolix/torrent atau
-libtorrent.
+Mesinnya libtorrent.
 
-Rancangan (disepakati 2026-10-18, sesuai rekomendasi review; libtorrent
-sebagai mesin kedua ditambahkan atas permintaan pemilik):
+Rancangan (disepakati 2026-10-18; pemilik memilih libtorrent saja, tanpa
+anacrolix/torrent):
 
-- Dua mesin, satu antarmuka:
-  - **anacrolix/torrent** ([github](https://github.com/anacrolix/torrent),
-    MPL-2.0, juga dipakai Gopeed) adalah mesin bawaan. Pustaka Go ini
-    tertanam di ODM, jadi tidak perlu diunduh lagi. Isinya lengkap:
-    magnet, DHT, PEX, uTP, enkripsi, torrent v2, dan pilih file;
-  - **libtorrent** ([libtorrent.org](https://www.libtorrent.org/),
-    libtorrent-rasterbar 2.1, BSD-3, dipakai qBittorrent dan Deluge)
-    adalah mesin pilihan. Ia lebih matang dan lebih hemat, dan punya dua
-    hal yang tidak ada di anacrolix: batas kecepatan per unduhan, dan
-    koneksi ke peer lewat proxy SOCKS5;
-  - kedua mesin memakai antarmuka yang sama di paket baru
-    `internal/torrent`, yang dipasang dari `main` lewat hook seperti
-    `EnsureTool` dan `MarkFile`. Engine tetap hanya memakai pustaka
-    standar. Satu rangkaian test kontrak dijalankan untuk kedua mesin.
-- libtorrent berjalan sebagai program pendamping `odm-libtorrent`, bukan
-  ditanam lewat cgo:
+- Mesin: **libtorrent** ([libtorrent.org](https://www.libtorrent.org/),
+  libtorrent-rasterbar 2.1, BSD-3), yang dipakai qBittorrent dan Deluge.
+  Isinya lengkap:
+  - magnet, DHT, PEX, uTP, enkripsi, torrent v2, dan pilih file;
+  - batas kecepatan per torrent;
+  - proxy SOCKS5 untuk peer;
+  - data lanjutan (*resume data*);
+  - UPnP dan NAT-PMP.
+- libtorrent berjalan sebagai program pendamping **`odm-libtorrent`**,
+  bukan ditanam lewat cgo:
   - `odm-libtorrent` adalah program C++ kecil di atas libtorrent, dengan
     kodenya di repo (`helper/libtorrent/`, CMake + vcpkg, dibangun
     statis);
-  - ODM berbicara dengannya lewat baris JSON di stdin/stdout, tanpa port.
-    Program itu ikut berhenti saat ODM berhenti, juga saat ODM crash;
+  - ODM berbicara dengannya lewat baris JSON di stdin/stdout, tanpa port
+    kontrol. Program itu berhenti saat stdin tertutup. Di Windows ia juga
+    diikat ke job object ODM, supaya ikut mati saat ODM crash;
   - alasannya: libtorrent butuh C++, Boost, dan OpenSSL. Kalau ditanam,
-    ketujuh build rilis butuh cgo dan toolchain C++, padahal `ODM.exe`
-    Windows sekarang dibangun tanpa cgo. Sebagai program terpisah,
-    `ODM.exe` tidak berubah dan tidak membesar;
-  - dibangun dan dirilis seperti ffmpeg ringan: workflow sendiri, tag
-    `odm-libtorrent-<versi>-<n>`, pre-release yang tidak pernah menjadi
-    rilis terbaru (yang dibaca cek pembaruan ODM), dengan SHA-256 dan
-    lisensi libtorrent, Boost, dan OpenSSL di paketnya. Target: Windows
-    x64, Linux x64/ARM64 (dibangun di Ubuntu 22.04), dan macOS Apple
-    silicon/Intel;
-  - diunduh oleh `tools.Keeper` saat pengguna memilih libtorrent, dengan
-    progres, lalu diperbarui seperti yt-dlp.
-- Berpindah mesin:
-  - pilihannya ada di Options → Torrent → Mesin. Saat diganti, torrent
-    yang berjalan dijeda, mesin lama dimatikan, mesin baru dinyalakan,
-    lalu torrent dilanjutkan;
-  - file di disk dipakai bersama. ODM yang menentukan jalur setiap file,
-    dan kedua mesin menulis ke jalur yang sama;
-  - data milik ODM (metainfo, pilihan file, total unggahan, lama seeding)
-    disimpan oleh engine, jadi tidak ikut mesin;
-  - catatan piece mana yang sudah lengkap disimpan per mesin. Karena itu,
-    pertama kali torrent dibuka di mesin lain, file-nya diperiksa ulang
-    (status "Memeriksa…"). Untuk torrent besar ini butuh waktu, tapi tidak
-    ada yang diunduh ulang selama file-nya utuh;
-  - kontrol yang hanya didukung libtorrent (batas kecepatan per unduhan,
-    proxy SOCKS5 untuk peer) dinonaktifkan dengan keterangan saat memakai
-    anacrolix.
+    ketujuh build rilis ODM butuh cgo dan toolchain C++, padahal
+    `ODM.exe` Windows sekarang dibangun tanpa cgo. Crash di kode C++ juga
+    akan menjatuhkan seluruh ODM. Sebagai program terpisah, `ODM.exe`
+    tidak berubah dan tidak membesar, dan crash hanya menghentikan
+    torrent;
+  - di sisi ODM, paket Go baru `internal/torrent` menjalankan program itu
+    dan menerjemahkan protokolnya. Paket ini dipasang dari `main` lewat
+    hook seperti `EnsureTool` dan `MarkFile`, jadi engine tetap hanya
+    memakai pustaka standar.
+- Distribusinya mengikuti ffmpeg ringan:
+  - workflow sendiri membangun lima target: Windows x64, Linux x64/ARM64
+    (dibangun di Ubuntu 22.04), dan macOS Apple silicon/Intel;
+  - rilisnya pre-release dengan tag `odm-libtorrent-p<protokol>-<versi>-<n>`
+    (misalnya `odm-libtorrent-p1-2.1.2-1`), yang tidak pernah menjadi
+    rilis terbaru yang dibaca cek pembaruan ODM. Paketnya berisi SHA-256
+    serta lisensi libtorrent (BSD-3), Boost (BSL-1.0), dan OpenSSL
+    (Apache-2.0);
+  - nomor protokol ada di prefix tag, jadi ODM versi lama tidak pernah
+    mengunduh `odm-libtorrent` yang protokolnya tidak ia kenal. Saat mulai,
+    program itu juga menyebut versi protokolnya;
+  - `tools.Keeper` mengunduhnya saat torrent pertama ditambahkan, dengan
+    pertanyaan dan progres seperti yt-dlp dan ffmpeg, lalu
+    memperbaruinya. Jendela Setup mencantumkannya sebagai pilihan, bukan
+    bagian dari "pasang semua".
 - Biaya:
-  - anacrolix, diukur dengan program uji: exe Windows naik sekitar 17 MB
-    (3,7 → 20,7 MB). Graf dependensinya berisi 252 modul, termasuk WebRTC
-    (pion) untuk WebTorrent. Di Tahap 1 ukurannya dicoba dikurangi;
-  - libtorrent tidak menambah ukuran `ODM.exe`. Ukuran unduhan
-    `odm-libtorrent` dan lama build-nya diukur di awal Tahap 4.
-    vcpkg mengompilasi Boost dan OpenSSL, jadi build pertama lama, lalu
-    di-cache;
-  - repo mendapat kode C++ pertamanya.
-- Lisensi: anacrolix (MPL-2.0) dipakai tanpa diubah. README menyebut
-  lisensi dan tempat sumber kedua mesin, seperti yang diminta MPL dan
-  BSD.
+  - `ODM.exe` tidak membesar;
+  - ukuran unduhan `odm-libtorrent` dan lama build-nya diukur di awal
+    Tahap 1. vcpkg mengompilasi Boost dan OpenSSL, jadi build pertama
+    lama, lalu di-cache;
+  - repo mendapat kode C++ pertamanya;
+  - torrent baru bisa dipakai setelah `odm-libtorrent` terunduh.
 - Satu unduhan = satu torrent, berupa satu file atau satu folder:
   - selama diunduh, isinya ada di `<nama>.odmpart` (file atau folder) di
     folder tujuan, lalu diganti nama saat selesai, dengan aturan nama
     ganda yang sama seperti unduhan lain;
+  - ODM yang menentukan jalur setiap file, lalu memberikannya ke
+    libtorrent;
   - kategori dipilih dari ekstensi file terbesar;
   - file yang tidak dicentang tetapi ikut tertulis karena berbagi piece di
     batasnya dihapus setelah selesai.
@@ -520,50 +509,75 @@ sebagai mesin kedua ditambahkan atas permintaan pemilik):
     lagi;
   - seeding tidak dihitung dalam batas unduhan bersamaan.
 - Jaringan:
-  - mesin torrent hanya jalan saat ada torrent yang diunduh atau di-seed,
-    lalu berhenti. Pengguna yang tidak memakai torrent tidak membuka port
-    dan tidak menanggung memorinya;
+  - `odm-libtorrent` hanya jalan saat ada torrent yang diunduh atau
+    di-seed, lalu berhenti. Pengguna yang tidak memakai torrent tidak
+    membuka port dan tidak menanggung memorinya;
   - port masuk dipilih acak sekali lalu disimpan, dan dibuka di router
-    lewat UPnP. Windows Firewall bertanya sekali saat torrent pertama
-    dimulai, dan ODM memberi tahu itu sebelumnya. Dengan libtorrent,
-    Windows bertanya sekali lagi, untuk `odm-libtorrent.exe`. ODM tidak
+    lewat UPnP/NAT-PMP;
+  - Windows Firewall bertanya sekali untuk `odm-libtorrent.exe` saat
+    torrent pertama dimulai, dan ODM memberi tahu itu sebelumnya.
+    `ODM.exe` sendiri tetap tidak membuka port ke luar, dan ODM tidak
     menambah aturan firewall sendiri. Koneksi masuk dan UPnP bisa
     dimatikan di Options;
-  - batas kecepatan untuk semua unduhan juga berlaku untuk torrent, di
-    kedua mesin. Batas per unduhan hanya berlaku dengan libtorrent. Batas
-    unggah diatur terpisah di Options;
-  - dengan anacrolix, proxy ODM hanya dipakai untuk tracker dan web seed
-    (HTTP); koneksi ke peer tidak lewat proxy. Dengan libtorrent, proxy
-    SOCKS5 juga dipakai untuk peer. Selain lewat proxy itu, peer melihat
-    IP pengguna. Ini ditulis di Options dan README.
+  - batas kecepatan untuk semua unduhan dan batas per unduhan berlaku
+    juga untuk torrent. Batas unggah diatur terpisah di Options;
+  - proxy ODM diteruskan ke libtorrent. Proxy SOCKS5 dipakai untuk semua
+    koneksi torrent, termasuk ke peer. Proxy HTTP dan proxy sistem hanya
+    dipakai untuk tracker dan web seed; koneksi ke peer berjalan langsung
+    dan peer melihat IP pengguna. Ini ditulis di Options dan README;
+  - tracker dan web seed tidak boleh dipakai torrent dari internet untuk
+    menjangkau jaringan lokal. `ssrf_mitigation` libtorrent dinyalakan,
+    dan ODM membuang tracker serta web seed yang menunjuk ke alamat lokal.
+    Peer di jaringan lokal tetap boleh, karena itu bagian dari
+    protokolnya.
 - Cakupan:
-  - Tahap 1–3: `.torrent` dan magnet di UI baru, CLI, dan API, dengan
-    anacrolix. Tahap ini bisa dirilis lebih dulu;
-  - Tahap 4: libtorrent sebagai mesin kedua, dan pilihan mesin;
-  - Tahap 5: ekstensi browser dan asosiasi file;
+  - UI baru, CLI, dan API;
   - UI Fyne tidak ikut, karena kini hanya cadangan. Torrent yang sudah ada
     tetap tampil di daftarnya, tanpa jendela khusus.
 
-Tahap 1: antarmuka mesin dan anacrolix
+Tahap 1: program `odm-libtorrent` dan rilisnya
 
-- [ ] Antarmuka mesin di `internal/torrent`, dirancang untuk kedua mesin
-      sejak awal. **S** Isinya: tambah torrent (metainfo atau magnet,
-      jalur file dari ODM, pilihan file), tunggu metadata, status (byte
-      dan piece terverifikasi, peer, seed, kecepatan, total unggahan),
-      jeda, lanjut, ubah pilihan file, hapus, dan pengaturan klien (port,
-      UPnP, koneksi masuk, batas kecepatan). Tiap mesin juga melaporkan
-      apa yang ia dukung (batas per unduhan, proxy untuk peer).
-- [ ] Mesin anacrolix dan jenis unduhan `Torrent` di engine (seperti
-      `Site` dan `Stream`). **B** Isinya:
+- [ ] Uji coba dulu: bangun libtorrent 2.1 statis dengan vcpkg di kelima
+      target, lalu ukur ukuran program dan lama build-nya. Hasilnya
+      dilaporkan sebelum lanjut. **K**
+- [ ] Program `odm-libtorrent` (C++, `helper/libtorrent/`). **B** Isinya:
+      - perintah dan kejadian dalam baris JSON di stdin/stdout, dengan
+        versi protokol. Perintahnya: tambah torrent (metainfo atau
+        magnet, jalur file dari ODM, pilihan file), tunggu metadata,
+        status (byte dan piece terverifikasi, peer, seed, kecepatan, total
+        unggahan), jeda, lanjut, ubah pilihan file, batas per torrent,
+        hapus, dan pengaturan sesi (port, UPnP, koneksi masuk, batas
+        kecepatan, proxy);
+      - data lanjutan libtorrent disimpan di folder data ODM, supaya
+        torrent berlanjut tanpa diperiksa ulang setelah ODM dibuka lagi;
+      - masa hidupnya terikat ke ODM: berhenti saat stdin tertutup, dan
+        di Windows ikut job object ODM.
+- [ ] Workflow `odm-libtorrent.yml` untuk kelima target. **S** Isinya:
+      - dipicu tag `odm-libtorrent-p<protokol>-<versi>-<n>`;
+      - dirilis sebagai pre-release yang bukan terbaru, dengan SHA-256,
+        lisensi, dan README di paketnya;
+      - vcpkg di-cache;
+      - CI biasa membangun versi Linux (dengan cache), supaya test Go di
+        Tahap 2 bisa memakainya.
+
+Tahap 2: engine
+
+- [ ] `internal/torrent` dan `tools.Keeper`. **S** Isinya:
+      - menjalankan `odm-libtorrent` dan menerjemahkan protokolnya;
+      - memeriksa versi protokol program;
+      - entri `odm-libtorrent` di `tools.Keeper`: diunduh saat dibutuhkan,
+        dengan progres, lalu diperbarui seperti yt-dlp;
+      - `odm-libtorrent` dicantumkan di jendela Setup.
+- [ ] Jenis unduhan `Torrent` di engine (seperti `Site` dan `Stream`).
+      **B** Isinya:
       - masukan file `.torrent` (dari disk atau URL) dan magnet (`btih`
-        dan `btmh`), dengan metadata magnet dari DHT dan tracker;
+        dan `btmh`);
       - pilihan file;
       - progres dari piece yang sudah terverifikasi, plus jumlah peer dan
         seed;
-      - jeda, lanjut, dan lanjut setelah ODM ditutup. Status piece
-        disimpan di folder data ODM, dengan cara yang sama di semua sistem
-        dan tanpa cgo;
-      - antrean, batas kecepatan semua unduhan, dan aksi selesai.
+      - jeda, lanjut, dan lanjut setelah ODM ditutup;
+      - antrean, batas kecepatan (semua unduhan dan per unduhan), dan aksi
+        selesai.
 - [ ] Penamaan dan keamanan. **S** Isinya:
       - nama dari torrent disaring per bagian jalur: `SanitizeName`, `..`,
         jalur absolut, nama terlarang Windows, karakter arah teks;
@@ -573,27 +587,28 @@ Tahap 1: antarmuka mesin dan anacrolix
         magnet tidak perlu mengambil metadata lagi.
 - [ ] `-add` dan API menerima magnet dan URL `.torrent`. `-add` tanpa UI
       selesai saat unduhannya selesai, tanpa seeding. **K**
-- [ ] Test kontrak tanpa internet: seeder dan ODM di localhost di dalam
-      test, jalan di CI untuk semua sistem. **S** Kasusnya: satu file,
-      banyak file, pilihan file, jeda, restart, dan piece rusak. Test yang
-      sama dipakai lagi untuk libtorrent di Tahap 4. Ukuran exe diukur,
-      dan dicoba dikurangi.
+- [ ] Test tanpa internet: seeder dan ODM di localhost di dalam test,
+      dengan `odm-libtorrent` hasil build CI. **S** Kasusnya: satu file,
+      banyak file, pilihan file, jeda, restart, piece rusak, dan
+      `odm-libtorrent` yang crash. Test dilewati, dengan keterangan, kalau
+      programnya tidak ada.
 
-Tahap 2: seeding dan jaringan
+Tahap 3: seeding dan jaringan
 
 - [ ] Seeding dengan target rasio dan waktu, tanda `Seeding`, aksi
       "Hentikan seeding", dan lanjut setelah restart. **S**
-- [ ] Mesin torrent hanya jalan saat dibutuhkan. **S** Juga: port tetap,
-      UPnP, koneksi masuk yang bisa dimatikan, dan batas unggah. Torrent
-      privat (flag `private`) tidak diumumkan lewat DHT dan PEX.
-- [ ] Tracker dan web seed mengikuti aturan netguard: torrent dari
-      internet tidak bisa menyuruh ODM membuka alamat di jaringan lokal
-      lewat HTTP. Peer di jaringan lokal tetap boleh, karena itu bagian
-      dari protokolnya. **K**
+- [ ] `odm-libtorrent` hanya jalan saat dibutuhkan. **S** Juga: port
+      tetap, UPnP/NAT-PMP, koneksi masuk yang bisa dimatikan, batas
+      unggah, dan proxy ODM. Torrent privat (flag `private`) tidak
+      diumumkan lewat DHT dan PEX.
+- [ ] Tracker dan web seed ke jaringan lokal: `ssrf_mitigation` dan
+      penyaringan oleh ODM, seperti di rancangan. **K**
 
-Tahap 3: UI baru
+Tahap 4: UI baru
 
 - [ ] Unduhan Baru untuk torrent. **S** Isinya:
+      - kalau `odm-libtorrent` belum ada, tawaran untuk mengunduhnya
+        dulu;
       - magnet menunggu metadata dulu: "Mengambil info torrent…" dengan
         jumlah peer. Bisa dibatalkan, atau "Tambahkan dan unduh semua";
       - lalu daftar file bercentang dengan ukurannya, plus folder,
@@ -603,9 +618,7 @@ Tahap 3: UI baru
       - lencana Seeding dengan kecepatan unggah;
       - menu baris: Hentikan seeding, Buka folder, Salin tautan magnet;
       - jendela Progres dengan peta piece, peer dan seed, kecepatan unduh
-        dan unggah, rasio, dan daftar file;
-      - pembatas kecepatan per unduhan dinonaktifkan untuk torrent selama
-        mesinnya tidak mendukung, dengan keterangan alasannya.
+        dan unggah, rasio, dan daftar file.
 - [ ] Options → Torrent dan jendela selesai. **S** Isinya:
       - target seeding, port, UPnP, koneksi masuk, batas unggah, batas
         peer, buka URL `.torrent` sebagai torrent, dan catatan soal IP dan
@@ -621,32 +634,6 @@ Tahap 3: UI baru
         juga saat ODM sudah jalan. Saat ini instans kedua hanya memanggil
         `/api/show`, jadi alamat atau file-nya perlu diteruskan.
 
-Tahap 4: libtorrent sebagai mesin kedua
-
-- [ ] Uji coba dulu: bangun libtorrent 2.1 statis dengan vcpkg di kelima
-      target, lalu ukur ukuran program dan lama build-nya. Hasilnya
-      dilaporkan sebelum lanjut. **K**
-- [ ] Program `odm-libtorrent` (C++, `helper/libtorrent/`). **B** Isinya:
-      - perintah dan kejadian dalam baris JSON di stdin/stdout, sesuai
-        antarmuka mesin dari Tahap 1;
-      - data lanjutan (*resume data*) libtorrent disimpan di folder data
-        ODM;
-      - program berhenti saat stdin tertutup. Di Windows ia juga diikat
-        ke job object ODM, supaya ikut mati saat ODM crash.
-- [ ] Workflow `odm-libtorrent.yml` untuk kelima target. **S** Dipicu tag
-      `odm-libtorrent-<versi>-<n>`, dirilis sebagai pre-release yang
-      bukan terbaru, dengan SHA-256, lisensi, dan README di paketnya. vcpkg
-      di-cache. CI biasa membangun versi Linux (dengan cache) supaya test
-      kontrak juga jalan untuk libtorrent.
-- [ ] Mesin libtorrent di `internal/torrent`. **S** Isinya: menjalankan
-      `odm-libtorrent` dan menerjemahkan protokolnya, lulus test kontrak,
-      dan menambah entri di `tools.Keeper` (diunduh saat dipilih, dengan
-      progres, diperbarui seperti yt-dlp).
-- [ ] Pilihan mesin di Options → Torrent → Mesin. **S** Isinya: jeda →
-      ganti mesin → lanjut, pemeriksaan ulang file saat torrent pertama
-      kali dibuka di mesin lain, serta batas kecepatan per unduhan dan
-      proxy SOCKS5 untuk peer yang aktif saat memakai libtorrent.
-
 Tahap 5: ekstensi dan asosiasi
 
 - [ ] Ekstensi: "Download with ODM" menerima tautan `magnet:`, dan
@@ -659,20 +646,18 @@ Tahap 5: ekstensi dan asosiasi
 
 Tahap 6: uji jalan dan rilis
 
-- [ ] Uji di exe dengan torrent dan magnet resmi Ubuntu atau Debian, di
-      kedua mesin. **S** Yang dicek: unduh, jeda, tutup ODM, lanjut,
-      ganti mesin di tengah unduhan, seeding sampai target, dialog
-      firewall, dan pemakaian memori kedua mesin. Linux diuji lewat
-      harness WSL. README (fitur, pilihan mesin, firewall, IP dan proxy,
-      lisensi) dan CHANGELOG ikut diperbarui.
+- [ ] Uji di exe dengan torrent dan magnet resmi Ubuntu atau Debian. **S**
+      Yang dicek: unduhan pertama `odm-libtorrent`, unduh, jeda, tutup
+      ODM, lanjut, seeding sampai target, dialog firewall, proxy SOCKS5,
+      dan pemakaian memori. Linux diuji lewat harness WSL.
+- [ ] Rilis. **K** `odm-libtorrent` dirilis lebih dulu (push tagnya
+      ditanyakan ke pemilik), baru ODM yang memakainya. README (fitur,
+      firewall, IP dan proxy, lisensi) dan CHANGELOG ikut diperbarui.
 
 Nanti
 
-- [ ] Batas kecepatan per unduhan dan proxy SOCKS5 untuk peer di mesin
-      anacrolix (belum didukung pustakanya; dengan libtorrent sudah ada
-      sejak Tahap 4). **B**
 - [ ] Prioritas per file, dan unduh berurutan untuk menonton sambil
-      mengunduh. **S**
+      mengunduh (keduanya sudah ada di libtorrent). **S**
 - [ ] Asosiasi `magnet:` dan `.torrent` di Linux dan macOS (butuh file
       `.desktop` dan `.app`). **S**
 - [ ] Unggah file `.torrent` di web UI `-serve`. **K**
@@ -680,8 +665,7 @@ Nanti
 Batasan:
 - Mengunduh dan mengunggah konten berhak cipta lewat torrent bisa
   melanggar hukum; itu tanggung jawab pemakai.
-- Peer dan tracker melihat IP pengguna, kecuali lewat proxy SOCKS5 dengan
-  libtorrent.
+- Peer dan tracker melihat IP pengguna, kecuali lewat proxy SOCKS5.
 - Sebagian ISP memperlambat atau memblokir lalu lintas torrent.
 
 ## Catatan kerja

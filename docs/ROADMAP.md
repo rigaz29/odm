@@ -826,13 +826,37 @@ Tahap 4: UI baru
 
 Tahap 5: ekstensi dan asosiasi
 
-- [ ] Ekstensi: "Download with ODM" menerima tautan `magnet:`, dan
+- [x] Ekstensi: "Download with ODM" menerima tautan `magnet:`, dan
       `.torrent` yang ditangkap dibuka sebagai torrent. Add-on Firefox
       ikut ditandatangani ulang di rilis berikutnya. **K**
-- [ ] Windows, opsional di Options: ODM sebagai pembuka `magnet:` dan
+
+      Untuk tautan `magnet:`, menu hanya mengirim tautannya, tanpa
+      cookie, halaman, atau judul tab. Unduhan `.torrent` (dikenali dari
+      alamat, nama, atau tipe `application/x-bittorrent`) diambil alih
+      walau `torrent` tidak ada di daftar tipe file, selama Options →
+      Torrent mengunduh alamat `.torrent` sebagai torrent. ODM
+      menyampaikannya lewat field `torrents` di balasan `config`.
+      Penandatanganan add-on menunggu rilis di Tahap 6.
+- [x] Windows, opsional di Options: ODM sebagai pembuka `magnet:` dan
       `.torrent` (di HKCU, dihapus lagi saat dimatikan). Windows tetap
       menanyakan pilihan aplikasinya ke pengguna; ODM tidak mengubah
       aplikasi bawaan sendiri. **S**
+
+      Ditangani paket `internal/assoc`:
+      - ProgID `ODM.Magnet` dan `ODM.Torrent`, Capabilities di
+        `HKCU\Software\ODM\Capabilities`, dan entri di
+        `RegisteredApplications`, jadi ODM muncul di Aplikasi default;
+      - `.torrent\OpenWithProgids` menawarkan ODM untuk file `.torrent`;
+      - skema `magnet:` dibuat di HKCU hanya kalau belum ada program yang
+        menanganinya (browser tidak meneruskan skema yang tidak dikenal),
+        dan dihapus hanya kalau masih milik ODM.
+
+      Kotak di Options → Torrent hanya tercentang kalau yang terdaftar
+      adalah exe ini sendiri, jadi build uji tidak mengambil alih atau
+      menghapus registrasi ODM utama. Tombol "Pilih di Windows…" membuka
+      `ms-settings:defaultapps?registeredAppUser=Ochi Download Manager`
+      (di Windows 10 halaman Aplikasi default biasa). Klik tautan magnet
+      sungguhan di browser diuji di Tahap 6.
 
 Tahap 6: uji jalan dan rilis
 

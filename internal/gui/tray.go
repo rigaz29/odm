@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"net/url"
+	"runtime"
 	"strconv"
 	"sync"
 	"sync/atomic"
@@ -60,6 +61,12 @@ func newDesk(app *application.App, win *application.WebviewWindow, svc *Service,
 	d.tray = app.SystemTray.New()
 	d.tray.SetIcon(appIcon(64))
 	d.tray.SetTooltip("Ochi Download Manager")
+	if runtime.GOOS == "linux" {
+		// Wails has no tray tooltips on Linux: the tray shows the label as
+		// the icon's name and tooltip, "Wails" without one. (On macOS a
+		// label is text beside the icon.)
+		d.tray.SetLabel("Ochi Download Manager")
+	}
 	d.tray.SetMenu(d.menu)
 	d.tray.OnClick(d.showMain) // a left click shows the window, the right the menu
 

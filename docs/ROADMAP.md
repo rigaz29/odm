@@ -403,14 +403,15 @@ bawaan sampai UI baru setara fiturnya.
       - README (fitur desktop, WebView2, build dengan Node dan Go 1.25,
         pintasan, struktur kode, tangkapan layar UI baru) dan CHANGELOG.
 
-- [ ] **Tahap 7** Linux dan macOS, penyesuaian minimal: UI baru bisa jalan
+- [x] **Tahap 7** Linux dan macOS, penyesuaian minimal: UI baru bisa jalan
       di sana tanpa dipoles (notifikasi "kalau bisa", target build
       `linux-gui`/`darwin-gui` dan artefak pratinjau CI, bingkai jendela
       sistem, clipboard lewat Wails). Fyne tetap jadi rilis sampai UI baru
       dicoba. Rencana dan keputusan: `docs/GUI.md`, "Rencana Linux dan
-      macOS". **S** Dikerjakan sejak 2026-10-18: semua butir (1–5) sudah
-      di kode, Linux memakai GTK 4 + WebKitGTK 6.0; tinggal uji jalan di
-      WSL Ubuntu. macOS hanya dibangun dan diuji di CI.
+      macOS". **S** Selesai 2026-10-18: semua butir (1–5) di kode, Linux
+      memakai GTK 4 + WebKitGTK 6.0, dan uji jalan di WSL Ubuntu 26.04
+      lolos (X11 dan Wayland), lalu nama ikon tray di Linux dibetulkan.
+      macOS hanya dibangun dan diuji di CI.
 
 Nanti: halaman yang sama untuk web UI `-serve`.
 

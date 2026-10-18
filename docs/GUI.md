@@ -213,15 +213,17 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
 - Status "terhubung" dari native host: extension mengirim nama
   browsernya, host meneruskannya di header `X-ODM-Browser`, dan ODM
   menyimpannya di `extension_browsers`.
-- Daftar browser baru ada untuk Windows; Linux/macOS menyusul di Tahap 7.
+- Daftar browser baru ada untuk Windows; di Linux/macOS jendela Setup
+  menunjuk ke halaman rilis (Tahap 7).
 
-**Tahap 7: Linux dan macOS, penyesuaian minimal.** Dikerjakan sejak
-2026-10-18; lihat [rencananya](#rencana-linux-dan-macos-penyesuaian-minimal).
+**Tahap 7: Linux dan macOS, penyesuaian minimal.** Selesai 2026-10-18;
+lihat [rencananya](#rencana-linux-dan-macos-penyesuaian-minimal) dan hasil
+ujinya.
 
 ## Rencana Linux dan macOS (penyesuaian minimal)
 
-Status: **dikerjakan sejak 2026-10-18** (rencana dicatat 2026-10-17):
-butir 1–5 sudah di kode dan CI, tinggal uji jalan di WSL. Tujuannya UI
+Status: **selesai 2026-10-18** (rencana dicatat 2026-10-17): butir 1–5
+di kode dan CI, dan lolos uji jalan di WSL Ubuntu. Tujuannya UI
 baru *bisa jalan* di Linux dan macOS dengan penyesuaian sekecil mungkin,
 ibarat mesin yang dipindah ke mobil lain: bautnya disesuaikan, bodinya
 tidak dipoles. Kerapian per platform menyusul bila diperlukan.
@@ -249,6 +251,9 @@ tidak dipoles. Kerapian per platform menyusul bila diperlukan.
   `internal/gui`). Semuanya aman, hanya kurang rapi.
 - yt-dlp diunduh otomatis juga untuk macOS dan Linux; ffmpeg hanya untuk
   Windows. Ini urusan engine, sama untuk kedua UI.
+- Tray Wails di Linux tidak punya tooltip: label tray dipakai sebagai nama
+  ikon (Id, Title) dan tooltip-nya, dan tanpa label namanya "Wails".
+  (Ditemukan saat uji jalan.)
 
 **Wajib**, supaya bisa start:
 1. Notifikasi "kalau bisa": service notifikasi dibungkus supaya gagal start
@@ -289,13 +294,47 @@ artefak pratinjau CI (misalnya `odm-next-linux-amd64` dan
 seperti Tahap 6.
 
 **Pengujian:**
-- Linux: WSL Ubuntu di komputer pengembang (26.04), lewat WSLg. Paket
-  build (`golang-go build-essential pkg-config libgtk-4-dev
-  libwebkitgtk-6.0-dev`) dipasang sendiri oleh pemiliknya, karena butuh
-  password sudo. Yang diuji: start, jendela utama, menambah unduhan, tray,
+- Linux: WSL Ubuntu di komputer pengembang (26.04). Paket build
+  (`golang-go build-essential pkg-config libgtk-4-dev
+  libwebkitgtk-6.0-dev`) dipasang atas izin pemiliknya lewat
+  `wsl -u root`. Yang diuji: start, jendela utama, menambah unduhan, tray,
   notifikasi, clipboard, Setup, dan Opsi.
 - macOS: CI membangun dan menjalankan tes; pemiliknya tidak punya Mac, jadi
   belum ada uji jalan.
+
+**Hasil uji Linux (2026-10-18),** binary `-tags gui,production` yang
+dibangun di WSL. Sebagian besar di Xvfb (X11) dengan openbox sebagai
+window manager, plus session DBus sendiri yang berisi host tray
+(StatusNotifierWatcher) dan server notifikasi tiruan, supaya tray dan
+notifikasi bisa diperiksa lewat DBus. Ditambah satu smoke test di WSLg
+(Wayland).
+- Start pertama membuka jendela Setup dengan petunjuk dan tombol halaman
+  rilis; start kedua tidak membukanya lagi, dan daftar unduhan kembali.
+- Jendela utama, New Download (probe ukuran dan tipe), Download complete,
+  dan Opsi tampil benar. Bingkai sistem tampil, dan tombol jendela halaman
+  tersembunyi.
+- Unduhan dari server lokal selesai dan isinya identik dengan sumbernya.
+- Tray terdaftar di host tray. Menunya lengkap; "Add URL…", "Show ODM",
+  "Exit", dan klik kiri ikon berjalan. Tombol × menyembunyikan jendela ke
+  tray. Menjalankan ODM lagi memunculkan jendelanya ("ODM is already
+  running.").
+- Notifikasi "ODM is still running" dan "Download failed" terkirim, dan
+  klik pada notifikasi memunculkan jendela. "Download complete" sengaja
+  tidak dikirim bila jendelanya terbuka.
+- Clipboard: setelah dinyalakan di Opsi, URL yang disalin langsung
+  terunduh.
+- Tanpa session DBus sama sekali, ODM tetap start; notifier mencatat
+  `notifications: failed to connect to session bus` di `odm.log`.
+- WSLg (Wayland): jendela tampil dengan bingkai GTK 4. Di sana tidak ada
+  host tray maupun server notifikasi, jadi jendela yang ditutup baru bisa
+  dimunculkan dengan menjalankan ODM lagi (README sudah menyebutnya untuk
+  GNOME tanpa AppIndicator).
+- Diperbaiki: ikon tray bernama "Wails"; sekarang di Linux ODM memberi
+  tray label "Ochi Download Manager".
+- Catatan: WebKitGTK sendiri crash bila `DBUS_SESSION_BUS_ADDRESS` menunjuk
+  ke socket yang tidak ada, karena sandbox-nya (bwrap) gagal memasang
+  socket itu. Ini perilaku WebKit, bukan ODM, dan tidak terjadi bila
+  variabelnya kosong.
 
 **Keputusan (2026-10-18):**
 - butir 3, 4, dan 5 dipakai;

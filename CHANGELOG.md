@@ -6,30 +6,7 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
-### Fixed
-
-- A right-click in ODM's windows no longer shows the browser's own menu
-  (Back, Refresh, Save as, Print, Inspect): the Windows build is Wails'
-  release build now. Text boxes and selected text keep Cut, Copy and
-  Paste.
-- A long file name no longer runs out of the box of the question before
-  removing a download (or of any other dialog): it wraps inside it.
-- A TikTok live recording whose connection dropped and was opened again
-  no longer comes out hours long, mostly still picture: a few minutes
-  showed as four hours. Each part's timestamps run on from the
-  broadcast's start, and ffmpeg's join took that for the length of the
-  part before; the parts are now copied one by one before they are
-  joined. Once a broadcast is over, TikTok's server keeps sending its
-  last seconds on every connection: those repeats are dropped, so the
-  recording ends instead of adding the same seconds again and again.
-- A download resumed after a power cut (or Windows crashing) no longer
-  ends with runs of zeros in its file: a broken video or archive, with no
-  error unless a checksum was given. The progress saved could count bytes
-  still in Windows' cache, which the cut lost. A running download's file
-  is now flushed to the disk before its progress is saved, every 5
-  seconds, and a download's state file is flushed before it replaces the
-  old one, so a cut cannot leave one that drops the download from the
-  list.
+## [0.5.1] - 2026-10-18
 
 ### Added
 
@@ -64,6 +41,31 @@ All notable changes to ODM are documented here. The format is based on
   outside an `.app`, on Linux without a session bus), without them.
   `./scripts/build.sh linux`, `darwin` and `darwin-intel` build the new
   UI; `linux-fyne` and `darwin-fyne` build the Fyne one.
+
+### Fixed
+
+- A right-click in ODM's windows no longer shows the browser's own menu
+  (Back, Refresh, Save as, Print, Inspect): the Windows build is Wails'
+  release build now. Text boxes and selected text keep Cut, Copy and
+  Paste.
+- A long file name no longer runs out of the box of the question before
+  removing a download (or of any other dialog): it wraps inside it.
+- A TikTok live recording whose connection dropped and was opened again
+  no longer comes out hours long, mostly still picture: a few minutes
+  showed as four hours. Each part's timestamps run on from the
+  broadcast's start, and ffmpeg's join took that for the length of the
+  part before; the parts are now copied one by one before they are
+  joined. Once a broadcast is over, TikTok's server keeps sending its
+  last seconds on every connection: those repeats are dropped, so the
+  recording ends instead of adding the same seconds again and again.
+- A download resumed after a power cut (or Windows crashing) no longer
+  ends with runs of zeros in its file: a broken video or archive, with no
+  error unless a checksum was given. The progress saved could count bytes
+  still in Windows' cache, which the cut lost. A running download's file
+  is now flushed to the disk before its progress is saved, every 5
+  seconds, and a download's state file is flushed before it replaces the
+  old one, so a cut cannot leave one that drops the download from the
+  list.
 
 ## [0.5.0] - 2026-10-17
 
@@ -686,7 +688,8 @@ All notable changes to ODM are documented here. The format is based on
   instance); no TCP port is opened unless `-serve` is given, and that
   listener requires a per-run token and rejects foreign origins.
 
-[Unreleased]: https://github.com/rigaz29/odm/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/rigaz29/odm/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/rigaz29/odm/releases/tag/v0.5.1
 [0.5.0]: https://github.com/rigaz29/odm/releases/tag/v0.5.0
 [0.3.1]: https://github.com/troke12/odm/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/troke12/odm/compare/v0.2.0...v0.3.0

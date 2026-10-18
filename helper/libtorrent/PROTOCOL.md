@@ -9,8 +9,9 @@ ODM sends **commands**. The program sends a **reply** to each command, and
 that magnet links find peers sooner.
 
 The program exits when its input closes, which includes ODM crashing, or
-on `quit`. Before exiting it pauses every torrent and writes its resume
-data, waiting for that for at most 10 seconds. Then it sends `bye`.
+on `quit`. Before exiting it pauses every torrent, writes out its cache and
+then its resume data, waiting for that for at most 10 seconds. Then it
+sends `bye`.
 
 ## Conventions
 

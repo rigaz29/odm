@@ -80,8 +80,10 @@ class Helper {
   std::string state_;
   std::unique_ptr<lt::session> ses_;
   std::map<std::string, Torrent> torrents_;
-  // outstanding counts the save_resume_data calls not answered yet.
+  // outstanding counts the save_resume_data calls not answered yet;
+  // flushing the flush_cache calls of quitting.
   int outstanding_ = 0;
+  int flushing_ = 0;
   bool quitting_ = false;
 
   std::chrono::milliseconds status_interval_{1000};

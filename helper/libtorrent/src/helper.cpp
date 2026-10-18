@@ -602,6 +602,7 @@ void Helper::on_alert(lt::alert* a) {
     return;
   }
   if (auto* p = lt::alert_cast<lt::cache_flushed_alert>(a)) {
+    if (flushing_ > 0) --flushing_;
     Torrent* t = find(p->handle);
     if (t != nullptr && t->finishing && !t->removing) {
       t->finishing = false;
@@ -762,12 +763,22 @@ void Helper::save_resume(Torrent& t) {
 }
 
 void Helper::shutdown() {
-  // Stop the transfers, so that the last resume data is the final state.
+  // Stop the transfers and write out the cache, so that the last resume
+  // data counts every piece checked.
   ses_->pause();
+  for (auto& [key, t] : torrents_) {
+    if (t.removing) continue;
+    t.handle.flush_cache();
+    ++flushing_;
+  }
+  auto until = steady::now() + kQuitWait;
+  while (flushing_ > 0 && steady::now() < until) {
+    ses_->wait_for_alert(std::chrono::milliseconds(100));
+    handle_alerts();
+  }
   for (auto& [key, t] : torrents_) {
     if (!t.removing) save_resume(t);
   }
-  auto until = steady::now() + kQuitWait;
   while (outstanding_ > 0 && steady::now() < until) {
     ses_->wait_for_alert(std::chrono::milliseconds(100));
     handle_alerts();

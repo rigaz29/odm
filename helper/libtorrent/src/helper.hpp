@@ -27,6 +27,9 @@ struct Torrent {
   // resume is where its resume data is kept, "" for nowhere.
   std::string resume;
   bool has_metadata = false;
+  // finishing: the torrent finished and its cache is being written out;
+  // "finished" follows once it is on the disk.
+  bool finishing = false;
   // saving: a save_resume_data is under way.
   bool saving = false;
   // removing: remove was asked; the torrent only waits for libtorrent to

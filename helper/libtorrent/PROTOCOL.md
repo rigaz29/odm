@@ -144,7 +144,7 @@ exits.
 | `portmap_failed` | `via`, `error` |
 | `metadata` | `key`, `name`, `size`, `piece_size`, `pieces`, `private`, `files` (`path`, `size`, `pad`), `trackers`, `info_hash`, `info_hash_v2`, `magnet`. Right after `add` for a torrent with metadata; for a magnet link when it arrives. Paths are the torrent's own, before `names` |
 | `status` | `torrents`: status objects of the torrents that changed, every `status_interval` |
-| `finished` | `key`: every wanted file is downloaded and checked. Not sent while nothing is wanted (`hold`) |
+| `finished` | `key`: every wanted file is downloaded, checked and written to the disk. Not sent while nothing is wanted (`hold`) |
 | `renamed` | `key`, `index`, `path` |
 | `rename_failed` | `key`, `index`, `error` |
 | `moved` | `key`, `path` |

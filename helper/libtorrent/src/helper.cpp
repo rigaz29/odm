@@ -592,9 +592,22 @@ void Helper::on_alert(lt::alert* a) {
     Torrent* t = find(p->handle);
     if (t == nullptr || t->removing) return;
     // A torrent with nothing wanted yet (held for ODM to choose its files)
-    // is "finished" as well; that is not news.
-    if (t->handle.status({}).total_wanted > 0) emit({{"event", "finished"}, {"key", t->key}});
+    // is "finished" as well; that is not news. Otherwise ODM hears of it
+    // once libtorrent's write cache is on the disk, so that the files it
+    // then opens, renames or checks are whole.
+    if (t->handle.status({}).total_wanted > 0) {
+      t->finishing = true;
+      t->handle.flush_cache();
+    }
     save_resume(*t);
+    return;
+  }
+  if (auto* p = lt::alert_cast<lt::cache_flushed_alert>(a)) {
+    Torrent* t = find(p->handle);
+    if (t != nullptr && t->finishing && !t->removing) {
+      t->finishing = false;
+      emit({{"event", "finished"}, {"key", t->key}});
+    }
     return;
   }
   if (auto* p = lt::alert_cast<lt::torrent_paused_alert>(a)) {

@@ -61,7 +61,8 @@ function Heading({ n, icon, title, text }: { n: number; icon: ReactNode; title: 
 
 function Tools({ status }: { status: SetupStatus }) {
   const [tools, setTools] = useState(status.tools);
-  const missing = tools.filter((x) => x.state !== "found" && x.canInstall);
+  // An optional tool has its own button, not a place in "Install both".
+  const missing = tools.filter((x) => x.state !== "found" && x.canInstall && !x.optional);
   // On by default while ODM has not asked yet; what was chosen otherwise.
   const [auto, setAuto] = useState(status.toolMode === "auto" || (status.toolMode === "" && missing.length > 0));
   // busy is the button's label while installing: the list it was for.
@@ -86,6 +87,18 @@ function Tools({ status }: { status: SetupStatus }) {
     }
     setBusy("");
   };
+  const installOne = async (tool: SetupTool) => {
+    setBusy(tf("Install %s", tool.name));
+    setError("");
+    try {
+      setProgress((m) => ({ ...m, [tool.name]: 0 }));
+      const after = await api.installTool(tool.name);
+      setTools((list) => list.map((x) => (x.name === after.name ? after : x)));
+    } catch (e) {
+      setError(errorText(e));
+    }
+    setBusy("");
+  };
   // With nothing to install the box takes effect at once; otherwise with
   // Install.
   const toggle = (on: boolean) => {
@@ -98,7 +111,12 @@ function Tools({ status }: { status: SetupStatus }) {
       <Heading n={1} icon={<Wrench className="text-violet-500" />} title={t("Companion programs")} text={t("Downloaded from their official releases and checked against their checksums.")} />
       <ul className="divide-y divide-border rounded-lg border border-border">
         {tools.map((tool) => (
-          <ToolRow key={tool.name} tool={tool} progress={busy ? progress[tool.name] : undefined} />
+          <ToolRow
+            key={tool.name}
+            tool={tool}
+            progress={busy ? progress[tool.name] : undefined}
+            onInstall={tool.optional && tool.canInstall && !busy ? () => void installOne(tool) : undefined}
+          />
         ))}
       </ul>
       <div className="mt-3 flex items-center justify-between gap-3">
@@ -118,8 +136,13 @@ function Tools({ status }: { status: SetupStatus }) {
   );
 }
 
-function ToolRow({ tool, progress }: { tool: SetupTool; progress?: number }) {
-  const what = tool.name === "yt-dlp" ? t("Downloads videos from YouTube, TikTok and other sites.") : t("Joins a video with its audio and saves live streams as MP4.");
+function ToolRow({ tool, progress, onInstall }: { tool: SetupTool; progress?: number; onInstall?: () => void }) {
+  const what =
+    tool.name === "yt-dlp"
+      ? t("Downloads videos from YouTube, TikTok and other sites.")
+      : tool.name === "ffmpeg"
+        ? t("Joins a video with its audio and saves live streams as MP4.")
+        : t("Downloads torrents and magnet links. ODM fetches it the first time you add one.");
   const found = tool.state === "found";
   return (
     <li className="flex items-center gap-3 px-3 py-2.5">
@@ -137,6 +160,10 @@ function ToolRow({ tool, progress }: { tool: SetupTool; progress?: number }) {
         <span className="h-1.5 w-32 shrink-0 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={tool.name}>
           <span className="accent-gradient block h-full transition-[width]" style={{ width: `${Math.max(progress, 0.03) * 100}%` }} />
         </span>
+      ) : onInstall ? (
+        <Button variant="outline" size="sm" className="shrink-0" onClick={onInstall}>
+          <Download /> {t("Install")}
+        </Button>
       ) : (
         <span className="shrink-0 text-xs text-muted-foreground">{tool.canInstall ? t("Not installed") : t("Not installed: ODM cannot download it here")}</span>
       )}

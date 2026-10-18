@@ -148,7 +148,12 @@ type Info struct {
 	// Live is a live stream being recorded: Pause stops and finishes it.
 	Live bool `json:"live,omitempty"`
 	// Site is a video page that yt-dlp downloads.
-	Site      bool      `json:"site,omitempty"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	Site bool `json:"site,omitempty"`
+	// Torrent is a torrent; Peers and Seeds are connected while it runs.
+	Torrent     bool      `json:"torrent,omitempty"`
+	Peers       int       `json:"peers,omitempty"`
+	Seeds       int       `json:"seeds,omitempty"`
+	UploadSpeed int64     `json:"upload_speed,omitempty"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
 }

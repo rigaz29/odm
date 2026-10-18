@@ -480,6 +480,7 @@ export function StopQueue(name: string): $CancellablePromise<void> {
 /**
  * ToolStatus checks the program tool ("ffmpeg" or "yt-dlp") at typed, or
  * where ODM looks for it when typed is empty, and runs it for its version.
+ * odm-libtorrent is only ever ODM's own copy.
  */
 export function ToolStatus(tool: string, typed: string): $CancellablePromise<$models.ToolStatus> {
     return $Call.ByID(1580169712, tool, typed).then(($result: any) => {
@@ -494,7 +495,8 @@ export function UnregisterBrowsers(): $CancellablePromise<$models.BrowserStatus>
 }
 
 /**
- * UpdateTools downloads the newest yt-dlp and ffmpeg now.
+ * UpdateTools downloads the newest yt-dlp and ffmpeg now, and
+ * odm-libtorrent once it is installed.
  */
 export function UpdateTools(): $CancellablePromise<void> {
     return $Call.ByID(577071980);

@@ -17,6 +17,7 @@ import (
 	"odm/internal/ffmpeg"
 	"odm/internal/i18n"
 	"odm/internal/tools"
+	"odm/internal/torrent"
 	"odm/internal/ytdlp"
 )
 
@@ -483,7 +484,11 @@ type ToolStatus struct {
 
 // ToolStatus checks the program tool ("ffmpeg" or "yt-dlp") at typed, or
 // where ODM looks for it when typed is empty, and runs it for its version.
+// odm-libtorrent is only ever ODM's own copy.
 func (s *Service) ToolStatus(tool, typed string) ToolStatus {
+	if tool == "odm-libtorrent" {
+		return libtorrentStatus()
+	}
 	locate, version := ffmpeg.Locate, ffmpeg.Version
 	if tool == "yt-dlp" {
 		locate, version = ytdlp.Locate, ytdlp.Version
@@ -506,7 +511,24 @@ func (s *Service) ToolStatus(tool, typed string) ToolStatus {
 	return ToolStatus{State: "found", Path: bin, Version: v}
 }
 
-// UpdateTools downloads the newest yt-dlp and ffmpeg now.
+func libtorrentStatus() ToolStatus {
+	bin := tools.Find(tools.Libtorrent().Files[0])
+	if bin == "" {
+		return ToolStatus{State: "missing"}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	v, err := torrent.Version(ctx, bin)
+	if err != nil {
+		return ToolStatus{State: "broken", Path: bin, Error: err.Error()}
+	}
+	// "odm-libtorrent 2.1.2-1 (protocol 1, libtorrent 2.1.2.0)"
+	v, _, _ = strings.Cut(strings.TrimPrefix(v, "odm-libtorrent "), " (")
+	return ToolStatus{State: "found", Path: bin, Version: v}
+}
+
+// UpdateTools downloads the newest yt-dlp and ffmpeg now, and
+// odm-libtorrent once it is installed.
 func (s *Service) UpdateTools() error {
 	k := s.tools()
 	if k == nil {

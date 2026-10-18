@@ -190,6 +190,9 @@ type addRequest struct {
 	// from the browser extension: kept for yt-dlp when the Options say to
 	// sign in with them, never saved.
 	SiteCookies []engine.BrowserCookie `json:"site_cookies"`
+	// Torrent makes URL, the address of a .torrent file, a torrent. A
+	// magnet link is one without it.
+	Torrent bool `json:"torrent"`
 }
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +254,16 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		}
 		opts.Site = &engine.SiteJob{Format: strings.TrimSpace(req.Format), Estimate: req.Estimate}
 	}
-	if req.Prompt && s.OnPrompt != nil && !s.mgr.Settings().NoStartDialog && s.OnPrompt(opts) {
+	if req.Torrent || engine.IsMagnet(req.URL) {
+		if opts.Stream != nil || opts.Site != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "a torrent is not a stream or a site page"})
+			return
+		}
+		opts.Torrent = &engine.TorrentJob{}
+	}
+	// The New Download window does not show torrents yet: they are added
+	// directly.
+	if req.Prompt && opts.Torrent == nil && s.OnPrompt != nil && !s.mgr.Settings().NoStartDialog && s.OnPrompt(opts) {
 		// The person decides in the window (it also handles duplicates).
 		writeJSON(w, http.StatusAccepted, map[string]bool{"prompted": true})
 		return

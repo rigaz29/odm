@@ -32,6 +32,7 @@ import (
 	"odm/internal/server"
 	"odm/internal/sysproxy"
 	"odm/internal/tools"
+	"odm/internal/torrent"
 	"odm/internal/ui"
 	"odm/internal/version"
 )
@@ -152,17 +153,31 @@ func main() {
 		}
 	}
 
-	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer stop()
-	mgr.Begin(ctx)
-	go mgr.Start(ctx)
-
-	// yt-dlp and ffmpeg: ODM's own copies, downloaded when needed once the
-	// person agreed (Settings.ToolUpdates) and kept up to date silently.
+	// yt-dlp, ffmpeg and odm-libtorrent: ODM's own copies, downloaded when
+	// needed once the person agreed (Settings.ToolUpdates) and kept up to
+	// date silently.
 	keeper := tools.NewKeeper(&tools.Installer{Dir: tools.Dir(), Client: mgr.HTTPClient()},
 		func() string { return mgr.Settings().ToolUpdates })
 	keeper.Log = log.Printf
 	engine.EnsureTool = keeper.Ensure
+
+	// Torrents run in odm-libtorrent, started when the first one needs it.
+	// Set before the queue starts, which may resume torrents.
+	engine.TorrentDir = filepath.Join(baseDir, "torrents")
+	torrents := &torrent.Session{
+		Program: func(ctx context.Context) (string, error) { return libtorrentProgram(ctx, keeper) },
+		State:   filepath.Join(engine.TorrentDir, "session.dat"),
+		Log:     log.Printf,
+	}
+	torrents.SetGlobalLimits(settings.EffectiveSpeedLimit(), 0)
+	engine.Torrents = torrents
+	// The program saves every torrent's resume data before it exits.
+	defer torrents.Close()
+
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	mgr.Begin(ctx)
+	go mgr.Start(ctx)
 	go keeper.Run(ctx, 24*time.Hour)
 
 	// Scheduler "when done" actions for headless runs. The desktop UI installs
@@ -219,7 +234,17 @@ func main() {
 			stopServers()
 			os.Exit(2)
 		}
-		info := mgr.Create(engine.AddOptions{URL: *add, Dir: settings.Dir, Connections: settings.Connections, Checksum: sum, Start: true})
+		o := engine.AddOptions{URL: *add, Dir: settings.Dir, Connections: settings.Connections, Checksum: sum, Start: true}
+		if engine.IsTorrentFile(*add) {
+			// A .torrent, by address or path, is downloaded as a torrent.
+			if _, err := os.Stat(*add); err == nil {
+				if abs, err := filepath.Abs(*add); err == nil {
+					o.URL = abs
+				}
+			}
+			o.Torrent = &engine.TorrentJob{}
+		}
+		info := mgr.Create(o)
 		fmt.Printf("added %s (%s)\n", info.FileName, info.ID)
 		waitFor(ctx, mgr, info.ID)
 		stopServers()
@@ -280,6 +305,19 @@ func main() {
 	}
 	<-ctx.Done()
 	stopServers()
+}
+
+// libtorrentProgram is the odm-libtorrent to run: ODM_LIBTORRENT when set
+// (developers), else ODM's own copy, downloaded first when the person
+// allowed that.
+func libtorrentProgram(ctx context.Context, keeper *tools.Keeper) (string, error) {
+	if p := os.Getenv("ODM_LIBTORRENT"); p != "" {
+		return p, nil
+	}
+	if p := tools.Find(tools.Libtorrent().Files[0]); p != "" {
+		return p, nil
+	}
+	return keeper.Ensure(ctx, "odm-libtorrent")
 }
 
 // clipboardConfig reads the clipboard monitor's settings on every call.

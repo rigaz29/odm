@@ -44,6 +44,9 @@ type SetupTool struct {
 	Version string `json:"version"`
 	// CanInstall: ODM can download it on this system.
 	CanInstall bool `json:"canInstall"`
+	// Optional: installed on its own, not with the others (odm-libtorrent,
+	// which ODM fetches the first time a torrent is added anyway).
+	Optional bool `json:"optional"`
 }
 
 // SetupBrowser is an installed browser as the Setup window lists it.
@@ -107,6 +110,7 @@ func (s *Service) setupTool(name string) SetupTool {
 	for _, t := range tools.All() {
 		if t.Name == name {
 			out.CanInstall = t.Supported() && s.tools() != nil
+			out.Optional = t.OnDemand
 		}
 	}
 	return out
@@ -300,7 +304,7 @@ func (s *Service) setupAtStart(firstRun, visible bool) {
 	show := firstRun
 	if !show {
 		for _, t := range tools.All() {
-			if t.Supported() && s.setupTool(t.Name).State == "missing" {
+			if t.Supported() && !t.OnDemand && s.setupTool(t.Name).State == "missing" {
 				show = true
 			}
 		}

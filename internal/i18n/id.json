@@ -524,6 +524,7 @@
   "Install %s": "Pasang %s",
   "Downloads videos from YouTube, TikTok and other sites.": "Mengunduh video dari YouTube, TikTok, dan situs lain.",
   "Joins a video with its audio and saves live streams as MP4.": "Menggabungkan video dengan audionya dan menyimpan siaran live sebagai MP4.",
+  "Downloads torrents and magnet links. ODM fetches it the first time you add one.": "Mengunduh torrent dan tautan magnet. ODM mengambilnya saat Anda pertama kali menambahkan torrent.",
   "Installed": "Terpasang",
   "Not installed": "Belum terpasang",
   "Not installed: ODM cannot download it here": "Belum terpasang: ODM tidak bisa mengunduhnya di sistem ini",

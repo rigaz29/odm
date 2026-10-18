@@ -76,6 +76,8 @@ type Download struct {
 	Stream *StreamJob
 	// Site is set for a video page that yt-dlp downloads; see site.go.
 	Site *SiteJob
+	// Torrent is set for a torrent; see torrent.go.
+	Torrent *TorrentJob
 
 	CreatedAt time.Time
 	UpdatedAt time.Time
@@ -176,8 +178,12 @@ type Download struct {
 	runDone chan struct{}
 
 	// Segmented downloads: bytes on disk, and segments present / total.
+	// A torrent's bytes downloaded are streamDone too.
 	streamDone             int64
 	streamHave, streamSegs int
+	// A torrent's peers and seeds connected, and its upload speed.
+	peers, seeds int
+	uploadSpeed  int64
 	// guarded is client wrapped by guardLocal for stream requests. It is
 	// rebuilt when the client or the manifest (Readdress) changes, since
 	// its verdict on the manifest is cached.
@@ -225,6 +231,24 @@ func (d *Download) SetSpeedLimit(bytesPerSecond int64) {
 	}
 	d.SpeedLimit = bytesPerSecond
 	d.mu.Unlock()
+}
+
+// targetDirLocked is the folder a file of category cat goes to: the
+// download's folder, or below it the category's when categories are on.
+// The caller holds d.mu.
+func (d *Download) targetDirLocked(cat string) string {
+	dir := d.BaseDir
+	if dir == "" {
+		dir = d.Dir
+	}
+	if d.Categories {
+		if custom := d.catDirs[cat]; strings.TrimSpace(custom) != "" {
+			dir = custom
+		} else {
+			dir = filepath.Join(dir, cat)
+		}
+	}
+	return dir
 }
 
 // SetOpenWhenDone toggles opening the file once the transfer completes.
@@ -344,6 +368,11 @@ func (d *Download) Start(parent context.Context) {
 	}
 	if d.Site != nil {
 		d.runSite(ctx)
+		d.notify(true)
+		return
+	}
+	if d.Torrent != nil {
+		d.runTorrent(ctx)
 		d.notify(true)
 		return
 	}
@@ -625,18 +654,7 @@ func (d *Download) openTarget(fresh bool) error {
 	discard := d.discardPart
 	d.discardPart = false
 	existing := d.file
-	dir := d.BaseDir
-	if dir == "" {
-		dir = d.Dir
-	}
-	if d.Categories {
-		cat := d.category()
-		if custom := d.catDirs[cat]; strings.TrimSpace(custom) != "" {
-			dir = custom
-		} else {
-			dir = filepath.Join(dir, cat)
-		}
-	}
+	dir := d.targetDirLocked(d.category())
 	d.Dir = dir
 	final := filepath.Join(dir, d.FileName)
 	tmp := final + ".odmpart"
@@ -1943,6 +1961,7 @@ type State struct {
 	Chunks       []*Chunk          `json:"chunks"`
 	Stream       *StreamJob        `json:"stream,omitempty"`
 	Site         *SiteJob          `json:"site,omitempty"`
+	Torrent      *TorrentJob       `json:"torrent,omitempty"`
 	CreatedAt    time.Time         `json:"created_at"`
 	UpdatedAt    time.Time         `json:"updated_at"`
 }
@@ -1970,6 +1989,13 @@ func (d *Download) State() State {
 		sj.Done = d.streamDone
 		site = &sj
 	}
+	var tor *TorrentJob
+	if d.Torrent != nil {
+		tj := *d.Torrent
+		tj.Files = append([]TorrentFile(nil), d.Torrent.Files...)
+		tj.Done = d.streamDone
+		tor = &tj
+	}
 	status := d.Status
 	if status == StatusDownloading {
 		status = StatusPaused
@@ -1981,7 +2007,7 @@ func (d *Download) State() State {
 		Queue: d.Queue, Description: d.Description, Order: d.Order, Checksum: d.Checksum,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
 		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
-		Chunks: chunks, Stream: stream, Site: site, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
+		Chunks: chunks, Stream: stream, Site: site, Torrent: tor, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
 
@@ -2026,6 +2052,13 @@ func Restore(s State, client *http.Client) *Download {
 			d.streamDone = s.Total
 		}
 	}
+	d.Torrent = s.Torrent
+	if s.Torrent != nil {
+		d.streamDone = s.Torrent.Done
+		if s.Status == StatusComplete {
+			d.streamDone = s.Total
+		}
+	}
 	d.Err = s.Err
 	d.CreatedAt = s.CreatedAt
 	if !s.UpdatedAt.IsZero() {
@@ -2059,6 +2092,12 @@ func (d *Download) Info() Info {
 func (d *Download) category() string {
 	if d.CategoryName != "" && knownCategory(d.CategoryName) {
 		return d.CategoryName
+	}
+	if d.Torrent != nil {
+		// A torrent may be a folder: its largest file says what it is.
+		if name := d.Torrent.largest(); name != "" {
+			return Category(name)
+		}
 	}
 	return Category(d.FileName)
 }
@@ -2104,8 +2143,10 @@ func (d *Download) infoLocked() Info {
 		SpeedLimit: d.SpeedLimit, OpenWhenDone: d.OpenWhenDone,
 		Checksum: d.Checksum, Verifying: d.verifying,
 		Stream: stream, Segments: d.streamSegs, SegmentsDone: d.streamHave,
-		Live:      d.Stream != nil && d.Stream.Live,
-		Site:      d.Site != nil,
+		Live:    d.Stream != nil && d.Stream.Live,
+		Site:    d.Site != nil,
+		Torrent: d.Torrent != nil,
+		Peers:   d.peers, Seeds: d.seeds, UploadSpeed: d.uploadSpeed,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}
 }

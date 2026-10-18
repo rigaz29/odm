@@ -18,6 +18,19 @@ jobs:
       - run: go vet ./...
       - name: Extension tests
         run: node --test extension/test/*.test.js
+      # The torrent tests run the newest odm-libtorrent release of this
+      # ODM's protocol (helper/libtorrent); they skip without one.
+      - name: odm-libtorrent
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName             -q '[.[] | select(.tagName | startswith("odm-libtorrent-p1-"))][0].tagName')
+          if [ -n "$tag" ]; then
+            gh release download "$tag" -R "$GITHUB_REPOSITORY" -p odm-libtorrent-linux-amd64.tar.gz -D "$RUNNER_TEMP/lt"
+            tar -xzf "$RUNNER_TEMP/lt/odm-libtorrent-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lt"
+            echo "ODM_LIBTORRENT=$RUNNER_TEMP/lt/odm-libtorrent" >> "$GITHUB_ENV"
+            echo "$tag"
+          fi
       - run: go test ./...
       - name: Build CLI
         run: CGO_ENABLED=0 go build -o /tmp/odm ./cmd/odm

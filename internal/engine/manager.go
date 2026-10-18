@@ -378,6 +378,9 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	}
 
 	m.limiter.SetRate(next.EffectiveSpeedLimit())
+	if b := Torrents; b != nil {
+		b.SetGlobalLimits(next.EffectiveSpeedLimit(), 0)
+	}
 	setUserAgent(next.UserAgent)
 	setCategories(next.CategoryDefs)
 	setFFmpegPath(next.FFmpegPath)
@@ -577,7 +580,7 @@ func (m *Manager) startQueueAt(name string, now time.Time) {
 		}
 		d.mu.Lock()
 		match := queueMatches(d.Queue, name)
-		done, stream := d.Status == StatusComplete, d.Stream != nil || d.Site != nil
+		done, stream := d.Status == StatusComplete, d.Stream != nil || d.Site != nil || d.Torrent != nil
 		d.mu.Unlock()
 		q := queueOf(d)
 		switch {
@@ -902,6 +905,9 @@ type AddOptions struct {
 	Stream *StreamJob
 	// Site makes this a video page that yt-dlp downloads; URL is the page.
 	Site *SiteJob
+	// Torrent makes this a torrent: URL is then a magnet link (which makes
+	// it one by itself), or the address or path of a .torrent file.
+	Torrent *TorrentJob
 	// StreamQuality is the label of the quality picked before the New
 	// Download window opened (in the browser's menu), which the window
 	// then selects. "" leaves the window's own choice.
@@ -941,6 +947,21 @@ func (m *Manager) Create(o AddOptions) Info {
 		// yt-dlp reads the page itself; the browser's cookies and agent
 		// are not given to it, nor kept.
 		d.Headers = nil
+	}
+	if o.Torrent == nil && IsMagnet(o.URL) {
+		o.Torrent = &TorrentJob{}
+	}
+	if o.Torrent != nil {
+		tj := *o.Torrent
+		tj.Files = append([]TorrentFile(nil), o.Torrent.Files...)
+		if IsMagnet(o.URL) {
+			tj.Magnet = strings.TrimSpace(o.URL)
+			if d.FileName == "" {
+				d.FileName = magnetName(tj.Magnet)
+			}
+		}
+		d.Torrent = &tj
+		d.Checksum = "" // a torrent checks every piece itself
 	}
 	d.SetCategoryDirs(st.CategoryDirs)
 	d.SetLimiter(m.limiter)
@@ -982,6 +1003,11 @@ func (m *Manager) SetSpeedLimit(id string, bytesPerSecond int64) bool {
 		return false
 	}
 	d.SetSpeedLimit(bytesPerSecond)
+	if b := Torrents; b != nil && d.Torrent != nil && d.status() == StatusDownloading {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		_ = b.SetLimits(ctx, id, bytesPerSecond, 0)
+		cancel()
+	}
 	m.changed(d)
 	return true
 }
@@ -1053,6 +1079,10 @@ func (m *Manager) Readdress(ctx context.Context, id, newURL string) error {
 	if d.Site != nil {
 		d.mu.Unlock()
 		return fmt.Errorf("a video page cannot change its address; add the new page as a new download")
+	}
+	if d.Torrent != nil {
+		d.mu.Unlock()
+		return fmt.Errorf("a torrent cannot change its address; add the new one as a new download")
 	}
 	headers, total, done, probed := d.Headers, d.Total, d.doneLocked(), len(d.Chunks) > 0
 	stream := d.Stream != nil
@@ -1264,7 +1294,9 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 	}
 	m.saveMu.Unlock()
 
-	if name != "" {
+	if d.Torrent != nil {
+		d.removeTorrent(deleteFile)
+	} else if name != "" {
 		_ = os.Remove(filepath.Join(dir, name+".odmpart"))
 		// A stream keeps its segments in a folder as big as the video.
 		_ = os.RemoveAll(filepath.Join(dir, name+".odmparts"))

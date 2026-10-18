@@ -1677,6 +1677,12 @@ export class SetupTool {
      */
     "canInstall": boolean;
 
+    /**
+     * Optional: installed on its own, not with the others (odm-libtorrent,
+     * which ODM fetches the first time a torrent is added anyway).
+     */
+    "optional": boolean;
+
     /** Creates a new SetupTool instance. */
     constructor($$source: Partial<SetupTool> = {}) {
         if (!("name" in $$source)) {
@@ -1693,6 +1699,9 @@ export class SetupTool {
         }
         if (!("canInstall" in $$source)) {
             this["canInstall"] = false;
+        }
+        if (!("optional" in $$source)) {
+            this["optional"] = false;
         }
 
         Object.assign(this, $$source);

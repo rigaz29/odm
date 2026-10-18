@@ -208,6 +208,13 @@ Helper::Helper(std::string state) : state_(std::move(state)) {
   s.set_bool(sp::enable_upnp, false);
   s.set_bool(sp::enable_natpmp, false);
   s.set_bool(sp::ssrf_mitigation, true);
+  // A paused torrent that resumes reconnects to its peers within seconds,
+  // not the minute libtorrent waits by default before it calls a peer
+  // again: pausing is common in a download manager.
+  s.set_int(sp::min_reconnect_time, 10);
+  // A magnet link held for ODM to choose its files wants nothing yet; that
+  // must not drop the seeds it got the metadata from.
+  s.set_bool(sp::close_redundant_connections, false);
   s.set_int(sp::stop_tracker_timeout, 2);
   s.set_int(sp::alert_queue_size, 10000);
   s.set_str(sp::user_agent, std::string("odm-libtorrent/") + ODM_LIBTORRENT_VERSION + " libtorrent/" +

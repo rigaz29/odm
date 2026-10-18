@@ -537,9 +537,35 @@ anacrolix/torrent):
 
 Tahap 1: program `odm-libtorrent` dan rilisnya
 
-- [ ] Uji coba dulu: bangun libtorrent 2.1 statis dengan vcpkg di kelima
+- [x] Uji coba dulu: bangun libtorrent 2.1 statis dengan vcpkg di kelima
       target, lalu ukur ukuran program dan lama build-nya. Hasilnya
-      dilaporkan sebelum lanjut. **K**
+      dilaporkan sebelum lanjut. **K** Selesai 2026-10-18 di cabang
+      `torrent-spike`, dengan libtorrent 2.1.2 tanpa WebTorrent dan
+      program uji kecil (unduh dari magnet atau `.torrent`, lalu simpan
+      resume data). Ukuran program (setelah strip), ukuran arsip, dan
+      lama build:
+      - Windows x64: 9,3 MB, zip 3,6 MB. Build pertama 15–22 menit,
+        dengan cache 72 detik;
+      - Linux x64: 13,4 MB, 5,1 MB. Build pertama 7 menit, dengan cache
+        29 detik;
+      - Linux ARM64: 12,4 MB, 5,3 MB. Build pertama 7 menit, dengan cache
+        53 detik;
+      - macOS Apple silicon: 9,4 MB, 4,2 MB. Build pertama 9 menit,
+        dengan cache 34 detik;
+      - macOS Intel (cross-compile): 10,3 MB, 4,0 MB. Build pertama 8
+        menit, dengan cache 47 detik.
+
+      Program hanya bergantung pada pustaka sistem:
+      - Windows: DLL bawaan Windows saja, tanpa runtime Visual C++;
+      - Linux: glibc 2.35 ke atas, karena dibangun di Ubuntu 22.04;
+      - macOS: libSystem dan libc++.
+
+      Di WSL, program uji mengunduh netinst Debian resmi: 245 MB dalam
+      45 detik (sekitar 7 MB/s dari sekitar 120 peer), dengan memori
+      puncak 49 MB, dan resume data tersimpan. Versi macOS Intel juga
+      berjalan lewat Rosetta. Uji unduh di Windows ditunda ke Tahap 6,
+      karena memicu dialog firewall. Build Linux paling besar; nanti
+      bisa dicoba dikecilkan dengan `--gc-sections` atau LTO.
 - [ ] Program `odm-libtorrent` (C++, `helper/libtorrent/`). **B** Isinya:
       - perintah dan kejadian dalam baris JSON di stdin/stdout, dengan
         versi protokol. Perintahnya: tambah torrent (metainfo atau

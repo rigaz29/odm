@@ -430,6 +430,172 @@ bawaan sampai UI baru setara fiturnya.
 
 Nanti: halaman yang sama untuk web UI `-serve`.
 
+## Fase 8: unduhan torrent
+
+Tujuan: ODM bisa mengunduh dari file `.torrent` dan tautan magnet seperti
+unduhan lain: masuk antrean, terlihat progresnya, bisa dijeda dan
+dilanjutkan, lalu ikut mengunggah (seeding) secukupnya setelah selesai.
+
+Rancangan (disepakati 2026-10-18, sesuai rekomendasi review):
+
+- Mesin: pustaka Go [anacrolix/torrent](https://github.com/anacrolix/torrent)
+  (MPL-2.0), yang juga dipakai Gopeed. Isinya lengkap: magnet, DHT, PEX,
+  uTP, enkripsi, torrent v2, dan pilih file. libtorrent-rasterbar
+  (qBittorrent, Deluge) lebih matang dan lebih hemat, tetapi butuh cgo,
+  C++, Boost, dan OpenSSL di ketujuh target rilis, padahal `ODM.exe`
+  Windows sekarang dibangun tanpa cgo. Pustaka dipakai tanpa diubah;
+  README menyebut lisensinya dan tempat sumbernya, seperti yang diminta
+  MPL.
+- Engine tetap hanya memakai pustaka standar. Torrent tinggal di paket
+  baru `internal/torrent`, yang dipasang dari `main` lewat hook seperti
+  `EnsureTool` dan `MarkFile`. Antarmukanya dibuat kecil, supaya mesinnya
+  bisa diganti (misalnya libtorrent sebagai program pendamping) tanpa
+  mengubah engine atau jendela.
+- Biaya, diukur dengan program uji: exe Windows naik sekitar 17 MB (3,7 →
+  20,7 MB). Graf dependensinya berisi 252 modul, termasuk WebRTC (pion)
+  untuk WebTorrent. Di Tahap 1 ukurannya dicoba dikurangi.
+- Satu unduhan = satu torrent, berupa satu file atau satu folder:
+  - selama diunduh, isinya ada di `<nama>.odmpart` (file atau folder) di
+    folder tujuan, lalu diganti nama saat selesai, dengan aturan nama
+    ganda yang sama seperti unduhan lain;
+  - kategori dipilih dari ekstensi file terbesar;
+  - file yang tidak dicentang tetapi ikut tertulis karena berbagi piece di
+    batasnya dihapus setelah selesai.
+- Status menjadi `complete` begitu semua file yang dipilih selesai dan
+  terverifikasi. Seeding ditandai terpisah (`Seeding` di `Info`). Jadi
+  filter Selesai, notifikasi, dan aksi selesai (buka file, matikan
+  komputer) berlaku saat unduhan selesai, bukan saat seeding berhenti.
+- Seeding berjalan sampai rasio 1,0 atau 30 menit, mana yang lebih dulu:
+  - targetnya bisa diubah di Options, termasuk "tidak seeding" dan
+    "sampai dihentikan";
+  - tiap unduhan bisa dihentikan lewat "Hentikan seeding";
+  - seeding yang belum mencapai target dilanjutkan setelah ODM dibuka
+    lagi;
+  - seeding tidak dihitung dalam batas unduhan bersamaan.
+- Jaringan:
+  - mesin torrent hanya jalan saat ada torrent yang diunduh atau di-seed,
+    lalu berhenti. Pengguna yang tidak memakai torrent tidak membuka port
+    dan tidak menanggung memorinya;
+  - port masuk dipilih acak sekali lalu disimpan, dan dibuka di router
+    lewat UPnP. Windows Firewall bertanya sekali saat torrent pertama
+    dimulai, dan ODM memberi tahu itu sebelumnya. ODM tidak menambah
+    aturan firewall sendiri. Koneksi masuk dan UPnP bisa dimatikan di
+    Options;
+  - batas kecepatan untuk semua unduhan juga berlaku untuk torrent. Batas
+    per unduhan tidak berlaku, karena pustakanya hanya punya batas untuk
+    seluruh klien. Batas unggah diatur terpisah di Options;
+  - proxy ODM hanya dipakai untuk tracker dan web seed (HTTP). Koneksi ke
+    peer tidak lewat proxy, dan peer melihat IP pengguna. Ini ditulis di
+    Options dan README.
+- Cakupan:
+  - Tahap 1–3: `.torrent` dan magnet di UI baru, CLI, dan API;
+  - Tahap 4: ekstensi browser dan asosiasi file;
+  - UI Fyne tidak ikut, karena kini hanya cadangan. Torrent yang sudah ada
+    tetap tampil di daftarnya, tanpa jendela khusus.
+
+Tahap 1: mesin dan engine
+
+- [ ] Paket `internal/torrent` di atas anacrolix/torrent, dan jenis unduhan
+      `Torrent` di engine (seperti `Site` dan `Stream`). **B** Isinya:
+      - masukan file `.torrent` (dari disk atau URL) dan magnet (`btih`
+        dan `btmh`), dengan metadata magnet dari DHT dan tracker;
+      - pilihan file;
+      - progres dari piece yang sudah terverifikasi, plus jumlah peer dan
+        seed;
+      - jeda, lanjut, dan lanjut setelah ODM ditutup. Status piece
+        disimpan di folder data ODM, dengan cara yang sama di semua sistem
+        dan tanpa cgo;
+      - antrean, batas kecepatan semua unduhan, dan aksi selesai.
+- [ ] Penamaan dan keamanan. **S** Isinya:
+      - nama dari torrent disaring per bagian jalur: `SanitizeName`, `..`,
+        jalur absolut, nama terlarang Windows, karakter arah teks;
+      - file atau folder `.odmpart`, lalu diganti nama saat selesai;
+      - Mark-of-the-Web untuk tiap file (`MarkFile`);
+      - metainfo disimpan sebagai `<id>.torrent` di samping state, supaya
+        magnet tidak perlu mengambil metadata lagi.
+- [ ] `-add` dan API menerima magnet dan URL `.torrent`. `-add` tanpa UI
+      selesai saat unduhannya selesai, tanpa seeding. **K**
+- [ ] Uji tanpa internet: seeder dan ODM di localhost di dalam test, jalan
+      di CI untuk semua sistem. **S** Kasusnya: satu file, banyak file,
+      pilihan file, jeda, restart, dan piece rusak. Ukuran exe diukur, dan
+      dicoba dikurangi.
+
+Tahap 2: seeding dan jaringan
+
+- [ ] Seeding dengan target rasio dan waktu, tanda `Seeding`, aksi
+      "Hentikan seeding", dan lanjut setelah restart. **S**
+- [ ] Mesin torrent hanya jalan saat dibutuhkan. **S** Juga: port tetap,
+      UPnP, koneksi masuk yang bisa dimatikan, dan batas unggah. Torrent
+      privat (flag `private`) tidak diumumkan lewat DHT dan PEX.
+- [ ] Tracker dan web seed mengikuti aturan netguard: torrent dari
+      internet tidak bisa menyuruh ODM membuka alamat di jaringan lokal
+      lewat HTTP. Peer di jaringan lokal tetap boleh, karena itu bagian
+      dari protokolnya. **K**
+
+Tahap 3: UI baru
+
+- [ ] Unduhan Baru untuk torrent. **S** Isinya:
+      - magnet menunggu metadata dulu: "Mengambil info torrent…" dengan
+        jumlah peer. Bisa dibatalkan, atau "Tambahkan dan unduh semua";
+      - lalu daftar file bercentang dengan ukurannya, plus folder,
+        kategori, dan antrean;
+      - "Buka file .torrent…" di menu ⋯, dan file bisa diseret ke jendela.
+- [ ] Daftar dan Progres. **S** Isinya:
+      - lencana Seeding dengan kecepatan unggah;
+      - menu baris: Hentikan seeding, Buka folder, Salin tautan magnet;
+      - jendela Progres dengan peta piece, peer dan seed, kecepatan unduh
+        dan unggah, rasio, dan daftar file;
+      - pembatas kecepatan per unduhan dinonaktifkan untuk torrent, dengan
+        keterangan alasannya.
+- [ ] Options → Torrent dan jendela selesai. **S** Isinya:
+      - target seeding, port, UPnP, koneksi masuk, batas unggah, batas
+        peer, buka URL `.torrent` sebagai torrent, dan catatan soal IP dan
+        proxy;
+      - jendela Unduhan selesai membuka folder untuk torrent banyak file;
+      - terjemahan Indonesia.
+- [ ] Jalan masuk lain. **S** Isinya:
+      - pemantau clipboard mengenali magnet (sekarang hanya alamat dengan
+        host);
+      - URL yang ternyata file `.torrent` (`application/x-bittorrent`)
+        dibuka sebagai torrent;
+      - `ODM.exe file.torrent` dan `ODM.exe magnet:…` membuka Unduhan Baru,
+        juga saat ODM sudah jalan. Saat ini instans kedua hanya memanggil
+        `/api/show`, jadi alamat atau file-nya perlu diteruskan.
+
+Tahap 4: ekstensi dan asosiasi
+
+- [ ] Ekstensi: "Download with ODM" menerima tautan `magnet:`, dan
+      `.torrent` yang ditangkap dibuka sebagai torrent. Add-on Firefox
+      ikut ditandatangani ulang di rilis berikutnya. **K**
+- [ ] Windows, opsional di Options: ODM sebagai pembuka `magnet:` dan
+      `.torrent` (di HKCU, dihapus lagi saat dimatikan). Windows tetap
+      menanyakan pilihan aplikasinya ke pengguna; ODM tidak mengubah
+      aplikasi bawaan sendiri. **S**
+
+Tahap 5: uji jalan dan rilis
+
+- [ ] Uji di exe dengan torrent dan magnet resmi Ubuntu atau Debian. **S**
+      Yang dicek: unduh, jeda, tutup ODM, lanjut, seeding sampai target,
+      dialog firewall, dan pemakaian memori. Linux diuji lewat harness
+      WSL. README (fitur, firewall, IP dan proxy, lisensi MPL anacrolix)
+      dan CHANGELOG ikut diperbarui.
+
+Nanti
+
+- [ ] Batas kecepatan per unduhan untuk torrent. **S**
+- [ ] Koneksi ke peer lewat proxy SOCKS5 (belum didukung pustakanya). **B**
+- [ ] Prioritas per file, dan unduh berurutan untuk menonton sambil
+      mengunduh. **S**
+- [ ] Asosiasi `magnet:` dan `.torrent` di Linux dan macOS (butuh file
+      `.desktop` dan `.app`). **S**
+- [ ] Unggah file `.torrent` di web UI `-serve`. **K**
+
+Batasan:
+- Mengunduh dan mengunggah konten berhak cipta lewat torrent bisa
+  melanggar hukum; itu tanggung jawab pemakai.
+- Peer dan tracker melihat IP pengguna.
+- Sebagian ISP memperlambat atau memblokir lalu lintas torrent.
+
 ## Catatan kerja
 
 - Go portable: `C:\Users\rigaz\AppData\Local\go-sdk\go\bin`, dengan

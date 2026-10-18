@@ -61,9 +61,11 @@ int main(int argc, char* argv[]) {
     std::cerr << "odm-libtorrent: " << e.what() << '\n';
   }
   // Everything is saved. Leave without exit()'s clean-up: the thread that
-  // reads stdin may still be waiting in it after "quit", and glibc 2.39's
-  // exit() waits for that stream's lock, so the program never ended.
+  // reads stdin may still be waiting in it after "quit", holding that
+  // stream's lock, which glibc 2.39's exit() waits for, as fflush(NULL)
+  // does everywhere; so only the streams written are flushed.
   std::cout.flush();
-  std::fflush(nullptr);
+  std::fflush(stdout);
+  std::fflush(stderr);
   std::_Exit(code);
 }

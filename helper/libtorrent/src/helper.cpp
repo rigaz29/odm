@@ -132,16 +132,15 @@ void put_info_hashes(json& j, lt::info_hash_t const& ih) {
 }
 
 // metadata describes a torrent's content, files in their original names.
-json metadata(lt::torrent_info const& ti) {
-  lt::file_storage const& fs = ti.orig_files();
+// libtorrent 2.1 keeps trackers out of torrent_info: they are the caller's.
+json metadata(lt::torrent_info const& ti, std::vector<std::string> const& trackers) {
+  lt::file_storage const& fs = ti.layout();
   json files = json::array();
   for (lt::file_index_t i : fs.file_range()) {
     json f = {{"path", portable(fs.file_path(i))}, {"size", fs.file_size(i)}};
     if (fs.pad_file_at(i)) f["pad"] = true;
     files.push_back(std::move(f));
   }
-  json trackers = json::array();
-  for (auto const& t : ti.trackers()) trackers.push_back(t.url);
   json j = {
       {"name", ti.name()},
       {"size", ti.total_size()},
@@ -149,7 +148,7 @@ json metadata(lt::torrent_info const& ti) {
       {"pieces", ti.num_pieces()},
       {"private", ti.priv()},
       {"files", files},
-      {"trackers", trackers},
+      {"trackers", json(trackers)},
   };
   put_info_hashes(j, ti.info_hashes());
   return j;
@@ -390,10 +389,8 @@ Helper::json Helper::cmd_inspect(json const& msg) {
   } else {
     throw std::runtime_error("inspect needs a torrent or a magnet link");
   }
-  if (atp.ti) return metadata(*atp.ti);
-  json trackers = json::array();
-  for (auto const& t : atp.trackers) trackers.push_back(t);
-  json j = {{"name", atp.name}, {"trackers", trackers}};
+  if (atp.ti) return metadata(*atp.ti, atp.trackers);
+  json j = {{"name", atp.name}, {"trackers", json(atp.trackers)}};
   put_info_hashes(j, atp.info_hashes);
   return j;
 }
@@ -724,11 +721,14 @@ void Helper::on_metadata(Torrent& t) {
   auto ti = t.handle.torrent_file();
   if (!ti) return;
   t.has_metadata = true;
-  json j = metadata(*ti);
+  std::vector<std::string> trackers;
+  for (auto const& e : t.handle.trackers()) trackers.push_back(e.url);
+  json j = metadata(*ti, trackers);
   j["event"] = "metadata";
   j["key"] = t.key;
   lt::add_torrent_params p;
   p.ti = std::const_pointer_cast<lt::torrent_info>(ti);
+  p.trackers = trackers;
   j["magnet"] = lt::make_magnet_uri(p);
   emit(j);
   // Keep the metadata, so that the torrent need not fetch it again.

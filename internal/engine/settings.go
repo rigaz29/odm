@@ -76,6 +76,40 @@ type QueueSchedule struct {
 	Sync bool `json:"sync,omitempty"`
 }
 
+// TorrentSettings are the torrents' options (odm-libtorrent).
+type TorrentSettings struct {
+	// Port is the port torrents listen on: chosen at random the first time
+	// a torrent runs, then kept, so that a rule for it in a router or a
+	// firewall lasts. 0 until then.
+	Port int `json:"port,omitempty"`
+	// NoIncoming refuses connections from peers; NoPortForwarding leaves the
+	// router's port closed (UPnP, NAT-PMP). Negative, so both are on.
+	NoIncoming       bool `json:"no_incoming,omitempty"`
+	NoPortForwarding bool `json:"no_port_forwarding,omitempty"`
+	// Seed is how long a finished torrent goes on uploading: SeedTarget,
+	// until it uploaded SeedRatio percent of its size or seeded for
+	// SeedMinutes, whichever comes first; SeedNever; or SeedForever, until
+	// it is stopped.
+	Seed        string `json:"seed,omitempty"`
+	SeedRatio   int    `json:"seed_ratio,omitempty"`
+	SeedMinutes int    `json:"seed_minutes,omitempty"`
+	// UploadLimit caps the torrents' upload in bytes per second; 0 is none.
+	UploadLimit int64 `json:"upload_limit,omitempty"`
+}
+
+// Kinds of TorrentSettings.Seed.
+const (
+	SeedTarget  = ""
+	SeedNever   = "never"
+	SeedForever = "forever"
+)
+
+// Default seeding target: as much as was downloaded, or half an hour.
+const (
+	DefaultSeedRatio   = 100
+	DefaultSeedMinutes = 30
+)
+
 // DownloadLimits caps how much is downloaded in a rolling window.
 type DownloadLimits struct {
 	Enabled bool `json:"enabled"`
@@ -173,6 +207,8 @@ type Settings struct {
 	// there. The Fyne UI keeps its own in its preferences.
 	Theme    string `json:"theme,omitempty"`
 	Language string `json:"language,omitempty"`
+	// Torrent are the torrents' options.
+	Torrent TorrentSettings `json:"torrent"`
 }
 
 // DefaultQueue is the queue used when none is specified.
@@ -290,6 +326,23 @@ func (s *Settings) normalize(fallbackDir string) {
 	}
 	if len(s.FileTypes) == 0 {
 		s.FileTypes = DefaultFileTypes()
+	}
+	switch s.Torrent.Seed {
+	case SeedTarget, SeedNever, SeedForever:
+	default:
+		s.Torrent.Seed = SeedTarget
+	}
+	if s.Torrent.SeedRatio <= 0 {
+		s.Torrent.SeedRatio = DefaultSeedRatio
+	}
+	if s.Torrent.SeedMinutes <= 0 {
+		s.Torrent.SeedMinutes = DefaultSeedMinutes
+	}
+	if s.Torrent.Port < 0 || s.Torrent.Port > 65535 {
+		s.Torrent.Port = 0
+	}
+	if s.Torrent.UploadLimit < 0 {
+		s.Torrent.UploadLimit = 0
 	}
 	if s.HostConnections == nil {
 		s.HostConnections = map[string]int{}

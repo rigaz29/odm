@@ -184,6 +184,11 @@ type Download struct {
 	// A torrent's peers and seeds connected, and its upload speed.
 	peers, seeds int
 	uploadSpeed  int64
+	// A finished torrent's seeding run: seedCancel ends it, seedDone is
+	// closed once it has, seedStop says StopSeeding ended it.
+	seedCancel context.CancelFunc
+	seedDone   chan struct{}
+	seedStop   bool
 	// guarded is client wrapped by guardLocal for stream requests. It is
 	// rebuilt when the client or the manifest (Readdress) changes, since
 	// its verdict on the manifest is cached.
@@ -2147,6 +2152,13 @@ func (d *Download) infoLocked() Info {
 		Site:    d.Site != nil,
 		Torrent: d.Torrent != nil,
 		Peers:   d.peers, Seeds: d.seeds, UploadSpeed: d.uploadSpeed,
+		Seeding: d.Torrent != nil && d.Torrent.Seeding,
+		Uploaded: func() int64 {
+			if d.Torrent == nil {
+				return 0
+			}
+			return d.Torrent.Uploaded
+		}(),
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
 	}
 }

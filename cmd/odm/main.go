@@ -165,11 +165,11 @@ func main() {
 	// Set before the queue starts, which may resume torrents.
 	engine.TorrentDir = filepath.Join(baseDir, "torrents")
 	torrents := &torrent.Session{
-		Program: func(ctx context.Context) (string, error) { return libtorrentProgram(ctx, keeper) },
-		State:   filepath.Join(engine.TorrentDir, "session.dat"),
-		Log:     log.Printf,
+		Program:  func(ctx context.Context) (string, error) { return libtorrentProgram(ctx, keeper) },
+		State:    filepath.Join(engine.TorrentDir, "session.dat"),
+		Settings: func() map[string]any { return torrentSettings(mgr) },
+		Log:      log.Printf,
 	}
-	torrents.SetGlobalLimits(settings.EffectiveSpeedLimit(), 0)
 	engine.Torrents = torrents
 	// The program saves every torrent's resume data before it exits.
 	defer torrents.Close()
@@ -318,6 +318,18 @@ func libtorrentProgram(ctx context.Context, keeper *tools.Keeper) (string, error
 		return p, nil
 	}
 	return keeper.Ensure(ctx, "odm-libtorrent")
+}
+
+// torrentSettings is odm-libtorrent's settings from ODM's. The port is
+// picked the first time and kept, so that a rule for it in a router or a
+// firewall lasts.
+func torrentSettings(mgr *engine.Manager) map[string]any {
+	st := mgr.Settings()
+	if st.Torrent.Port == 0 {
+		st.Torrent.Port = torrent.RandomPort()
+		st = mgr.UpdateSettings(st)
+	}
+	return torrent.SettingsFrom(st, engine.SystemProxy)
 }
 
 // clipboardConfig reads the clipboard monitor's settings on every call.

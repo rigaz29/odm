@@ -88,6 +88,7 @@ func NewManager(settings Settings, settingsPath string) *Manager {
 	setFFmpegPath(settings.FFmpegPath)
 	setYtDlpPath(settings.YtDlpPath)
 	setYtDlpCookies(settings.YtDlpCookies)
+	setTorrentSettings(settings.Torrent)
 	m := &Manager{
 		downloads: map[string]*Download{},
 		running:   map[string]bool{},
@@ -378,8 +379,9 @@ func (m *Manager) UpdateSettings(next Settings) Settings {
 	}
 
 	m.limiter.SetRate(next.EffectiveSpeedLimit())
+	setTorrentSettings(next.Torrent)
 	if b := Torrents; b != nil {
-		b.SetGlobalLimits(next.EffectiveSpeedLimit(), 0)
+		b.Reconfigure()
 	}
 	setUserAgent(next.UserAgent)
 	setCategories(next.CategoryDefs)
@@ -840,10 +842,22 @@ func (m *Manager) Begin(ctx context.Context) {
 			}
 		}
 	}
+	// Torrents that had not seeded enough when ODM closed seed again.
+	var seeding []*Download
+	for _, d := range m.downloads {
+		d.mu.Lock()
+		if d.Status == StatusComplete && d.Torrent != nil && d.Torrent.Seeding {
+			seeding = append(seeding, d)
+		}
+		d.mu.Unlock()
+	}
 	m.mu.Unlock()
 	m.pump()
 	for _, q := range onStartup {
 		m.StartQueue(q)
+	}
+	for _, d := range seeding {
+		go m.seed(d, true)
 	}
 }
 
@@ -1270,6 +1284,7 @@ func (m *Manager) RemoveWithFile(id string, deleteFile bool) bool {
 	// Let workers (and a stream's assembly) close their files first; on
 	// Windows an open file cannot be deleted and the error is ignored.
 	d.waitIdle(10 * time.Second)
+	d.haltSeeding(10 * time.Second)
 	d.mu.Lock()
 	dir, name := d.Dir, d.FileName
 	f := d.file
@@ -1438,9 +1453,13 @@ func (m *Manager) run(d *Download) {
 	if d.status() == StatusComplete {
 		d.mu.Lock()
 		open, dir, name := d.OpenWhenDone, d.Dir, d.FileName
+		seeding := d.Torrent != nil && d.Torrent.Seeding
 		d.mu.Unlock()
 		if open && name != "" {
 			_ = osutil.Open(filepath.Join(dir, name))
+		}
+		if seeding {
+			go m.seed(d, false)
 		}
 	}
 	if d.status() == StatusError && m.retryInQueue(d) {
@@ -1472,6 +1491,56 @@ func (m *Manager) retryInQueue(d *Download) bool {
 		d.mu.Unlock()
 	}
 	return ok
+}
+
+// seed has a finished torrent seed, outside the queue's slots; readd puts
+// it back into the session first (after ODM started).
+func (m *Manager) seed(d *Download, readd bool) {
+	b := Torrents
+	m.mu.Lock()
+	ctx := m.ctx
+	m.mu.Unlock()
+	if b == nil || ctx == nil {
+		return
+	}
+	sctx, cancel := context.WithCancel(ctx)
+	done := make(chan struct{})
+	if !d.beginSeeding(cancel, done) {
+		cancel()
+		return
+	}
+	defer func() {
+		cancel()
+		d.endSeeding()
+		close(done)
+		m.changed(d)
+	}()
+	d.seedTorrent(sctx, b, readd)
+}
+
+// StopSeeding ends a finished torrent's seeding; false when id is not
+// seeding.
+func (m *Manager) StopSeeding(id string) bool {
+	d := m.get(id)
+	if d == nil {
+		return false
+	}
+	d.mu.Lock()
+	cancel := d.seedCancel
+	seeding := d.Torrent != nil && d.Torrent.Seeding
+	switch {
+	case cancel != nil:
+		d.seedStop = true
+	case seeding:
+		d.Torrent.Seeding = false // not running: nothing else to stop
+	}
+	d.mu.Unlock()
+	if cancel != nil {
+		cancel()
+	} else if seeding {
+		m.changed(d)
+	}
+	return cancel != nil || seeding
 }
 
 func (m *Manager) changed(d *Download) { m.updated(d, false) }

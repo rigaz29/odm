@@ -11,9 +11,12 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
+	"net/http"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"testing"
@@ -142,7 +145,9 @@ func newHarness(t *testing.T, store *engine.Store, torrentDir, dir string) *harn
 	s := &Session{Program: func(context.Context) (string, error) { return prog, nil }, Settings: local, Log: t.Logf}
 	prevT, prevD := engine.Torrents, engine.TorrentDir
 	engine.Torrents, engine.TorrentDir = s, torrentDir
-	m := engine.NewManager(engine.Settings{Dir: dir, Concurrent: 3}, "")
+	// No seeding unless a test asks for it: a finished torrent leaves the
+	// session.
+	m := engine.NewManager(engine.Settings{Dir: dir, Concurrent: 3, Torrent: engine.TorrentSettings{Seed: engine.SeedNever}}, "")
 	if store != nil {
 		m.SetStore(store)
 		if states, err := store.Load(); err == nil {
@@ -329,5 +334,128 @@ func TestSessionStartsAgainAfterTheProgramStops(t *testing.T) {
 	sameFile(t, filepath.Join(h.dir, "big.bin"), want)
 	if fmt.Sprint(h.s.Port()) == "0" {
 		t.Fatal("the program did not start again")
+	}
+}
+
+// leech is a second odm-libtorrent that downloads the torrent into dir.
+func leech(t *testing.T, torrent, dir string) *Client {
+	t.Helper()
+	c, err := Start(context.Background(), program(t), Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { c.Close(10 * time.Second) })
+	if err := c.Call(context.Background(), "settings", local(), nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := c.Call(context.Background(), "add", map[string]any{"key": "peer", "torrent": torrent, "save_path": dir}, nil); err != nil {
+		t.Fatal(err)
+	}
+	return c
+}
+
+func TestSettingsFrom(t *testing.T) {
+	st := engine.Settings{SpeedLimit: 5000, Torrent: engine.TorrentSettings{Port: 41000, NoPortForwarding: true, UploadLimit: 300},
+		Proxy: engine.ProxyConfig{Mode: engine.ProxySOCKS5, Host: "p", Port: 1080, User: "u", Pass: "s"}}
+	got := SettingsFrom(st, nil)
+	want := map[string]any{"listen": "0.0.0.0:41000,[::]:41000", "incoming": true, "port_forwarding": false,
+		"dht": true, "lsd": true, "download_limit": int64(5000), "upload_limit": int64(300)}
+	for k, v := range want {
+		if !reflect.DeepEqual(got[k], v) {
+			t.Errorf("%s: %#v, want %#v", k, got[k], v)
+		}
+	}
+	if p := got["proxy"].(map[string]any); p["type"] != "socks5" || p["peers"] != true || p["user"] != "u" {
+		t.Errorf("SOCKS5 proxy: %v", p)
+	}
+	st.Proxy = engine.ProxyConfig{Mode: engine.ProxyHTTP, Host: "p", Port: 8080}
+	if p := SettingsFrom(st, nil)["proxy"].(map[string]any); p["type"] != "http" || p["peers"] != false {
+		t.Errorf("HTTP proxy: %v", p)
+	}
+	st.Proxy = engine.ProxyConfig{Mode: engine.ProxySystem}
+	system := func(*http.Request) (*url.URL, error) { return url.Parse("http://corp:3128") }
+	if p := SettingsFrom(st, system)["proxy"].(map[string]any); p["type"] != "http" || p["host"] != "corp" || p["port"] != 3128 {
+		t.Errorf("system proxy: %v", p)
+	}
+	if p := SettingsFrom(st, nil)["proxy"].(map[string]any); p["type"] != "none" {
+		t.Errorf("no system proxy: %v", p)
+	}
+	st.LimiterOff = true
+	if got := SettingsFrom(st, nil)["download_limit"]; got != int64(0) {
+		t.Errorf("limiter off: %v", got)
+	}
+}
+
+func TestSessionStopsTheProgramWhenIdle(t *testing.T) {
+	prev := idleStop
+	idleStop = 300 * time.Millisecond
+	t.Cleanup(func() { idleStop = prev })
+	dir := t.TempDir()
+	src := filepath.Join(dir, "seed", "big.bin")
+	want := makeFile(t, src, 4<<20)
+	tf := filepath.Join(dir, "big.torrent")
+	createTorrent(t, src, tf)
+	sd := seed(t, tf, filepath.Dir(src), 1<<20)
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), filepath.Join(dir, "got"))
+	info := h.m.Create(engine.AddOptions{URL: tf, Torrent: &engine.TorrentJob{}, Start: true})
+	h.wait(info.ID, sd, 30*time.Second, "1 MiB", func(i engine.Info) bool { return i.Done >= 1<<20 })
+	h.m.Pause(info.ID)
+	stopped := time.Now().Add(10 * time.Second)
+	for {
+		h.s.mu.Lock()
+		running := h.s.c != nil
+		h.s.mu.Unlock()
+		if !running {
+			break
+		}
+		if time.Now().After(stopped) {
+			t.Fatal("odm-libtorrent still runs with nothing to do")
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	h.m.Resume(info.ID)
+	h.wait(info.ID, sd, 60*time.Second, "the download", complete)
+	sameFile(t, filepath.Join(h.dir, "big.bin"), want)
+}
+
+func TestSessionSeedsUntilTheRatio(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "seed", "data.bin")
+	makeFile(t, src, 1<<20)
+	tf := filepath.Join(dir, "data.torrent")
+	createTorrent(t, src, tf)
+	sd := seed(t, tf, filepath.Dir(src), 0)
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), filepath.Join(dir, "got"))
+	st := h.m.Settings()
+	st.Torrent.Seed = engine.SeedTarget // 100 %, or 30 minutes
+	h.m.UpdateSettings(st)
+	info := h.m.Create(engine.AddOptions{URL: tf, Torrent: &engine.TorrentJob{}, Start: true})
+	got := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
+	if !got.Seeding || h.s.in(info.ID) == nil {
+		t.Fatalf("not seeding: %+v", got)
+	}
+	// The first seeder goes: a second peer can only get the file from ODM.
+	sd.c.Close(10 * time.Second)
+	b := leech(t, tf, filepath.Join(dir, "b"))
+	for i := 0; ; i++ {
+		info, _ := h.m.Get(info.ID)
+		if !info.Seeding {
+			if info.Uploaded < 1<<20 {
+				t.Fatalf("stopped seeding at %d bytes uploaded", info.Uploaded)
+			}
+			break
+		}
+		if i%20 == 0 {
+			_ = b.Call(context.Background(), "connect", map[string]any{"key": "peer", "peer": "127.0.0.1:" + strconv.Itoa(h.s.Port())}, nil)
+		}
+		if i > 1200 {
+			t.Fatalf("still seeding after a peer took the whole file: %+v", info)
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	if h.s.in(info.ID) != nil {
+		t.Fatal("the torrent is still in the session after seeding")
 	}
 }

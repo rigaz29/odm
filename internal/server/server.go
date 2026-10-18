@@ -477,6 +477,11 @@ func (s *Server) handleAction(w http.ResponseWriter, r *http.Request) {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
 			return
 		}
+	case "stop-seeding":
+		if !s.mgr.StopSeeding(id) {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "not a torrent that is seeding"})
+			return
+		}
 	case "open", "reveal":
 		path, ok := s.mgr.Path(id)
 		if !ok {

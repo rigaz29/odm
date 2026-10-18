@@ -74,6 +74,7 @@ type Metadata struct {
 	Private    bool     `json:"private"`
 	Files      []File   `json:"files"`
 	Trackers   []string `json:"trackers"`
+	WebSeeds   []string `json:"web_seeds"`
 	InfoHash   string   `json:"info_hash"`
 	InfoHashV2 string   `json:"info_hash_v2"`
 	Magnet     string   `json:"magnet"`

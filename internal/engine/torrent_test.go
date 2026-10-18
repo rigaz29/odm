@@ -39,6 +39,10 @@ func newFakeTorrents(t *testing.T, meta TorrentMeta) *fakeTorrents {
 }
 
 func (f *fakeTorrents) Inspect(ctx context.Context, file, magnet string) (TorrentMeta, error) {
+	if file == "" {
+		// A magnet link names no files.
+		return TorrentMeta{Name: f.meta.Name, InfoHash: f.meta.InfoHash, Trackers: f.meta.Trackers, WebSeeds: f.meta.WebSeeds}, nil
+	}
 	if _, err := os.Stat(file); err != nil {
 		return TorrentMeta{}, err
 	}
@@ -147,7 +151,7 @@ func (f *fakeTorrents) SetLimits(ctx context.Context, id string, down, up int64)
 	return nil
 }
 
-func (f *fakeTorrents) SetGlobalLimits(down, up int64) {}
+func (f *fakeTorrents) Reconfigure() {}
 
 func (f *fakeTorrents) Remove(ctx context.Context, id string, deleteFiles bool) error {
 	f.mu.Lock()
@@ -214,7 +218,7 @@ func TestTorrentOfOneFile(t *testing.T) {
 	prevMark := MarkFile
 	MarkFile = func(path, source, referrer string) error { marked = append(marked, path); return nil }
 	t.Cleanup(func() { MarkFile = prevMark })
-	m := torrentManager(t, Settings{})
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
 	src := dotTorrent(t)
 	info := m.Create(AddOptions{URL: src, Torrent: &TorrentJob{}, Start: true, SpeedLimit: 5000})
 	a := f.waitAdd(t)
@@ -262,7 +266,7 @@ func TestTorrentFolderIsSanitizedAndMoved(t *testing.T) {
 		{Path: "Album: Live?/01 song.MP3", Size: 20},
 		{Path: "Album: Live?/photo\u202egpj.exe", Size: 10},
 	}})
-	m := torrentManager(t, Settings{Categories: true})
+	m := torrentManager(t, Settings{Categories: true, Torrent: TorrentSettings{Seed: SeedNever}})
 	info := m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{}, Start: true})
 	a := f.waitAdd(t)
 	base := m.Settings().Dir
@@ -432,6 +436,146 @@ func TestTorrentAddresses(t *testing.T) {
 	} {
 		if got := magnetName(link); got != want {
 			t.Errorf("magnetName(%q) = %q, want %q", link, got, want)
+		}
+	}
+}
+
+func (f *fakeTorrents) removed(id string) (deleteFiles, ok bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	deleteFiles, ok = f.removes[id]
+	return deleteFiles, ok
+}
+
+func finishOne(t *testing.T, f *fakeTorrents, m *Manager) *Download {
+	t.Helper()
+	info := m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{}, Start: true})
+	f.waitAdd(t)
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventFinished})
+	d := m.get(info.ID)
+	waitStatus(t, d, StatusComplete)
+	return d
+}
+
+func TestTorrentSeedsUntilTheRatio(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "a.bin", InfoHash: "a1", Files: []TorrentFile{{Path: "a.bin", Size: 1000}}})
+	m := torrentManager(t, Settings{}) // the default target: 100 %, or 30 minutes
+	d := finishOne(t, f, m)
+	if i := d.Info(); !i.Seeding {
+		t.Fatalf("not seeding: %+v", i)
+	}
+	if _, ok := f.removed(d.ID); ok {
+		t.Fatal("left the session before seeding")
+	}
+	if active := activeCount(m); active != 0 {
+		t.Fatalf("seeding takes a slot: %d active", active)
+	}
+	f.send(t, d.ID, TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{State: "seeding", Size: 1000, Done: 1000, Uploaded: 600, Peers: 2}})
+	waitUntil(t, "upload", func() bool { i := d.Info(); return i.Uploaded == 600 && i.Peers == 2 })
+	if i := d.Info(); !i.Seeding {
+		t.Fatal("stopped seeding at 60 %")
+	}
+	f.send(t, d.ID, TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{State: "seeding", Size: 1000, Done: 1000, Uploaded: 1000}})
+	waitUntil(t, "the end of seeding", func() bool { return !d.Info().Seeding })
+	if del, ok := f.removed(d.ID); !ok || del {
+		t.Fatalf("after seeding: removed %v, delete %v", ok, del)
+	}
+	if i := d.Info(); i.Status != StatusComplete || i.Peers != 0 {
+		t.Fatalf("after seeding: %+v", i)
+	}
+}
+
+func TestTorrentSeedsForItsMinutes(t *testing.T) {
+	prevMinute, prevCheck := seedMinute, seedCheck
+	seedMinute, seedCheck = 20*time.Millisecond, 5*time.Millisecond
+	t.Cleanup(func() { seedMinute, seedCheck = prevMinute, prevCheck })
+	f := newFakeTorrents(t, TorrentMeta{Name: "a.bin", InfoHash: "a2", Files: []TorrentFile{{Path: "a.bin", Size: 1000}}})
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{SeedMinutes: 3}})
+	d := finishOne(t, f, m)
+	waitUntil(t, "the end of seeding", func() bool { return !d.Info().Seeding })
+	d.mu.Lock()
+	secs := d.Torrent.SeedTime
+	d.mu.Unlock()
+	if _, ok := f.removed(d.ID); !ok || secs != 0 {
+		t.Fatalf("removed %v, seeded %d s of a 60 ms target", ok, secs)
+	}
+}
+
+func TestTorrentForeverSeedsUntilStopped(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "a.bin", InfoHash: "a3", Files: []TorrentFile{{Path: "a.bin", Size: 10}}})
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedForever}})
+	d := finishOne(t, f, m)
+	f.send(t, d.ID, TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{Size: 10, Done: 10, Uploaded: 500}})
+	time.Sleep(50 * time.Millisecond)
+	if !d.Info().Seeding {
+		t.Fatal("stopped at a ratio while seeding forever")
+	}
+	if !m.StopSeeding(d.ID) {
+		t.Fatal("StopSeeding: not seeding")
+	}
+	waitUntil(t, "the end of seeding", func() bool { return !d.Info().Seeding })
+	if _, ok := f.removed(d.ID); !ok {
+		t.Fatal("still in the session")
+	}
+	if m.StopSeeding(d.ID) {
+		t.Fatal("StopSeeding again")
+	}
+}
+
+func TestTorrentSeedsAgainAfterODMStarts(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "a.bin", InfoHash: "a4", Files: []TorrentFile{{Path: "a.bin", Size: 100}}})
+	dir := t.TempDir()
+	st := State{ID: "seed1", URL: "http://h/a.torrent", FileName: "a.bin", Dir: dir, Status: StatusComplete, Total: 100,
+		Torrent: &TorrentJob{InfoHash: "a4", Files: []TorrentFile{{Path: "a.bin", Size: 100}}, Seeding: true, Uploaded: 30}}
+	if err := os.WriteFile(filepath.Join(TorrentDir, "seed1.torrent"), []byte("d4:infod4:name1:aee"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	m := NewManager(Settings{Dir: dir, Concurrent: 3}, "")
+	m.Restore([]State{st})
+	ctx, cancel := context.WithCancel(context.Background())
+	t.Cleanup(cancel)
+	m.Begin(ctx)
+	a := f.waitAdd(t)
+	if a.ID != "seed1" || a.SavePath != dir || !reflect.DeepEqual(a.Names, map[int]string{0: "a.bin"}) || a.Hold {
+		t.Fatalf("seeding again: %+v", a)
+	}
+	d := m.get("seed1")
+	f.send(t, "seed1", TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{State: "seeding", Size: 100, Done: 100, Uploaded: 100}})
+	waitUntil(t, "the end of seeding", func() bool { return !d.Info().Seeding })
+}
+
+func TestTorrentLeavesOutLocalTrackers(t *testing.T) {
+	meta := TorrentMeta{Name: "a.bin", InfoHash: "a5", Files: []TorrentFile{{Path: "a.bin", Size: 10}},
+		Trackers: []string{"http://tracker.example/announce", "udp://192.168.1.1:6969/announce", "http://0x7f.1/announce", "http://router.localhost/a"},
+		WebSeeds: []string{"http://10.0.0.5/files/", "https://mirror.example/files/"}}
+	f := newFakeTorrents(t, meta)
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
+	m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{}, Start: true})
+	a := f.waitAdd(t)
+	if !reflect.DeepEqual(a.DropTrackers, []string{"udp://192.168.1.1:6969/announce", "http://0x7f.1/announce", "http://router.localhost/a"}) ||
+		!reflect.DeepEqual(a.DropWebSeeds, []string{"http://10.0.0.5/files/"}) {
+		t.Fatalf("dropped %v and %v", a.DropTrackers, a.DropWebSeeds)
+	}
+	// A .torrent from the network itself may use it.
+	if tr, ws := torrentDrops("http://192.168.1.2/a.torrent", meta); tr != nil || ws != nil {
+		t.Fatalf("from the network: dropped %v and %v", tr, ws)
+	}
+}
+
+func TestTorrentSettingsDefaults(t *testing.T) {
+	s := Settings{Torrent: TorrentSettings{Seed: "sometimes", Port: 70000, UploadLimit: -1}}
+	s.normalize(t.TempDir())
+	if want := (TorrentSettings{SeedRatio: DefaultSeedRatio, SeedMinutes: DefaultSeedMinutes}); s.Torrent != want {
+		t.Fatalf("normalized %+v", s.Torrent)
+	}
+	ts := s.Torrent
+	for _, c := range []struct {
+		size, uploaded int64
+		seeding        time.Duration
+		want           bool
+	}{{1000, 999, 0, false}, {1000, 1000, 0, true}, {1000, 0, 30 * time.Minute, true}, {0, 0, 0, true}} {
+		if got := seeded(ts, c.size, c.uploaded, c.seeding); got != c.want {
+			t.Errorf("seeded(%d, %d, %v) = %v", c.size, c.uploaded, c.seeding, got)
 		}
 	}
 }

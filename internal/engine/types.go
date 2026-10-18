@@ -150,10 +150,14 @@ type Info struct {
 	// Site is a video page that yt-dlp downloads.
 	Site bool `json:"site,omitempty"`
 	// Torrent is a torrent; Peers and Seeds are connected while it runs.
-	Torrent     bool      `json:"torrent,omitempty"`
-	Peers       int       `json:"peers,omitempty"`
-	Seeds       int       `json:"seeds,omitempty"`
-	UploadSpeed int64     `json:"upload_speed,omitempty"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	Torrent     bool  `json:"torrent,omitempty"`
+	Peers       int   `json:"peers,omitempty"`
+	Seeds       int   `json:"seeds,omitempty"`
+	UploadSpeed int64 `json:"upload_speed,omitempty"`
+	// Seeding is a finished torrent uploading until its seeding target;
+	// Uploaded the bytes it uploaded.
+	Seeding   bool      `json:"seeding,omitempty"`
+	Uploaded  int64     `json:"uploaded,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
 }

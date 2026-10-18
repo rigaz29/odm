@@ -16,6 +16,16 @@ package engine
 // path inside the folder is sanitized part by part, so a torrent cannot
 // write outside it. <dir> is the download's folder, below its category's
 // when categories are on; the category is the largest file's.
+//
+// A finished torrent is complete at once and then seeds, outside the
+// queue's slots, until Settings.Torrent's target: the Seeding mark. It
+// leaves the session once that is reached or StopSeeding is asked, and
+// seeds again after ODM starts again if it did not get there.
+//
+// Trackers and web seeds on this computer or its network are left out of a
+// torrent that did not come from there, as the playlists' guard does: a
+// torrent from the internet cannot make ODM reach the routers and services
+// next to it. Peers on the network stay: finding them is BitTorrent's.
 
 import (
 	"context"
@@ -29,6 +39,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -53,7 +64,9 @@ type TorrentBackend interface {
 	Rename(ctx context.Context, id string, names map[int]string) error
 	Move(ctx context.Context, id, savePath string) error
 	SetLimits(ctx context.Context, id string, download, upload int64) error
-	SetGlobalLimits(download, upload int64)
+	// Reconfigure applies ODM's settings to the session again: they
+	// changed.
+	Reconfigure()
 	// Remove takes the torrent out of the session, deleting what it
 	// downloaded when deleteFiles is set, and returns once it is gone. A
 	// torrent that is not in the session is not an error.
@@ -84,6 +97,8 @@ type TorrentAdd struct {
 	// Hold makes a magnet link download nothing until SetFiles.
 	Hold          bool
 	DownloadLimit int64
+	// DropTrackers and DropWebSeeds are left out of the torrent's own.
+	DropTrackers, DropWebSeeds []string
 }
 
 // TorrentMeta describes a torrent.
@@ -95,6 +110,7 @@ type TorrentMeta struct {
 	InfoHashV2 string
 	Private    bool
 	Trackers   []string
+	WebSeeds   []string
 	Magnet     string
 	// Files are the torrent's files in its own order, with their paths in
 	// the torrent (Path); Name is left to the engine.
@@ -111,7 +127,9 @@ type TorrentStatus struct {
 	DownloadRate, UploadRate int64
 	Uploaded                 int64
 	Peers, Seeds             int
-	Error                    string
+	// SeedingTime is how long it seeded, in seconds.
+	SeedingTime int64
+	Error       string
 }
 
 // Kinds of TorrentEvent.
@@ -146,6 +164,12 @@ type TorrentJob struct {
 	Files []TorrentFile `json:"files,omitempty"`
 	// Done is the bytes downloaded when the state was saved.
 	Done int64 `json:"done,omitempty"`
+	// Seeding: finished, and uploading until the seeding target.
+	Seeding bool `json:"seeding,omitempty"`
+	// Uploaded is the bytes uploaded over the torrent's life; SeedTime the
+	// seconds it seeded.
+	Uploaded int64 `json:"uploaded,omitempty"`
+	SeedTime int64 `json:"seed_time,omitempty"`
 }
 
 // TorrentFile is a file of a torrent.
@@ -159,6 +183,78 @@ type TorrentFile struct {
 	// Skip: not downloaded. Pad: padding between files, never a file.
 	Skip bool `json:"skip,omitempty"`
 	Pad  bool `json:"pad,omitempty"`
+}
+
+// torrentPolicy is Settings.Torrent, for the downloads to read.
+var torrentPolicy atomic.Pointer[TorrentSettings]
+
+func setTorrentSettings(ts TorrentSettings) { torrentPolicy.Store(&ts) }
+
+func torrentSettings() TorrentSettings {
+	if p := torrentPolicy.Load(); p != nil {
+		return *p
+	}
+	return TorrentSettings{SeedRatio: DefaultSeedRatio, SeedMinutes: DefaultSeedMinutes}
+}
+
+// seedMinute is a minute of SeedMinutes, and seedCheck how often a seeding
+// torrent with no news is held against its target; tests shorten them.
+var (
+	seedMinute = time.Minute
+	seedCheck  = 30 * time.Second
+)
+
+// seeded reports whether a torrent of size bytes that uploaded uploaded
+// bytes, and has seeded for seeding, has seeded enough under ts.
+func seeded(ts TorrentSettings, size, uploaded int64, seeding time.Duration) bool {
+	switch ts.Seed {
+	case SeedNever:
+		return true
+	case SeedForever:
+		return false
+	}
+	if size <= 0 || uploaded*100 >= size*int64(ts.SeedRatio) {
+		return true
+	}
+	return seeding >= time.Duration(ts.SeedMinutes)*seedMinute
+}
+
+// localURL reports whether raw names this computer or a private network by
+// itself: a local name, or an address literal (in any form the system's
+// resolver reads) that is not public. A name is not looked up.
+func localURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := canonicalHost(u.Hostname())
+	if localName(host) {
+		return true
+	}
+	if ip, ok := literalIP(host); ok {
+		return localAddr(ip)
+	}
+	return false
+}
+
+// torrentDrops lists the trackers and web seeds of m that a torrent from
+// source must not use: those on this computer or its network, unless the
+// .torrent came from there too.
+func torrentDrops(source string, m TorrentMeta) (trackers, webSeeds []string) {
+	if u, err := url.Parse(source); err == nil && (u.Scheme == "http" || u.Scheme == "https") && localURL(source) {
+		return nil, nil
+	}
+	for _, t := range m.Trackers {
+		if localURL(t) {
+			trackers = append(trackers, t)
+		}
+	}
+	for _, w := range m.WebSeeds {
+		if localURL(w) {
+			webSeeds = append(webSeeds, w)
+		}
+	}
+	return trackers, webSeeds
 }
 
 // errNoTorrents is a torrent download's error where ODM cannot run torrents.
@@ -264,7 +360,7 @@ func (d *Download) runTorrent(ctx context.Context) {
 
 func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error {
 	d.mu.Lock()
-	id, magnet := d.ID, d.Torrent.Magnet
+	id, magnet, source := d.ID, d.Torrent.Magnet, d.URL
 	known := d.Torrent.adopted()
 	limit := d.SpeedLimit
 	d.mu.Unlock()
@@ -276,30 +372,32 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 			return err
 		}
 		file = p
-		if !known {
-			meta, err := b.Inspect(ctx, file, "")
-			if err != nil {
-				return fmt.Errorf("reading the torrent: %w", err)
-			}
-			if err := d.adoptTorrent(meta); err != nil {
-				return err
-			}
-			known = true
+	}
+	// Read every time: it gives the trackers and web seeds to leave out.
+	meta, err := b.Inspect(ctx, file, magnet)
+	if err != nil {
+		return fmt.Errorf("reading the torrent: %w", err)
+	}
+	if !known && file != "" {
+		if err := d.adoptTorrent(meta); err != nil {
+			return err
 		}
+		known = true
 	}
 
 	events, stop := b.Watch(id)
 	defer stop()
 	resume := torrentPath(id, ".resume")
 	add := TorrentAdd{ID: id, File: file, Magnet: magnet, Resume: resume, DownloadLimit: limit}
+	add.DropTrackers, add.DropWebSeeds = torrentDrops(source, meta)
 	if known {
-		add.SavePath, add.Names, add.Priorities = d.torrentLayout()
+		add.SavePath, add.Names, add.Priorities = d.torrentLayout(false)
 	} else {
 		// A magnet link before its metadata: nothing is written until the
 		// files have their names.
 		add.SavePath, add.Hold = d.torrentDir(), true
 	}
-	err := b.Add(ctx, add)
+	err = b.Add(ctx, add)
 	if err != nil && known && file == "" {
 		// A magnet link whose resume data lost the metadata: fetch it
 		// again, then name the files as before.
@@ -334,7 +432,7 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 					}
 					known = true
 				}
-				save, names, prio := d.torrentLayout()
+				save, names, prio := d.torrentLayout(false)
 				if save != add.SavePath {
 					if err := b.Move(ctx, id, save); err != nil {
 						return err
@@ -567,11 +665,16 @@ func (d *Download) torrentDir() string {
 	return d.targetDirLocked(d.category())
 }
 
-// torrentLayout is where the backend puts the files while they download.
-func (d *Download) torrentLayout() (save string, names map[int]string, prio []int) {
+// torrentLayout is where the backend puts the files: while they download,
+// or once they are finished (final).
+func (d *Download) torrentLayout(final bool) (save string, names map[int]string, prio []int) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	tj := d.Torrent
+	part := ".odmpart"
+	if final {
+		part = ""
+	}
 	names = map[int]string{}
 	prio = make([]int, len(tj.Files))
 	for i, f := range tj.Files {
@@ -584,12 +687,12 @@ func (d *Download) torrentLayout() (save string, names map[int]string, prio []in
 		if tj.Folder {
 			names[i] = f.Name
 		} else {
-			names[i] = d.FileName + ".odmpart"
+			names[i] = d.FileName + part
 		}
 	}
 	save = d.Dir
 	if tj.Folder {
-		save = filepath.Join(d.Dir, d.FileName+".odmpart")
+		save = filepath.Join(d.Dir, d.FileName+part)
 	}
 	return save, names, prio
 }
@@ -602,6 +705,7 @@ func (d *Download) torrentProgress(st TorrentStatus) {
 	d.streamDone = st.Done
 	d.peers, d.seeds = st.Peers, st.Seeds
 	d.uploadSpeed = st.UploadRate
+	d.Torrent.Uploaded = st.Uploaded
 	d.mu.Unlock()
 	d.notify(false)
 }
@@ -610,13 +714,13 @@ func (d *Download) torrentProgress(st TorrentStatus) {
 // an antivirus program scanning a new file can hold it for a moment.
 var renameTries = 4
 
-// finishTorrent gives the finished files their names, takes the torrent out
-// of the session and marks the files as downloaded from the internet.
+// finishTorrent gives the finished files their names, marks them as
+// downloaded from the internet and has the torrent seed, or takes it out of
+// the session when it seeded enough already (or is not to seed).
 func (d *Download) finishTorrent(ctx context.Context, b TorrentBackend) error {
 	d.mu.Lock()
 	dir, name, folder := d.Dir, d.FileName, d.Torrent.Folder
 	files := append([]TorrentFile(nil), d.Torrent.Files...)
-	hashes := []string{d.Torrent.InfoHash, d.Torrent.InfoHashV2}
 	d.mu.Unlock()
 
 	final := name
@@ -656,17 +760,15 @@ func (d *Download) finishTorrent(ctx context.Context, b TorrentBackend) error {
 	}
 	d.mu.Lock()
 	d.FileName = final
+	size, uploaded, secs := d.Total, d.Torrent.Uploaded, d.Torrent.SeedTime
 	d.mu.Unlock()
 	if folder {
 		_ = os.Remove(filepath.Join(dir, name+".odmpart")) // empty after the move
 	}
 
-	// No seeding yet: the torrent leaves the session once it is done.
-	rctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
-	_ = b.Remove(rctx, d.ID, false)
-	cancel()
-	if folder {
-		removePartFiles(filepath.Join(dir, final), hashes)
+	seed := !seeded(torrentSettings(), size, uploaded, time.Duration(secs)*time.Second)
+	if !seed {
+		d.leaveSession(b)
 	}
 	if MarkFile != nil {
 		source, referrer := d.origin()
@@ -677,8 +779,178 @@ func (d *Download) finishTorrent(ctx context.Context, b TorrentBackend) error {
 	d.mu.Lock()
 	d.Status = StatusComplete
 	d.streamDone = d.Total
+	d.Torrent.Seeding = seed
 	d.mu.Unlock()
 	return nil
+}
+
+// leaveSession takes a finished torrent out of the session, keeping its
+// files, and deletes the part file it needed for seeding.
+func (d *Download) leaveSession(b TorrentBackend) {
+	d.mu.Lock()
+	id, dir, name, folder := d.ID, d.Dir, d.FileName, d.Torrent.Folder
+	hashes := []string{d.Torrent.InfoHash, d.Torrent.InfoHashV2}
+	d.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	_ = b.Remove(ctx, id, false)
+	cancel()
+	if folder {
+		removePartFiles(filepath.Join(dir, name), hashes)
+	}
+}
+
+// How seeding ended.
+const (
+	seedReached  = iota // the target, or settings that want no more
+	seedStopped         // StopSeeding
+	seedShutdown        // ODM closing: it seeds again at the next start
+	seedRemoved         // the download was removed
+	seedFailed          // the torrent stopped on an error
+)
+
+// seedTorrent has a finished torrent upload until its target, StopSeeding,
+// the end of ctx or an error. readd puts it back into the session first,
+// as ODM started again.
+func (d *Download) seedTorrent(ctx context.Context, b TorrentBackend, readd bool) {
+	events, stop := b.Watch(d.ID)
+	defer stop()
+	switch d.seedLoop(ctx, b, events, readd) {
+	case seedShutdown, seedRemoved:
+		return // Seeding stays set for the next start, or nothing is left
+	}
+	d.leaveSession(b)
+	d.mu.Lock()
+	d.Torrent.Seeding = false
+	d.peers, d.seeds, d.uploadSpeed = 0, 0, 0
+	d.mu.Unlock()
+	d.notify(true)
+}
+
+func (d *Download) seedLoop(ctx context.Context, b TorrentBackend, events <-chan TorrentEvent, readd bool) int {
+	d.mu.Lock()
+	base := time.Duration(d.Torrent.SeedTime) * time.Second
+	d.mu.Unlock()
+	start := time.Now()
+	// enough also keeps the seconds seeded, for the next start.
+	enough := func() bool {
+		elapsed := base + time.Since(start)
+		d.mu.Lock()
+		d.Torrent.SeedTime = int64(elapsed / time.Second)
+		size, uploaded := d.Total, d.Torrent.Uploaded
+		d.mu.Unlock()
+		return seeded(torrentSettings(), size, uploaded, elapsed)
+	}
+	if enough() {
+		return seedReached
+	}
+	if readd {
+		if err := d.readdSeed(ctx, b); err != nil {
+			if ctx.Err() != nil {
+				return d.seedEnd()
+			}
+			return seedFailed
+		}
+	}
+	tick := time.NewTicker(seedCheck)
+	defer tick.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return d.seedEnd()
+		case <-tick.C:
+			if enough() {
+				return seedReached
+			}
+			d.notify(false)
+		case ev, ok := <-events:
+			if !ok {
+				return seedFailed
+			}
+			switch ev.Kind {
+			case TorrentEventStatus:
+				if ev.Status.Error != "" {
+					return seedFailed
+				}
+				d.mu.Lock()
+				d.peers, d.seeds = ev.Status.Peers, ev.Status.Seeds
+				d.uploadSpeed = ev.Status.UploadRate
+				d.Torrent.Uploaded = ev.Status.Uploaded
+				d.mu.Unlock()
+				if enough() {
+					return seedReached
+				}
+				d.notify(false)
+			case TorrentEventError:
+				return seedFailed
+			}
+		}
+	}
+}
+
+// seedEnd is how seeding ended when its context did.
+func (d *Download) seedEnd() int {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case d.removed:
+		return seedRemoved
+	case d.seedStop:
+		return seedStopped
+	}
+	return seedShutdown
+}
+
+// readdSeed puts a finished torrent back into the session, where its files
+// are now.
+func (d *Download) readdSeed(ctx context.Context, b TorrentBackend) error {
+	d.mu.Lock()
+	id, magnet, source := d.ID, d.Torrent.Magnet, d.URL
+	d.mu.Unlock()
+	file := ""
+	if magnet == "" {
+		file = torrentPath(id, ".torrent")
+		if _, err := os.Stat(file); err != nil {
+			return err
+		}
+	}
+	add := TorrentAdd{ID: id, File: file, Magnet: magnet, Resume: torrentPath(id, ".resume")}
+	add.SavePath, add.Names, add.Priorities = d.torrentLayout(true)
+	if meta, err := b.Inspect(ctx, file, magnet); err == nil {
+		add.DropTrackers, add.DropWebSeeds = torrentDrops(source, meta)
+	}
+	return b.Add(ctx, add)
+}
+
+// beginSeeding records a seeding run of the download, unless one runs.
+func (d *Download) beginSeeding(cancel context.CancelFunc, done chan struct{}) bool {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.seedCancel != nil || d.removed || d.Torrent == nil || !d.Torrent.Seeding {
+		return false
+	}
+	d.seedCancel, d.seedDone, d.seedStop = cancel, done, false
+	return true
+}
+
+func (d *Download) endSeeding() {
+	d.mu.Lock()
+	d.seedCancel, d.seedDone = nil, nil
+	d.mu.Unlock()
+}
+
+// haltSeeding ends a seeding run and waits up to timeout for it.
+func (d *Download) haltSeeding(timeout time.Duration) {
+	d.mu.Lock()
+	cancel, done := d.seedCancel, d.seedDone
+	d.mu.Unlock()
+	if cancel == nil {
+		return
+	}
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(timeout):
+	}
 }
 
 func firstFile(files []TorrentFile) int {

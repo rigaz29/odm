@@ -416,8 +416,11 @@ func TestSelectFilesAndMove(t *testing.T) {
 
 	final := filepath.Join(dir, "got", "Album")
 	h.call(msg{"cmd": "move", "key": "l", "save_path": final})
-	if ev := h.event("moved", 20*time.Second, nil); filepath.Clean(filepath.FromSlash(ev.str("path"))) != final {
-		t.Errorf("moved: %v", ev)
+	ev := h.read(20*time.Second, "moved or move_failed event", func(m msg) bool {
+		return m.str("event") == "moved" || m.str("event") == "move_failed"
+	})
+	if ev.str("event") != "moved" || filepath.Clean(filepath.FromSlash(ev.str("path"))) != final {
+		t.Fatalf("move: %v", ev)
 	}
 	sameFile(t, filepath.Join(final, "a.bin"), a)
 	sameFile(t, filepath.Join(final, "c.bin"), c)

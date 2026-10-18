@@ -58,8 +58,8 @@ nothing listening and DHT, LSD and port mapping off.
 
 Reads a torrent without adding it: `{"torrent": "<path>"}` or
 `{"magnet": "<link>"}`. For a .torrent the reply has the fields of the
-`metadata` event; for a magnet link only `name`, `trackers` and the info
-hashes.
+`metadata` event; for a magnet link only `name`, `trackers`, `web_seeds`
+and the info hashes.
 
 ### add
 
@@ -78,6 +78,7 @@ the torrent has one) and `resumed`.
 | `paused` | add it paused |
 | `download_limit`, `upload_limit` | for this torrent |
 | `peers` | `["ip:port", …]` to connect to |
+| `drop_trackers`, `drop_web_seeds` | URLs to leave out of the torrent's trackers and web seeds (ODM leaves out those on its own network for a torrent from the internet) |
 
 ODM runs its own queue: the program never starts or stops torrents by
 itself.
@@ -94,7 +95,7 @@ follows.
 
 ### pause, resume
 
-`{"key"}`.
+`{"key"}`. `resume` also clears an error the torrent stopped on.
 
 ### priorities
 
@@ -147,7 +148,7 @@ exits.
 | `listen_failed` | `address`, `port`, `type`, `error` |
 | `portmap` | `port` (external), `via` (`upnp` or `natpmp`) |
 | `portmap_failed` | `via`, `error` |
-| `metadata` | `key`, `name`, `size`, `piece_size`, `pieces`, `private`, `files` (`path`, `size`, `pad`), `trackers`, `info_hash`, `info_hash_v2`, `magnet`. Right after `add` for a torrent with metadata; for a magnet link when it arrives. Paths are the torrent's own, before `names` |
+| `metadata` | `key`, `name`, `size`, `piece_size`, `pieces`, `private`, `files` (`path`, `size`, `pad`), `trackers`, `web_seeds`, `info_hash`, `info_hash_v2`, `magnet`. Right after `add` for a torrent with metadata; for a magnet link when it arrives. Paths are the torrent's own, before `names` |
 | `status` | `torrents`: status objects of the torrents that changed, every `status_interval` |
 | `finished` | `key`: every wanted file is downloaded, checked and written to the disk. Not sent while nothing is wanted (`hold`) |
 | `renamed` | `key`, `index`, `path` |

@@ -26,6 +26,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <set>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -126,14 +127,34 @@ lt::tcp::endpoint endpoint(std::string const& s) {
   return lt::tcp::endpoint(boost::asio::ip::make_address(host), static_cast<unsigned short>(port));
 }
 
+// drop_trackers removes the trackers ODM named (those on its own network,
+// for a torrent from the internet), with their tiers.
+void drop_trackers(lt::add_torrent_params& atp, json const& urls) {
+  std::vector<std::string> trackers;
+  std::vector<int> tiers;
+  for (std::size_t i = 0; i < atp.trackers.size(); ++i) {
+    bool drop = false;
+    for (auto const& u : urls) {
+      if (u.get<std::string>() == atp.trackers[i]) drop = true;
+    }
+    if (drop) continue;
+    trackers.push_back(atp.trackers[i]);
+    if (i < atp.tracker_tiers.size()) tiers.push_back(atp.tracker_tiers[i]);
+  }
+  atp.trackers = std::move(trackers);
+  atp.tracker_tiers = std::move(tiers);
+}
+
 void put_info_hashes(json& j, lt::info_hash_t const& ih) {
   if (ih.has_v1()) j["info_hash"] = hex(ih.v1.data(), ih.v1.size());
   if (ih.has_v2()) j["info_hash_v2"] = hex(ih.v2.data(), ih.v2.size());
 }
 
 // metadata describes a torrent's content, files in their original names.
-// libtorrent 2.1 keeps trackers out of torrent_info: they are the caller's.
-json metadata(lt::torrent_info const& ti, std::vector<std::string> const& trackers) {
+// libtorrent 2.1 keeps trackers and web seeds out of torrent_info: they are
+// the caller's.
+json metadata(lt::torrent_info const& ti, std::vector<std::string> const& trackers,
+              std::vector<std::string> const& web_seeds) {
   lt::file_storage const& fs = ti.layout();
   json files = json::array();
   for (lt::file_index_t i : fs.file_range()) {
@@ -149,6 +170,7 @@ json metadata(lt::torrent_info const& ti, std::vector<std::string> const& tracke
       {"private", ti.priv()},
       {"files", files},
       {"trackers", json(trackers)},
+      {"web_seeds", json(web_seeds)},
   };
   put_info_hashes(j, ti.info_hashes());
   return j;
@@ -318,7 +340,10 @@ Helper::json Helper::dispatch(std::string const& cmd, json const& msg) {
     return json::object();
   }
   if (cmd == "resume") {
-    torrent(msg).handle.resume();
+    // A torrent stopped on an error (a file it could not write) starts again.
+    Torrent& t = torrent(msg);
+    t.handle.clear_error();
+    t.handle.resume();
     return json::object();
   }
   if (cmd == "priorities") return cmd_priorities(msg);
@@ -396,8 +421,8 @@ Helper::json Helper::cmd_inspect(json const& msg) {
   } else {
     throw std::runtime_error("inspect needs a torrent or a magnet link");
   }
-  if (atp.ti) return metadata(*atp.ti, atp.trackers);
-  json j = {{"name", atp.name}, {"trackers", json(atp.trackers)}};
+  if (atp.ti) return metadata(*atp.ti, atp.trackers, atp.url_seeds);
+  json j = {{"name", atp.name}, {"trackers", json(atp.trackers)}, {"web_seeds", json(atp.url_seeds)}};
   put_info_hashes(j, atp.info_hashes);
   return j;
 }
@@ -445,6 +470,13 @@ Helper::json Helper::cmd_add(json const& msg) {
     }
   }
   if (msg.contains("priorities")) atp.file_priorities = priorities(msg["priorities"]);
+  if (msg.contains("drop_trackers")) drop_trackers(atp, msg["drop_trackers"]);
+  if (msg.contains("drop_web_seeds")) {
+    for (auto const& u : msg["drop_web_seeds"]) {
+      auto& v = atp.url_seeds;
+      v.erase(std::remove(v.begin(), v.end(), u.get<std::string>()), v.end());
+    }
+  }
   // ODM runs its own queue: libtorrent's automatic management stays off.
   atp.flags &= ~lt::torrent_flags::auto_managed;
   atp.flags &= ~lt::torrent_flags::paused;
@@ -746,7 +778,8 @@ void Helper::on_metadata(Torrent& t) {
   t.info_hashes = t.handle.info_hashes();
   std::vector<std::string> trackers;
   for (auto const& e : t.handle.trackers()) trackers.push_back(e.url);
-  json j = metadata(*ti, trackers);
+  std::set<std::string> seeds = t.handle.url_seeds();
+  json j = metadata(*ti, trackers, std::vector<std::string>(seeds.begin(), seeds.end()));
   j["event"] = "metadata";
   j["key"] = t.key;
   lt::add_torrent_params p;

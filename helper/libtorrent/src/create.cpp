@@ -20,7 +20,7 @@ namespace {
 
 int usage() {
   std::cerr << "usage: odm-libtorrent create <file or folder> <out.torrent> [--piece-size <bytes>]\n"
-               "                             [--tracker <url>]... [--private] [--v1-only]\n";
+               "                             [--tracker <url>]... [--web-seed <url>]... [--private] [--v1-only]\n";
   return 2;
 }
 
@@ -29,6 +29,7 @@ int usage() {
 int create_main(std::vector<std::string> const& args) {
   std::vector<std::string> paths;
   std::vector<std::string> trackers;
+  std::vector<std::string> web_seeds;
   int piece_size = 0;
   bool priv = false;
   lt::create_flags_t flags{};
@@ -38,6 +39,8 @@ int create_main(std::vector<std::string> const& args) {
       piece_size = std::stoi(args[++i]);
     } else if (a == "--tracker" && i + 1 < args.size()) {
       trackers.push_back(args[++i]);
+    } else if (a == "--web-seed" && i + 1 < args.size()) {
+      web_seeds.push_back(args[++i]);
     } else if (a == "--private") {
       priv = true;
     } else if (a == "--v1-only") {
@@ -55,7 +58,9 @@ int create_main(std::vector<std::string> const& args) {
     // The torrent is named after src; its files' paths start with that name
     // for a folder, and hashing reads them from src's parent.
     lt::create_torrent ct(lt::list_files(src.u8string(), flags), piece_size, flags);
-    for (auto const& t : trackers) ct.add_tracker(t);
+    // One tier each, as a torrent's announce-list usually has them.
+    for (std::size_t i = 0; i < trackers.size(); ++i) ct.add_tracker(trackers[i], static_cast<int>(i));
+    for (auto const& w : web_seeds) ct.add_url_seed(w);
     ct.set_priv(priv);
     std::string creator = std::string("odm-libtorrent ") + ODM_LIBTORRENT_VERSION;
     ct.set_creator(creator.c_str());

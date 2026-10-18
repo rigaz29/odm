@@ -279,9 +279,10 @@ func missing(t *testing.T, path string) {
 }
 
 // createTorrent makes a .torrent of src with "odm-libtorrent create".
-func createTorrent(t *testing.T, src, out string, pieceSize int) msg {
+func createTorrent(t *testing.T, src, out string, pieceSize int, extra ...string) msg {
 	t.Helper()
-	cmd := exec.Command(program(t), "create", src, out, "--piece-size", strconv.Itoa(pieceSize))
+	args := append([]string{"create", src, out, "--piece-size", strconv.Itoa(pieceSize)}, extra...)
+	cmd := exec.Command(program(t), args...)
 	cmd.Stderr = os.Stderr
 	b, err := cmd.Output()
 	if err != nil {
@@ -549,6 +550,29 @@ func TestRemoveDeletesFiles(t *testing.T) {
 	missing(t, resume)
 	if r := h.try(msg{"cmd": "status", "key": "l"}); r.flag("ok") {
 		t.Errorf("status after remove: %v", r)
+	}
+}
+
+func TestDroppedTrackersAndWebSeeds(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "seed", "data.bin")
+	makeFile(t, src, 100000)
+	tf := filepath.Join(dir, "data.torrent")
+	local, public := "http://192.168.1.1/announce", "http://tracker.example/announce"
+	seedLocal, seedPublic := "http://127.0.0.1:9/files/", "https://mirror.example/files/"
+	createTorrent(t, src, tf, 32<<10, "--tracker", local, "--tracker", public, "--web-seed", seedLocal, "--web-seed", seedPublic)
+
+	h := start(t)
+	h.listen()
+	info := h.call(msg{"cmd": "inspect", "torrent": tf})
+	if fmt.Sprint(info["trackers"]) != fmt.Sprint([]any{local, public}) || len(info["web_seeds"].([]any)) != 2 {
+		t.Fatalf("inspect: %v", info)
+	}
+	h.call(msg{"cmd": "add", "key": "d", "torrent": tf, "save_path": filepath.Join(dir, "got"), "paused": true,
+		"drop_trackers": []string{local}, "drop_web_seeds": []string{seedLocal}})
+	md := h.event("metadata", 10*time.Second, nil)
+	if fmt.Sprint(md["trackers"]) != fmt.Sprint([]any{public}) || fmt.Sprint(md["web_seeds"]) != fmt.Sprint([]any{seedPublic}) {
+		t.Fatalf("metadata: trackers %v, web seeds %v", md["trackers"], md["web_seeds"])
 	}
 }
 

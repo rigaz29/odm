@@ -56,8 +56,9 @@ func (k *Keeper) logf(format string, args ...any) {
 	}
 }
 
-// Ensure returns the program of the tool named name ("yt-dlp", "ffmpeg")
-// from ODM's folder, installing it first when the person allowed that.
+// Ensure returns the program of the tool named name ("yt-dlp", "ffmpeg",
+// "odm-libtorrent") from ODM's folder, installing it first when the person
+// allowed that.
 func (k *Keeper) Ensure(ctx context.Context, name string) (string, error) {
 	t, ok := byName(name)
 	if !ok || !t.Supported() {
@@ -105,12 +106,12 @@ func (k *Keeper) install(ctx context.Context, t Tool, progress Progress) (string
 	return v, nil
 }
 
-// UpdateAll installs or updates every tool this system supports and
-// returns the first error.
+// UpdateAll installs or updates every tool this system supports, and an
+// OnDemand one only once it is installed, and returns the first error.
 func (k *Keeper) UpdateAll(ctx context.Context) error {
 	var first error
 	for _, t := range All() {
-		if !t.Supported() {
+		if !t.Supported() || t.OnDemand && k.Installer.Installed(t) == "" {
 			continue
 		}
 		if _, err := k.install(ctx, t, nil); err != nil && first == nil {

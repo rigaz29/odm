@@ -1,6 +1,7 @@
 // Package tools keeps ODM's own copies of the companion programs it runs:
-// yt-dlp, which reads video sites' pages such as YouTube's, and ffmpeg,
-// which joins a video track with an audio track. They are downloaded from
+// yt-dlp, which reads video sites' pages such as YouTube's, ffmpeg, which
+// joins a video track with an audio track, and odm-libtorrent, which
+// downloads torrents (helper/libtorrent). They are downloaded from
 // their releases when first needed (once the person has agreed), checked
 // against the SHA-256 checksums published with them, and kept up to date
 // in a folder of ODM's, so nobody has to install them by hand.
@@ -15,8 +16,10 @@
 package tools
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bufio"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -65,8 +68,12 @@ type Tool struct {
 	Asset     string // the asset to download; "" when this OS has none
 	Sums      string // the asset listing SHA-256 checksums ("<hex>  <name>")
 	// Files are the programs installed: the asset itself saved under
-	// Files[0], or for a .zip asset, the files of these names inside it.
+	// Files[0], or for a .zip or .tar.gz asset, the files of these names
+	// inside it.
 	Files []string
+	// OnDemand: installed only when first needed, never as part of "all
+	// the tools", and kept up to date only once installed.
+	OnDemand bool
 }
 
 // Supported reports whether the tool can be installed on this system.
@@ -112,8 +119,34 @@ func FFmpeg() Tool {
 	return t
 }
 
+// LibtorrentRepo publishes odm-libtorrent, the companion program for
+// torrents (see .github/workflows/odm-libtorrent.yml).
+var LibtorrentRepo = "rigaz29/odm"
+
+// LibtorrentProtocol is the protocol this ODM speaks with odm-libtorrent
+// (helper/libtorrent/PROTOCOL.md). A release's tag names its protocol, so
+// ODM only installs one it can talk to.
+const LibtorrentProtocol = 1
+
+// Libtorrent is odm-libtorrent for this system, installed the first time a
+// torrent is added.
+func Libtorrent() Tool {
+	t := Tool{Name: "odm-libtorrent", Repo: LibtorrentRepo, TagPrefix: fmt.Sprintf("odm-libtorrent-p%d-", LibtorrentProtocol),
+		Files: []string{exe("odm-libtorrent")}, OnDemand: true}
+	switch runtime.GOOS + "/" + runtime.GOARCH {
+	case "windows/amd64":
+		t.Asset = "odm-libtorrent-windows-amd64.zip"
+	case "linux/amd64", "linux/arm64", "darwin/amd64", "darwin/arm64":
+		t.Asset = "odm-libtorrent-" + runtime.GOOS + "-" + runtime.GOARCH + ".tar.gz"
+	}
+	if t.Asset != "" {
+		t.Sums = t.Asset + ".sha256"
+	}
+	return t
+}
+
 // All are the tools ODM keeps.
-func All() []Tool { return []Tool{YtDlp(), FFmpeg()} }
+func All() []Tool { return []Tool{YtDlp(), FFmpeg(), Libtorrent()} }
 
 // maxAsset bounds a download.
 const maxAsset = 512 << 20
@@ -296,11 +329,16 @@ func (in *Installer) Install(ctx context.Context, t Tool, progress Progress) (st
 			os.Remove(p)
 		}
 	}()
-	if strings.HasSuffix(t.Asset, ".zip") {
+	switch {
+	case strings.HasSuffix(t.Asset, ".zip"):
 		if err := unzip(tmp, in.Dir, t.Files, staged); err != nil {
 			return "", err
 		}
-	} else {
+	case strings.HasSuffix(t.Asset, ".tar.gz"):
+		if err := untar(tmp, in.Dir, t.Files, staged); err != nil {
+			return "", err
+		}
+	default:
 		p := filepath.Join(in.Dir, ".new-"+t.Files[0])
 		if err := os.Rename(tmp, p); err != nil {
 			return "", err
@@ -427,6 +465,57 @@ func unzip(path, dir string, names []string, staged map[string]string) error {
 		staged[name] = p
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+// untar is unzip for a .tar.gz.
+func untar(path, dir string, names []string, staged map[string]string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	gz, err := gzip.NewReader(f)
+	if err != nil {
+		return err
+	}
+	defer gz.Close()
+	tr := tar.NewReader(gz)
+	for {
+		h, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return err
+		}
+		if h.Typeflag != tar.TypeReg {
+			continue
+		}
+		base := filepath.Base(filepath.FromSlash(h.Name))
+		for _, name := range names {
+			if !strings.EqualFold(base, name) || staged[name] != "" {
+				continue
+			}
+			p := filepath.Join(dir, ".new-"+name)
+			out, err := os.Create(p)
+			if err == nil {
+				_, err = io.Copy(out, io.LimitReader(tr, maxAsset))
+				if cerr := out.Close(); err == nil {
+					err = cerr
+				}
+			}
+			staged[name] = p
+			if err != nil {
+				return err
+			}
+		}
+	}
+	for _, name := range names {
+		if staged[name] == "" {
+			return fmt.Errorf("%s is not in the download", name)
 		}
 	}
 	return nil

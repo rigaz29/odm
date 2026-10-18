@@ -1,8 +1,10 @@
 package tools
 
 import (
+	"archive/tar"
 	"archive/zip"
 	"bytes"
+	"compress/gzip"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -227,6 +229,86 @@ func TestInstallFromZipByTagPrefix(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(in.Dir, "LICENSE.txt")); !errors.Is(err, os.ErrNotExist) {
 		t.Fatal("a file not asked for was taken out")
+	}
+}
+
+func tarGzOf(t *testing.T, files map[string]string) []byte {
+	t.Helper()
+	var buf bytes.Buffer
+	gz := gzip.NewWriter(&buf)
+	tw := tar.NewWriter(gz)
+	tw.WriteHeader(&tar.Header{Name: "./", Typeflag: tar.TypeDir, Mode: 0o755})
+	for name, body := range files {
+		if err := tw.WriteHeader(&tar.Header{Name: name, Mode: 0o755, Size: int64(len(body))}); err != nil {
+			t.Fatal(err)
+		}
+		tw.Write([]byte(body))
+	}
+	if err := tw.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := gz.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return buf.Bytes()
+}
+
+func TestInstallFromTarGzByProtocol(t *testing.T) {
+	g := newFakeGitHub(t)
+	lt := Tool{Name: "odm-libtorrent", Repo: "me/odm", TagPrefix: "odm-libtorrent-p1-",
+		Asset: "odm-libtorrent-linux-amd64.tar.gz", Sums: "odm-libtorrent-linux-amd64.tar.gz.sha256",
+		Files: []string{"odm-libtorrent"}, OnDemand: true}
+	pkg := tarGzOf(t, map[string]string{"./odm-libtorrent": "helper", "./licenses/libtorrent.txt": "BSD"})
+	g.releases["me/odm"] = []fakeRelease{
+		// A newer protocol this ODM cannot speak is passed over.
+		{tag: "odm-libtorrent-p2-2.2.0-1", sums: lt.Sums, assets: map[string][]byte{lt.Asset: []byte("p2")}},
+		{tag: "odm-libtorrent-p1-2.1.2-1", sums: lt.Sums, assets: map[string][]byte{lt.Asset: pkg}},
+	}
+	in := installer(t, g)
+	v, err := in.Install(context.Background(), lt, nil)
+	if err != nil || v != "odm-libtorrent-p1-2.1.2-1" {
+		t.Fatalf("install: %q %v", v, err)
+	}
+	if data, _ := os.ReadFile(filepath.Join(in.Dir, "odm-libtorrent")); string(data) != "helper" {
+		t.Fatalf("odm-libtorrent: %q", data)
+	}
+	if _, err := os.Stat(filepath.Join(in.Dir, "libtorrent.txt")); !errors.Is(err, os.ErrNotExist) {
+		t.Fatal("a file not asked for was taken out")
+	}
+
+	g.releases["me/odm"][1].assets[lt.Asset] = tarGzOf(t, map[string]string{"./README.txt": "no program"})
+	g.releases["me/odm"][1].tag = "odm-libtorrent-p1-2.1.2-2"
+	if _, err := in.Install(context.Background(), lt, nil); err == nil || !strings.Contains(err.Error(), "not in the download") {
+		t.Fatalf("a package without the program: %v", err)
+	}
+}
+
+func TestUpdateAllLeavesOnDemandToolsAlone(t *testing.T) {
+	g := newFakeGitHub(t)
+	lt := Libtorrent()
+	if !lt.Supported() {
+		t.Skip("no odm-libtorrent build for this system")
+	}
+	pkg := map[string][]byte{}
+	if strings.HasSuffix(lt.Asset, ".zip") {
+		pkg[lt.Asset] = zipOf(t, map[string]string{lt.Files[0]: "helper"})
+	} else {
+		pkg[lt.Asset] = tarGzOf(t, map[string]string{lt.Files[0]: "helper"})
+	}
+	g.releases[lt.Repo] = []fakeRelease{{tag: lt.TagPrefix + "2.1.2-1", sums: lt.Sums, assets: pkg}}
+	in := installer(t, g)
+	k := NewKeeper(in, func() string { return ModeAuto })
+	k.UpdateAll(context.Background()) // yt-dlp and ffmpeg fail here: no releases
+	if in.Installed(lt) != "" {
+		t.Fatal("odm-libtorrent was installed without a torrent")
+	}
+	if _, err := k.Ensure(context.Background(), "odm-libtorrent"); err != nil {
+		t.Fatal(err)
+	}
+	g.releases[lt.Repo] = append([]fakeRelease{{tag: lt.TagPrefix + "2.1.3-1", sums: lt.Sums, assets: pkg}}, g.releases[lt.Repo]...)
+	k.UpdateAll(context.Background())
+	if v := in.Installed(lt); v != lt.TagPrefix+"2.1.3-1" {
+		t.Fatalf("installed odm-libtorrent not kept up to date: %q", v)
 	}
 }
 

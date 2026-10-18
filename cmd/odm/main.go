@@ -188,7 +188,7 @@ func main() {
 
 	// The watcher always runs and reads the setting on each change, so the
 	// Options toggle applies immediately. Without a native clipboard API
-	// (Linux, macOS) the desktop UI polls through Fyne instead.
+	// (Linux, macOS) the desktop UI polls the clipboard instead.
 	if clipmon.Native {
 		go clipmon.Watch(ctx, clipboardConfig(mgr), func(u string) {
 			mgr.AddAuto(engine.AddOptions{URL: u, Start: true})

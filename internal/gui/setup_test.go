@@ -62,6 +62,20 @@ func TestSetupBrowsersConnected(t *testing.T) {
 	}
 }
 
+// Where ODM cannot find the browsers (outside Windows), the Setup window
+// points to the releases page for the extension.
+func TestSetupStatusReleasesPage(t *testing.T) {
+	svc, _ := setupService(t)
+	got := svc.SetupStatus().ReleasesPage
+	want := "https://github.com/" + version.Repo + "/releases/latest"
+	if browsers.Listed {
+		want = ""
+	}
+	if got != want {
+		t.Fatalf("releases page %q, want %q", got, want)
+	}
+}
+
 // A Chromium browser gets the extension written to a folder for "Load
 // unpacked", its extensions page to paste, and a window.
 func TestInstallExtensionChromium(t *testing.T) {

@@ -9,12 +9,15 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
+	"github.com/wailsapp/wails/v3/pkg/events"
 	"github.com/wailsapp/wails/v3/pkg/services/notifications"
 
+	"odm/internal/clipmon"
 	"odm/internal/engine"
 	"odm/internal/osutil"
 	"odm/internal/tools"
@@ -51,16 +54,20 @@ var (
 
 // Run opens the main window and blocks until it is closed or ctx ends.
 //
-// The window has no frame: the page draws the title bar, moves the window
-// from it (--wails-draggable, so Windows' own move: dragged to an edge it
-// snaps) and maximizes it on a double click; Windows keeps the resize
-// border and the shadow. WebView2 is hosted in a child window, not through
-// composition (WebView2CompositionHosting). With composition Windows would
-// take the title bar's parts as its own (--wails-non-client-region) and
-// offer the snap layouts over the maximize button, but the page's UI
-// Automation, what Narrator and other screen readers read, then reaches
-// Windows only through the host window, which Wails (v3.0.0-beta.30) does
-// not do: to a screen reader the window was empty.
+// On Windows the window has no frame: the page draws the title bar, moves
+// the window from it (--wails-draggable, so Windows' own move: dragged to
+// an edge it snaps) and maximizes it on a double click; Windows keeps the
+// resize border and the shadow. WebView2 is hosted in a child window, not
+// through composition (WebView2CompositionHosting). With composition
+// Windows would take the title bar's parts as its own
+// (--wails-non-client-region) and offer the snap layouts over the maximize
+// button, but the page's UI Automation, what Narrator and other screen
+// readers read, then reaches Windows only through the host window, which
+// Wails (v3.0.0-beta.30) does not do: to a screen reader the window was
+// empty.
+//
+// On Linux and macOS the window keeps the system's frame, and the page
+// draws no window buttons: ODM runs there as it is, not polished.
 func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	assets, err := fs.Sub(dist, "frontend/dist")
 	if err != nil {
@@ -74,7 +81,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		}
 		return errors.New("the Microsoft Edge WebView2 Runtime is not installed: " + webView2Page)
 	}
-	notes := notifications.New()
+	notes := &notifier{svc: notifications.New()}
 	app := application.New(application.Options{
 		Name:        "Ochi Download Manager",
 		Description: "Ochi Download Manager",
@@ -112,7 +119,7 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		MinWidth:         min(860, width),
 		MinHeight:        min(520, height),
 		URL:              "/",
-		Frameless:        true,
+		Frameless:        runtime.GOOS == "windows",
 		Hidden:           opts.Hidden,
 		BackgroundColour: background,
 		Windows: application.WindowsWindow{
@@ -148,6 +155,22 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 	}()
 
 	go svc.watch(ctx, 500*time.Millisecond)
+	if !clipmon.Native {
+		// Linux and macOS have no clipboard watcher (clipmon.Watch, which
+		// cmd/odm runs): the clipboard is read every second through Wails
+		// instead, once the app runs, as the Fyne UI reads it through Fyne.
+		app.Event.OnApplicationEvent(events.Common.ApplicationStarted, func(*application.ApplicationEvent) {
+			go clipmon.Poll(ctx, time.Second, func() string {
+				text, _ := app.Clipboard.Text()
+				return text
+			}, func() clipmon.Config {
+				st := mgr.Settings()
+				return clipmon.Config{Enabled: st.Clipboard, FileTypes: st.FileTypes}
+			}, func(u string) {
+				mgr.AddAuto(engine.AddOptions{URL: u, Start: true})
+			})
+		})
+	}
 	if opts.Prompt != nil {
 		go func() {
 			for o := range opts.Prompt {

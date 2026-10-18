@@ -215,19 +215,28 @@ membuktikan kerangkanya, lalu mockup (`ui-mockups`) menentukan gaya A+D.
   menyimpannya di `extension_browsers`.
 - Daftar browser baru ada untuk Windows; Linux/macOS menyusul di Tahap 7.
 
-**Tahap 7: Linux dan macOS, penyesuaian minimal.** Belum dimulai; lihat
-[rencananya](#rencana-linux-dan-macos-penyesuaian-minimal).
+**Tahap 7: Linux dan macOS, penyesuaian minimal.** Dikerjakan sejak
+2026-10-18; lihat [rencananya](#rencana-linux-dan-macos-penyesuaian-minimal).
 
 ## Rencana Linux dan macOS (penyesuaian minimal)
 
-Status: **rencana, belum dikerjakan** (dicatat 2026-10-17). Tujuannya UI
+Status: **dikerjakan sejak 2026-10-18** (rencana dicatat 2026-10-17):
+butir 1–5 sudah di kode dan CI, tinggal uji jalan di WSL. Tujuannya UI
 baru *bisa jalan* di Linux dan macOS dengan penyesuaian sekecil mungkin,
 ibarat mesin yang dipindah ke mobil lain: bautnya disesuaikan, bodinya
 tidak dipoles. Kerapian per platform menyusul bila diperlukan.
 
 **Temuan** (Wails v3.0.0-beta.30, sudah dicek di kodenya):
-- Linux memakai GTK3 + WebKitGTK 4.1 (GTK4 + WebKitGTK 6.0 lewat tag
-  build). Tray dan notifikasi lewat DBus.
+- Linux memakai GTK4 + WebKitGTK 6.0 secara bawaan; GTK3 + WebKitGTK 4.1
+  hanya lewat tag build `gtk3`, yang oleh Wails disebut *legacy*. (Catatan
+  awal rencana ini terbalik; dicek ulang di `linux_cgo.go` saat mulai
+  dikerjakan.) Tray dan notifikasi lewat DBus.
+- Di Linux dan macOS halaman disajikan dari `wails://localhost`, bukan
+  `http://wails.localhost` seperti di Windows. Halaman yang hanya mengenali
+  alamat Windows mengira dirinya di browser biasa dan memakai data tiruan.
+- Jendela Setup juga terbuka di start pertama di Linux/macOS, tetapi daftar
+  browser di sana kosong (`browsers.Installed`), sehingga tertulis "No
+  browser was found.".
 - macOS memakai WKWebView. Bila aplikasi tidak memasang menu, Wails
   memasang menu bawaannya (Edit dengan ⌘C/⌘V, Quit dengan ⌘Q).
 - Service notifikasi gagal start di macOS bila ODM bukan `.app` (butuh
@@ -247,11 +256,11 @@ tidak dipoles. Kerapian per platform menyusul bila diperlukan.
    tersedia (`app.go`, `tray.go`). Binding halaman untuk service itu
    dibuat ulang bila namanya berubah.
 2. Cara build: `scripts/build.sh` mendapat `linux-gui` dan `darwin-gui`
-   (halaman dulu, lalu `go build -tags gui` dengan cgo). Kebutuhan build:
-   Linux `libgtk-3-dev libwebkit2gtk-4.1-dev`, macOS Xcode command line
-   tools (sudah dipakai untuk Fyne). CI mendapat job yang menghasilkan
-   artefak pratinjau. Pengguna Linux butuh `libwebkit2gtk-4.1`, yang ada di
-   Ubuntu 22.04+ dan Fedora versi desktop.
+   (halaman dulu, lalu `go build -tags gui,production` dengan cgo).
+   Kebutuhan build: Linux `libgtk-4-dev libwebkitgtk-6.0-dev`, macOS Xcode
+   command line tools (sudah dipakai untuk Fyne). CI mendapat job yang
+   menghasilkan artefak pratinjau. Pengguna Linux butuh WebKitGTK 6.0, yang
+   ada di Ubuntu 24.04+, Debian 12+, dan Fedora 39+; Ubuntu 22.04 tidak.
 
 **Disarankan**, juga kecil:
 3. Bingkai jendela bawaan sistem di Linux/macOS (`Frameless` hanya di
@@ -261,6 +270,9 @@ tidak dipoles. Kerapian per platform menyusul bila diperlukan.
    ubah ukuran, dan tutup jendela pasti jalan.
 4. Pemantau clipboard lewat polling clipboard Wails (sekitar 20 baris), atau
    dibiarkan mati di Linux/macOS dan dicatat di README.
+5. Jendela Setup di Linux/macOS: bagian browser diganti petunjuk ke halaman
+   rilis (berkas `.xpi` untuk Firefox, `.zip` untuk *Load unpacked*),
+   supaya tidak tertulis "tidak ada browser".
 
 **Dibiarkan** (tetap jalan, hanya kurang rapi):
 - label "Ctrl" dan "Same as Windows", suara, ukuran jendela ke layar, dan
@@ -277,18 +289,19 @@ artefak pratinjau CI (misalnya `odm-next-linux-amd64` dan
 seperti Tahap 6.
 
 **Pengujian:**
-- Linux: WSL Ubuntu di komputer pengembang, lewat WSLg. Perlu memasang Go,
-  `libgtk-3-dev`, dan `libwebkit2gtk-4.1-dev` di WSL; minta izin pemiliknya
-  dulu. Yang diuji: start, jendela utama, menambah unduhan, tray,
-  notifikasi, dan Opsi.
-- macOS: CI membangun dan menjalankan tes; uji jalan dilakukan di Mac
-  pemiliknya.
+- Linux: WSL Ubuntu di komputer pengembang (26.04), lewat WSLg. Paket
+  build (`golang-go build-essential pkg-config libgtk-4-dev
+  libwebkitgtk-6.0-dev`) dipasang sendiri oleh pemiliknya, karena butuh
+  password sudo. Yang diuji: start, jendela utama, menambah unduhan, tray,
+  notifikasi, clipboard, Setup, dan Opsi.
+- macOS: CI membangun dan menjalankan tes; pemiliknya tidak punya Mac, jadi
+  belum ada uji jalan.
 
-**Keputusan yang masih terbuka:**
-- butir 3 dan 4 dipakai atau tidak;
-- izin memasang paket build di WSL Ubuntu;
-- rilis Linux/macOS tetap Fyne dulu dengan UI baru sebagai pratinjau, atau
-  langsung diganti.
+**Keputusan (2026-10-18):**
+- butir 3, 4, dan 5 dipakai;
+- Linux memakai GTK4 + WebKitGTK 6.0 (bawaan Wails), bukan tag `gtk3`;
+- rilis Linux/macOS tetap Fyne, UI baru sebagai artefak pratinjau CI;
+- paket build di WSL dipasang pemiliknya; macOS cukup lewat CI.
 
 **Perkiraan:** setengah tahap UI: sekitar 3–5 berkas Go, sedikit di halaman,
 `build.sh`, dan `ci.yml`.

@@ -530,6 +530,8 @@
   "Browser extension": "Extension browser",
   "It hands the browser's downloads to ODM, and the videos a page plays.": "Extension menyerahkan unduhan browser ke ODM, juga video yang diputar halaman.",
   "No browser was found.": "Tidak ada browser yang ditemukan.",
+  "ODM finds the browsers on Windows only for now. Download the extension from ODM's releases page: odm-extension-firefox.xpi for Firefox (open the file with Firefox), odm-extension-chromium.zip for Chrome and other browsers (unpack it, then on the browser's extensions page turn on Developer mode and click Load unpacked).": "Untuk sementara ODM hanya bisa menemukan browser di Windows. Unduh extension dari halaman rilis ODM: odm-extension-firefox.xpi untuk Firefox (buka file-nya dengan Firefox), odm-extension-chromium.zip untuk Chrome dan browser lain (ekstrak, lalu di halaman extension browser nyalakan Developer mode dan klik Load unpacked).",
+  "Open the releases page": "Buka halaman rilis",
   "Connected": "Terhubung",
   "Waiting for the extension…": "Menunggu extension…",
   "Not installed yet": "Belum dipasang",

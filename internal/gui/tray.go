@@ -5,9 +5,11 @@ package gui
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/url"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/wailsapp/wails/v3/pkg/application"
@@ -28,7 +30,7 @@ type desk struct {
 	svc   *Service
 	tray  *application.SystemTray
 	menu  *application.Menu
-	notes *notifications.NotificationService
+	notes *notifier
 
 	items struct{ show, add, pause, resume, limiter, exit *application.MenuItem }
 
@@ -38,7 +40,7 @@ type desk struct {
 	seq    int
 }
 
-func newDesk(app *application.App, win *application.WebviewWindow, svc *Service, notes *notifications.NotificationService) *desk {
+func newDesk(app *application.App, win *application.WebviewWindow, svc *Service, notes *notifier) *desk {
 	d := &desk{app: app, win: win, svc: svc, notes: notes}
 	d.menu = application.NewMenu()
 	d.items.show = d.menu.Add("").OnClick(func(*application.Context) { d.showMain() })
@@ -79,7 +81,7 @@ func newDesk(app *application.App, win *application.WebviewWindow, svc *Service,
 			d.notify(tr("ODM is still running"), tr("Downloads continue in the background. Use the tray icon to open ODM or exit."))
 		}
 	})
-	notes.OnNotificationResponse(func(notifications.NotificationResult) { d.showMain() })
+	notes.svc.OnNotificationResponse(func(notifications.NotificationResult) { d.showMain() })
 	return d
 }
 
@@ -171,13 +173,45 @@ func (d *desk) watch(ctx context.Context) {
 	}
 }
 
-// notify shows a Windows notification; a click on it shows the window.
+// notify shows a system notification, if there are any (notifier); a
+// click on it shows the window.
 func (d *desk) notify(title, body string) {
+	if !d.notes.ok.Load() {
+		return
+	}
 	d.mu.Lock()
 	d.seq++
 	id := "odm-" + strconv.FormatInt(time.Now().UnixNano(), 36) + "-" + strconv.Itoa(d.seq)
 	d.mu.Unlock()
-	_ = d.notes.SendNotification(notifications.NotificationOptions{ID: id, Title: title, Body: body})
+	_ = d.notes.svc.SendNotification(notifications.NotificationOptions{ID: id, Title: title, Body: body})
+}
+
+// notifier is Wails' notification service, which ODM starts without: on
+// macOS it needs ODM to be an .app (a bundle identifier), on Linux a
+// session bus. A service that fails to start stops the whole app, so this
+// one logs why instead, and ODM goes on without notifications. It has no
+// methods for the page.
+type notifier struct {
+	svc *notifications.NotificationService
+	ok  atomic.Bool // started
+}
+
+func (n *notifier) ServiceName() string { return n.svc.ServiceName() }
+
+func (n *notifier) ServiceStartup(ctx context.Context, options application.ServiceOptions) error {
+	if err := n.svc.ServiceStartup(ctx, options); err != nil {
+		log.Println("notifications:", err)
+		return nil
+	}
+	n.ok.Store(true)
+	return nil
+}
+
+func (n *notifier) ServiceShutdown() error {
+	if !n.ok.Load() {
+		return nil
+	}
+	return n.svc.ServiceShutdown()
 }
 
 func (d *desk) beep(failed bool) { playSound(failed) }

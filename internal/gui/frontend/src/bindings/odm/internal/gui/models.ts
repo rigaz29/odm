@@ -1621,6 +1621,12 @@ export class SetupStatus {
     "toolMode": string;
     "browsers": SetupBrowser[];
 
+    /**
+     * ReleasesPage is where to download the extension where ODM cannot
+     * find the browsers (outside Windows); empty where it can.
+     */
+    "releasesPage": string;
+
     /** Creates a new SetupStatus instance. */
     constructor($$source: Partial<SetupStatus> = {}) {
         if (!("tools" in $$source)) {
@@ -1631,6 +1637,9 @@ export class SetupStatus {
         }
         if (!("browsers" in $$source)) {
             this["browsers"] = [];
+        }
+        if (!("releasesPage" in $$source)) {
+            this["releasesPage"] = "";
         }
 
         Object.assign(this, $$source);

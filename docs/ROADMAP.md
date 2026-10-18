@@ -407,8 +407,10 @@ bawaan sampai UI baru setara fiturnya.
       di sana tanpa dipoles (notifikasi "kalau bisa", target build
       `linux-gui`/`darwin-gui` dan artefak pratinjau CI, bingkai jendela
       sistem, clipboard lewat Wails). Fyne tetap jadi rilis sampai UI baru
-      dicoba. Rencana dan keputusan yang masih terbuka: `docs/GUI.md`,
-      "Rencana Linux dan macOS". **S**
+      dicoba. Rencana dan keputusan: `docs/GUI.md`, "Rencana Linux dan
+      macOS". **S** Dikerjakan sejak 2026-10-18: semua butir (1–5) sudah
+      di kode, Linux memakai GTK 4 + WebKitGTK 6.0; tinggal uji jalan di
+      WSL Ubuntu. macOS hanya dibangun dan diuji di CI.
 
 Nanti: halaman yang sama untuk web UI `-serve`.
 

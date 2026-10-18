@@ -87,7 +87,8 @@ queues. It runs as a desktop app, or headless with a JSON API.
   itself.
 - On Windows the windows are a page drawn by Microsoft Edge WebView2
   ([Wails](https://wails.io)); on Linux and macOS they are built with
-  [Fyne](https://fyne.io), with the same features.
+  [Fyne](https://fyne.io), with the same features. The new windows have a
+  preview for Linux and macOS too (see Build from source).
 
 **Integration**
 - A browser extension (Chrome, Edge, Firefox) hands downloads to ODM through
@@ -182,7 +183,18 @@ the `fyne` build tag, so it needs cgo.
 | Windows, Fyne UI | `./scripts/build.sh windows-fyne` | mingw-w64 (`CC_WINDOWS`, default `x86_64-w64-mingw32-gcc`) |
 | Linux | `./scripts/build.sh linux` | `libgl1-mesa-dev xorg-dev libxkbcommon-dev` |
 | macOS | `./scripts/build.sh darwin` (or `darwin-intel`) | Xcode command line tools |
+| Linux, new UI (preview) | `./scripts/build.sh linux-gui` | Node.js and npm, `libgtk-4-dev libwebkitgtk-6.0-dev` |
+| macOS, new UI (preview) | `./scripts/build.sh darwin-gui` | Node.js and npm, Xcode command line tools |
 | Headless | `./scripts/build.sh cli` | none |
+
+The new UI's preview for Linux and macOS (`odm-next`) runs as it is, not
+polished: it keeps the system's window frame and labels shortcuts Ctrl. On
+Linux it needs WebKitGTK 6.0 (Ubuntu 24.04, Debian 12, Fedora 39 or later)
+and, on GNOME, the AppIndicator extension for its tray icon. On macOS it
+shows no notifications, since it is not an `.app`; open it with right-click
+→ Open. CI builds it on every push, as the `odm-next-linux-amd64` and
+`odm-next-darwin-arm64` artifacts; the releases there stay the Fyne UI for
+now.
 
 ```bash
 go test ./...                                    # engine tests, no UI needed
@@ -340,7 +352,7 @@ download-manager techniques. ODM implements them in its own code.
 ```
 cmd/odm             entry point: desktop app, native-messaging relay, headless mode
 internal/engine     probe, chunk planner, transfers, queues, scheduler, settings, state
-internal/gui        desktop UI on Windows (Wails, WebView2): the service, tray and windows; the React page in frontend/
+internal/gui        desktop UI on Windows (Wails, WebView2), a preview on Linux and macOS: the service, tray and windows; the React page in frontend/
 internal/ui         desktop UI on Linux and macOS (Fyne): main window, progress, Scheduler, Options
 internal/i18n       the translations both desktop UIs share
 internal/server     JSON + SSE API, token guard, embedded web UI
@@ -350,7 +362,7 @@ internal/browserreg native-host registration for Chrome, Edge, Chromium, Firefox
 internal/sysproxy   OS proxy lookup (environment, Windows Internet Options)
 internal/autostart  launch at login (Run key, XDG autostart, LaunchAgent)
 internal/update     GitHub Releases version check
-internal/clipmon    clipboard watcher (native on Windows, via Fyne elsewhere) and URL detection
+internal/clipmon    clipboard watcher (native on Windows, polled by the desktop UI elsewhere) and URL detection
 internal/osutil     open, reveal and shutdown helpers
 cmd/extpack         builds the Chromium (.zip) and Firefox (.xpi) extension packages
 internal/extpack    per-browser manifest derivation and packaging

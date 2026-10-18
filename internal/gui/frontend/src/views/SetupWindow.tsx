@@ -34,7 +34,7 @@ export function SetupWindow() {
           <p className="text-sm text-muted-foreground">{t("ODM downloads files without these. They let it download from video sites and take over the browser's downloads.")}</p>
         </div>
         <Tools status={status} />
-        <Extension browsers={browsers ?? status.browsers} />
+        <Extension browsers={browsers ?? status.browsers} releasesPage={status.releasesPage} />
       </div>
       <div className="flex justify-end border-t border-border p-3">
         <Button variant="brand" onClick={api.closeWindow}>
@@ -144,7 +144,9 @@ function ToolRow({ tool, progress }: { tool: SetupTool; progress?: number }) {
   );
 }
 
-function Extension({ browsers }: { browsers: SetupBrowser[] }) {
+// Extension lists the browsers; where ODM cannot find them (outside
+// Windows), it points to the releases page instead.
+function Extension({ browsers, releasesPage }: { browsers: SetupBrowser[]; releasesPage: string }) {
   const [steps, setSteps] = useState<Record<string, ExtensionStep>>({});
   const [busy, setBusy] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -172,7 +174,18 @@ function Extension({ browsers }: { browsers: SetupBrowser[] }) {
         title={t("Browser extension")}
         text={t("It hands the browser's downloads to ODM, and the videos a page plays.")}
       />
-      {browsers.length === 0 ? (
+      {releasesPage ? (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {t(
+              "ODM finds the browsers on Windows only for now. Download the extension from ODM's releases page: odm-extension-firefox.xpi for Firefox (open the file with Firefox), odm-extension-chromium.zip for Chrome and other browsers (unpack it, then on the browser's extensions page turn on Developer mode and click Load unpacked).",
+            )}
+          </p>
+          <Button size="sm" variant="outline" onClick={() => void api.openURL(releasesPage)}>
+            {t("Open the releases page")}
+          </Button>
+        </div>
+      ) : browsers.length === 0 ? (
         <p className="text-sm text-muted-foreground">{t("No browser was found.")}</p>
       ) : (
         <ul className="divide-y divide-border rounded-lg border border-border">
@@ -200,7 +213,9 @@ function Extension({ browsers }: { browsers: SetupBrowser[] }) {
           ))}
         </ul>
       )}
-      <p className="mt-2 text-xs text-muted-foreground">{t("A browser shows as connected once its extension first talks to ODM, such as when the browser starts.")}</p>
+      {!releasesPage && (
+        <p className="mt-2 text-xs text-muted-foreground">{t("A browser shows as connected once its extension first talks to ODM, such as when the browser starts.")}</p>
+      )}
     </section>
   );
 }

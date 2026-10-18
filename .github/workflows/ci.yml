@@ -56,6 +56,52 @@ jobs:
           name: ODM-windows-amd64.exe
           path: dist/ODM.exe
 
+  # The desktop UI on Linux (GTK 4, WebKitGTK 6.0) and macOS, a preview:
+  # the releases there stay the Fyne UI until it has been tried
+  # (docs/GUI.md, "Rencana Linux dan macOS").
+  gui-preview:
+    name: Desktop UI preview (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: odm-next-linux-amd64
+          - os: macos-latest
+            artifact: odm-next-darwin-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+          cache: true
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: internal/gui/frontend/package-lock.json
+      - name: Install GTK 4 and WebKitGTK 6.0
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc pkg-config libgtk-4-dev libwebkitgtk-6.0-dev
+      - name: Page build
+        working-directory: internal/gui/frontend
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+      - run: go vet -tags gui ./internal/gui/ ./internal/ui/ ./cmd/odm
+      - run: go test -tags gui ./internal/gui/ ./internal/i18n/
+      - name: Build the preview
+        run: |
+          CGO_ENABLED=1 go build -tags gui,production -trimpath -ldflags "-s -w" \
+            -o "dist/${{ matrix.artifact }}" ./cmd/odm
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
   # The Fyne UI: what Linux and macOS ship, and on Windows a build kept
   # working (./scripts/build.sh windows-fyne).
   desktop:

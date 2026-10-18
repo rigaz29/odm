@@ -6,6 +6,9 @@ import (
 	"golang.org/x/sys/windows/registry"
 )
 
+// Listed reports whether Installed can find the browsers here.
+const Listed = true
+
 // Installed lists the browsers Windows knows, from the entries browsers
 // write for Default apps (Clients\StartMenuInternet): the user's own
 // first, then the machine's, in both registry views.

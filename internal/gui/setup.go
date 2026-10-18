@@ -30,6 +30,9 @@ type SetupStatus struct {
 	// ToolMode is Settings.ToolUpdates: "" (not asked yet), "auto" or "off".
 	ToolMode string         `json:"toolMode"`
 	Browsers []SetupBrowser `json:"browsers"`
+	// ReleasesPage is where to download the extension where ODM cannot
+	// find the browsers (outside Windows); empty where it can.
+	ReleasesPage string `json:"releasesPage"`
 }
 
 // SetupTool is yt-dlp or ffmpeg as the Setup window lists it: State and
@@ -84,6 +87,9 @@ const firefoxAddon = "odm-extension-firefox.xpi"
 func (s *Service) SetupStatus() SetupStatus {
 	st := s.mgr.Settings()
 	out := SetupStatus{ToolMode: st.ToolUpdates, Browsers: s.SetupBrowsers()}
+	if !browsers.Listed {
+		out.ReleasesPage = releaseBase + version.Repo + "/releases/latest"
+	}
 	for _, t := range tools.All() {
 		out.Tools = append(out.Tools, s.setupTool(t.Name))
 	}

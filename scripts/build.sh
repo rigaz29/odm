@@ -6,6 +6,10 @@
 # cgo. Linux and macOS build the Fyne UI (build tag "fyne"), which needs cgo:
 #   Linux    -> libgl1-mesa-dev xorg-dev
 #   macOS    -> Xcode command line tools
+# The "linux-gui" and "darwin-gui" targets build the new UI there as a
+# preview (odm-next), with cgo too:
+#   Linux    -> libgtk-4-dev libwebkitgtk-6.0-dev (GTK 4, WebKitGTK 6.0)
+#   macOS    -> Xcode command line tools
 # The "windows-fyne" target builds the Fyne UI for Windows too, with
 # mingw-w64 (CC_WINDOWS, default x86_64-w64-mingw32-gcc).
 # The "cli" target builds the engine + web UI with no cgo and no desktop UI.
@@ -61,27 +65,30 @@ cli() {
 }
 
 gui() {
-  local name="$1"
-  echo "building gui windows/amd64 -> $OUT/$name"
+  local goos="$1" goarch="$2" name="$3" ldflags="-s -w" cgo=1
+  [ "$goos" = "windows" ] && ldflags="-s -w -H=windowsgui" && cgo=0
+  echo "building gui $goos/$goarch -> $OUT/$name"
   (cd internal/gui/frontend && npm ci --no-audit --no-fund && npm run build)
-  # production: Wails' release mode, without WebView2's own right-click
+  # production: Wails' release mode, without the web view's own right-click
   # menu (Back, Refresh, Print, Inspect) and its developer tools.
-  CGO_ENABLED=0 GOOS=windows GOARCH=amd64 \
-    go build -tags gui,production -trimpath -ldflags "-s -w -H=windowsgui" -o "$OUT/$name" ./cmd/odm
+  CGO_ENABLED=$cgo GOOS="$goos" GOARCH="$goarch" \
+    go build -tags gui,production -trimpath -ldflags "$ldflags" -o "$OUT/$name" ./cmd/odm
   echo "built $OUT/$name"
 }
 
 case "${1:-windows}" in
-  windows) gui ODM.exe ;;
+  windows) gui windows amd64 ODM.exe ;;
   windows-fyne) desktop windows amd64 ODM.exe ;;
   linux) desktop linux amd64 odm ;;
+  linux-gui) gui linux amd64 odm-next ;;
   darwin) desktop darwin arm64 odm ;;
+  darwin-gui) gui darwin arm64 odm-next ;;
   darwin-intel) desktop darwin amd64 odm ;;
   cli) cli linux amd64 odm-cli ;;
   all)
-    gui ODM.exe
+    gui windows amd64 ODM.exe
     desktop linux amd64 odm
     desktop darwin arm64 odm
     ;;
-  *) echo "usage: $0 [windows|windows-fyne|linux|darwin|darwin-intel|cli|all]" >&2; exit 2 ;;
+  *) echo "usage: $0 [windows|windows-fyne|linux|linux-gui|darwin|darwin-gui|darwin-intel|cli|all]" >&2; exit 2 ;;
 esac

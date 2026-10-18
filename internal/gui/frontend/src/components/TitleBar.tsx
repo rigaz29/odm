@@ -1,7 +1,8 @@
 // The title bar the page draws (the window has no frame, see app.go): its
 // empty areas are --wails-draggable, so they move the window as Windows'
 // own title bar does, and maximize it on a double click; the buttons call
-// the window. The search box in the middle takes clicks.
+// the window. The search box in the middle takes clicks. On Linux and macOS
+// the window keeps the system's frame, and the bar has no window buttons.
 //
 // The search box (Ctrl K) filters the list as it is typed and offers
 // commands under it (palette.ts): a pasted address first, then the
@@ -11,7 +12,7 @@
 import { Window } from "@wailsio/runtime";
 import { ArrowDownToLine, CornerDownLeft, Download, Minus, Search, Square, X } from "lucide-react";
 import { type CSSProperties, type RefObject, useEffect, useRef, useState } from "react";
-import { inODM } from "../api";
+import { framed, inODM } from "../api";
 import { looksLikeURL } from "../format";
 import { t } from "../i18n";
 import { cn } from "../lib/utils";
@@ -147,7 +148,7 @@ export function TitleBar(props: {
         )}
       </div>
       <div className="flex-1" {...caption} />
-      <div className="flex">
+      <div className={cn("flex", framed && "hidden")}>
         {(
           [
             ["minimize", t("Minimize"), Minus, () => Window.Minimise()],

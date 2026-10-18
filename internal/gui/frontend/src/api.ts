@@ -1,5 +1,6 @@
 // What the page asks of ODM. Inside ODM (Wails serves the page from
-// wails.localhost) the calls go to the Go Service; in a plain browser
+// http://wails.localhost on Windows, wails://localhost on Linux and macOS)
+// the calls go to the Go Service; in a plain browser
 // (npm run dev, or the visual tests) a stand-in answers with made-up
 // downloads, so the page can be worked on and measured without ODM.
 
@@ -140,7 +141,13 @@ export interface SetupProgress {
   total: number;
 }
 
-export const inODM = location.hostname === "wails.localhost";
+// framed: the window has the system's frame (Linux, macOS), and the page
+// draws no window buttons. Told by the address, known from the start:
+// Wails' own word on the system (System.IsWindows) can come after the page
+// has loaded. In a plain browser the page looks as on Windows.
+export const framed = location.protocol === "wails:";
+
+export const inODM = location.hostname === "wails.localhost" || framed;
 
 // held is the snapshot this window has: the one it asked for, brought up to
 // date with each Change ODM sends after it. Changes before it are dropped:

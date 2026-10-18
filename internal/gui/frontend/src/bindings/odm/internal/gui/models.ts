@@ -1089,11 +1089,23 @@ export class OptionsForm {
     "torrentLinks": boolean;
 
     /**
+     * Associate offers this ODM in Windows for magnet links and .torrent
+     * files (internal/assoc); it reads as off while another copy of ODM
+     * is the one offered.
+     */
+    "associate": boolean;
+
+    /**
      * What this system offers, not saved: a sound to play, and ODM's own
      * copies of yt-dlp and ffmpeg.
      */
     "canSound": boolean;
     "canTools": boolean;
+
+    /**
+     * CanAssociate: the system has associations ODM registers.
+     */
+    "canAssociate": boolean;
 
     /** Creates a new OptionsForm instance. */
     constructor($$source: Partial<OptionsForm> = {}) {
@@ -1235,11 +1247,17 @@ export class OptionsForm {
         if (!("torrentLinks" in $$source)) {
             this["torrentLinks"] = false;
         }
+        if (!("associate" in $$source)) {
+            this["associate"] = false;
+        }
         if (!("canSound" in $$source)) {
             this["canSound"] = false;
         }
         if (!("canTools" in $$source)) {
             this["canTools"] = false;
+        }
+        if (!("canAssociate" in $$source)) {
+            this["canAssociate"] = false;
         }
 
         Object.assign(this, $$source);
@@ -1457,6 +1475,12 @@ export class SaveResult {
      */
     "startupError": string;
 
+    /**
+     * AssociateError says why ODM could not be offered (or no longer be
+     * offered) for magnet links and .torrent files.
+     */
+    "associateError": string;
+
     /** Creates a new SaveResult instance. */
     constructor($$source: Partial<SaveResult> = {}) {
         if (!("refused" in $$source)) {
@@ -1467,6 +1491,9 @@ export class SaveResult {
         }
         if (!("startupError" in $$source)) {
             this["startupError"] = "";
+        }
+        if (!("associateError" in $$source)) {
+            this["associateError"] = "";
         }
 
         Object.assign(this, $$source);

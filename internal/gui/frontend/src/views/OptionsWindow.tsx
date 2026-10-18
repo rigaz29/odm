@@ -10,6 +10,7 @@ import {
   CircleCheck,
   CircleX,
   Download,
+  ExternalLink,
   FileType2,
   FolderOpen,
   FolderTree,
@@ -111,6 +112,11 @@ export function OptionsWindow({ tab: first }: { tab: string }) {
       }
       if (r.startupError) {
         setError(tf("Could not change start-up launch: %s", r.startupError));
+        return;
+      }
+      if (r.associateError) {
+        setTab("torrents");
+        setError(tf("Could not change what Windows offers for torrents: %s", r.associateError));
         return;
       }
       api.closeWindow();
@@ -683,7 +689,33 @@ function Torrents({ o, set }: TabProps) {
         <Hint>{t("Peers see this computer's IP address. A SOCKS5 proxy (Proxy / Socks) carries every torrent connection; an HTTP proxy or the system's only reaches trackers.")}</Hint>
         <Hint>{t("Torrents run in odm-libtorrent, which Windows' firewall may ask about the first time.")}</Hint>
       </Section>
+      {o.canAssociate && <Associate o={o} set={set} />}
     </>
+  );
+}
+
+// Associate offers ODM in Windows for magnet links and .torrent files;
+// Windows itself asks which program opens them.
+function Associate({ o, set }: TabProps) {
+  const [error, setError] = useState("");
+  const choose = () => {
+    setError("");
+    api.openAssociationSettings().then(
+      () => set({ associate: true }),
+      (e) => setError(String((e as Error)?.message ?? e)),
+    );
+  };
+  return (
+    <Section title={t("Magnet links and .torrent files")}>
+      <Check label={t("Offer ODM to open them")} checked={o.associate} onChange={(v) => set({ associate: v })} />
+      <Hint>{t("Windows keeps the choice of the program that opens them: it asks the next time, or choose ODM in its Default apps.")}</Hint>
+      <div className="flex items-center gap-3">
+        <Button size="sm" disabled={!o.associate} onClick={choose}>
+          <ExternalLink /> {t("Choose in Windows…")}
+        </Button>
+        {error && <p className="min-w-0 truncate text-xs text-red-600 dark:text-red-400" title={error}>{error}</p>}
+      </div>
+    </Section>
   );
 }
 

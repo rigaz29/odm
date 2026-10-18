@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"odm/internal/assoc"
 	"odm/internal/autostart"
 	"odm/internal/browserreg"
 	"odm/internal/engine"
@@ -109,11 +110,17 @@ type OptionsForm struct {
 	PortForwarding bool   `json:"portForwarding"`
 	UploadLimitKB  int    `json:"uploadLimitKB"` // 0 for none
 	TorrentLinks   bool   `json:"torrentLinks"`  // .torrent addresses as torrents
+	// Associate offers this ODM in Windows for magnet links and .torrent
+	// files (internal/assoc); it reads as off while another copy of ODM
+	// is the one offered.
+	Associate bool `json:"associate"`
 
 	// What this system offers, not saved: a sound to play, and ODM's own
 	// copies of yt-dlp and ffmpeg.
 	CanSound bool `json:"canSound"`
 	CanTools bool `json:"canTools"`
+	// CanAssociate: the system has associations ODM registers.
+	CanAssociate bool `json:"canAssociate"`
 }
 
 // The default User-Agent, for the field's placeholder.
@@ -140,7 +147,8 @@ func (s *Service) Options() OptionsForm {
 		Seed: st.Torrent.Seed, SeedRatio: st.Torrent.SeedRatio, SeedMinutes: st.Torrent.SeedMinutes,
 		TorrentPort: st.Torrent.Port, Incoming: !st.Torrent.NoIncoming, PortForwarding: !st.Torrent.NoPortForwarding,
 		UploadLimitKB: int(st.Torrent.UploadLimit / 1024), TorrentLinks: !st.Torrent.NoTorrentLinks,
-		CanSound: runtime.GOOS == "windows", CanTools: s.tools() != nil,
+		Associate: associated(),
+		CanSound:  runtime.GOOS == "windows", CanTools: s.tools() != nil, CanAssociate: assoc.Supported(),
 	}
 	if o.Theme == "" || o.Language == "" {
 		look := appearanceFor(st)
@@ -286,8 +294,42 @@ func (s *Service) SaveOptions(o OptionsForm) SaveResult {
 			res.StartupError = err.Error()
 		}
 	}
+	if assoc.Supported() && o.Associate != associated() {
+		exe, err := selfExe()
+		if err == nil {
+			err = assoc.Set(o.Associate, exe)
+		}
+		if err != nil {
+			res.AssociateError = err.Error()
+		}
+	}
 	s.poke()
 	return res
+}
+
+// associated reports whether this ODM is the one Windows offers for magnet
+// links and .torrent files. Another copy's registration is left to it: a
+// test build or a second ODM does not take it over unless asked.
+func associated() bool {
+	exe, err := selfExe()
+	reg := assoc.Exe()
+	return err == nil && reg != "" && strings.EqualFold(filepath.Clean(reg), filepath.Clean(exe))
+}
+
+// OpenAssociationSettings opens Windows' Default apps at ODM, to choose it
+// for magnet links and .torrent files. ODM offers itself first if it does
+// not yet: the person asked for it, even before the window's OK.
+func (s *Service) OpenAssociationSettings() error {
+	if !associated() {
+		exe, err := selfExe()
+		if err == nil {
+			err = assoc.Set(true, exe)
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return assoc.OpenSettings()
 }
 
 // SaveResult is how saving the options went.
@@ -299,6 +341,9 @@ type SaveResult struct {
 	Appearance *Appearance `json:"appearance"`
 	// StartupError says why launching at start-up could not change.
 	StartupError string `json:"startupError"`
+	// AssociateError says why ODM could not be offered (or no longer be
+	// offered) for magnet links and .torrent files.
+	AssociateError string `json:"associateError"`
 }
 
 // AppearanceEvent carries a new look to every window.

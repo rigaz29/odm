@@ -77,6 +77,7 @@ export interface Api {
   openTorrentFile(): Promise<void>;
   stopSeeding(id: string): Promise<void>;
   torrentMagnet(id: string): Promise<string>;
+  openAssociationSettings(): Promise<void>;
 
   // The progress and download complete windows (detail.go).
   detail(id: string): Promise<Detail>;
@@ -202,6 +203,7 @@ const wailsApi: Api = {
   openTorrentFile: () => Service.OpenTorrentFile(),
   stopSeeding: (id) => Service.StopSeeding(id),
   torrentMagnet: (id) => Service.TorrentMagnet(id),
+  openAssociationSettings: () => Service.OpenAssociationSettings(),
   detail: (id) => Service.Detail(id),
   setDownloadLimit: (id, bps) => Service.SetDownloadLimit(id, bps),
   setOpenWhenDone: (id, on) => Service.SetOpenWhenDone(id, on),

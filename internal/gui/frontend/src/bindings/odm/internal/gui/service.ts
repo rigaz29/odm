@@ -195,6 +195,15 @@ export function MoveToQueue(ids: string[], queue: string): $CancellablePromise<v
 }
 
 /**
+ * OpenAssociationSettings opens Windows' Default apps at ODM, to choose it
+ * for magnet links and .torrent files. ODM offers itself first if it does
+ * not yet: the person asked for it, even before the window's OK.
+ */
+export function OpenAssociationSettings(): $CancellablePromise<void> {
+    return $Call.ByID(1506749862);
+}
+
+/**
  * OpenFile opens a finished download with its program; ShowInFolder
  * shows it in Explorer.
  */

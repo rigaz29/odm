@@ -188,6 +188,7 @@ export function mockApi(): Api {
     hosts: [new HostConnections({ host: "cdn.example.com", connections: 2 })], capOn: false, capMB: 200, capHours: 5, capWarning: true,
     proxyMode: "system", proxyHost: "", proxyPort: 8080, proxyUser: "", proxyPass: "",
     seed: "", seedRatio: 100, seedMinutes: 30, torrentPort: 51413, incoming: true, portForwarding: true, uploadLimitKB: 0, torrentLinks: true,
+    associate: false, canAssociate: true,
     logins: [new SiteLogin({ host: "files.example.com", user: "rigaz", pass: "rahasia" })], canSound: true, canTools: true,
   });
   const openWhenDone = new Set<string>();
@@ -382,6 +383,7 @@ export function mockApi(): Api {
       push();
     },
     torrentMagnet: async () => "magnet:?xt=urn:btih:0000",
+    openAssociationSettings: async () => {},
 
     detail: async (id) => {
       const d = items.find((x) => x.id === id) ?? items[0];

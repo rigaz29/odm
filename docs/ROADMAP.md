@@ -782,7 +782,7 @@ Tahap 3: seeding dan jaringan
 
 Tahap 4: UI baru
 
-- [ ] Unduhan Baru untuk torrent. **S** Isinya:
+- [x] Unduhan Baru untuk torrent. **S** Isinya:
       - kalau `odm-libtorrent` belum ada, tawaran untuk mengunduhnya
         dulu;
       - magnet menunggu metadata dulu: "Mengambil info torrent…" dengan
@@ -790,18 +790,32 @@ Tahap 4: UI baru
       - lalu daftar file bercentang dengan ukurannya, plus folder,
         kategori, dan antrean;
       - "Buka file .torrent…" di menu ⋯, dan file bisa diseret ke jendela.
-- [ ] Daftar dan Progres. **S** Isinya:
+
+      Kartu di formulir menampilkan jumlah peer selama menunggu; Mulai
+      saat itu mengunduh semua file. Torrent yang sedang dibaca disimpan
+      di ODM dengan kunci `probe-<hash>` dan dilepas saat alamatnya
+      berganti atau formulir ditutup, jadi Mulai tidak mengambil
+      metadatanya dua kali. Torrent pertama memberi catatan bahwa
+      Windows mungkin menanyakan izin jaringan untuk `odm-libtorrent`.
+- [x] Daftar dan Progres. **S** Isinya:
       - lencana Seeding dengan kecepatan unggah;
       - menu baris: Hentikan seeding, Buka folder, Salin tautan magnet;
       - jendela Progres dengan peta piece, peer dan seed, kecepatan unduh
         dan unggah, rasio, dan daftar file.
-- [ ] Options → Torrent dan jendela selesai. **S** Isinya:
+
+      Baris torrent di daftar menulis "Torrent" sebagai ganti host-nya.
+- [x] Options → Torrent dan jendela selesai. **S** Isinya:
       - target seeding, port, UPnP, koneksi masuk, batas unggah, batas
         peer, buka URL `.torrent` sebagai torrent, dan catatan soal IP dan
         proxy;
       - jendela Unduhan selesai membuka folder untuk torrent banyak file;
       - terjemahan Indonesia.
-- [ ] Jalan masuk lain. **S** Isinya:
+
+      Tanpa batas peer: `odm-libtorrent` p1 tidak punya
+      `connections_limit`, jadi opsinya menunggu protokol berikutnya.
+      Jendela selesai tidak perlu diubah: torrent banyak file berakhir
+      sebagai folder, dan "Buka" membuka folder itu.
+- [x] Jalan masuk lain. **S** Isinya:
       - pemantau clipboard mengenali magnet (sekarang hanya alamat dengan
         host);
       - URL yang ternyata file `.torrent` (`application/x-bittorrent`)

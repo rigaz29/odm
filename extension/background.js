@@ -62,6 +62,24 @@ function hasType(url, types, filename) {
   return set.has(urlExt(url)) || (fromName !== null && set.has(fromName[1].toLowerCase()));
 }
 
+// isTorrentFile reports whether a download is a .torrent file, by its
+// address, its name or the type the server gave it.
+function isTorrentFile(url, filename, mime) {
+  if (String(mime || "").split(";")[0].trim().toLowerCase() === "application/x-bittorrent") return true;
+  return urlExt(url) === "torrent" || /\.torrent$/i.test(filename || "");
+}
+
+// takes reports whether ODM takes a browser download: its type is on
+// ODM's list, or it is a .torrent file and ODM downloads those as torrents.
+function takes(cfg, url, filename, mime) {
+  return hasType(url, cfg.fileTypes, filename) || (cfg.torrents === true && isTorrentFile(url, filename, mime));
+}
+
+// isMagnet reports whether url is a magnet link.
+function isMagnet(url) {
+  return /^magnet:\?/i.test(String(url || ""));
+}
+
 // isNewDownload reports whether a download onCreated reports has just
 // begun. Chromium also reports every download in its history that way when
 // it loads the history (at browser start, once the extension has run), so
@@ -275,8 +293,8 @@ async function getConfig() {
   if (odmConfig && Date.now() - odmConfig.at < CONFIG_TTL_MS) return odmConfig;
   const reply = await askOdm({ type: "config" });
   const cfg = reply.ok && reply.config
-    ? { fileTypes: reply.config.fileTypes || DEFAULT_TYPES, excludeSites: reply.config.excludeSites || [], at: Date.now() }
-    : { fileTypes: DEFAULT_TYPES, excludeSites: [], at: 0 }; // retry next time
+    ? { fileTypes: reply.config.fileTypes || DEFAULT_TYPES, excludeSites: reply.config.excludeSites || [], torrents: reply.config.torrents === true, at: Date.now() }
+    : { fileTypes: DEFAULT_TYPES, excludeSites: [], torrents: false, at: 0 }; // retry next time
   await chrome.storage.session.set({ odmConfig: cfg });
   return cfg;
 }
@@ -425,10 +443,10 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     const cfg = await getConfig();
     if (isExcluded(url, cfg.excludeSites)) return;
     let filename = item.filename || "";
-    if (!filename && !hasType(url, cfg.fileTypes, "")) {
+    if (!filename && !takes(cfg, url, "", item.mime)) {
       filename = await settledFilename(chrome.downloads, item.id, NAME_WAIT_MS);
     }
-    if (!hasType(url, cfg.fileTypes, filename)) return;
+    if (!takes(cfg, url, filename, item.mime)) return;
 
     // Hold the browser's copy until ODM confirms; it used to be cancelled
     // first, so with ODM closed or unregistered the download was lost.
@@ -456,7 +474,11 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 
   chrome.contextMenus.onClicked.addListener((info, tab) => {
     const url = info.linkUrl || info.srcUrl;
-    if (url && /^https?:/.test(url)) {
+    if (isMagnet(url)) {
+      // A torrent comes from its peers: no site's cookies, page or title
+      // (the torrent names itself) go with it.
+      askOdm({ type: "download", url });
+    } else if (url && /^https?:/.test(url)) {
       handOff({ url, referrer: info.pageUrl || "", title: (tab && tab.title) || "" });
     }
   });
@@ -555,5 +577,5 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
 }
 
 if (typeof module !== "undefined") {
-  module.exports = { hasType, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, browserName, DEFAULT_TYPES };
+  module.exports = { hasType, isTorrentFile, takes, isMagnet, isNewDownload, NEW_DOWNLOAD_MS, settledFilename, hostMatches, isExcluded, mediaKind, streamFormat, normalizeMediaURL, totalSize, mergeMedia, popupReferrer, pruneBypass, BYPASS_MS, browserName, DEFAULT_TYPES };
 }

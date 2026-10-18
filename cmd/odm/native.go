@@ -331,6 +331,9 @@ func relayConfig(client *http.Client) native.Reply {
 	var st struct {
 		FileTypes    []string `json:"file_types"`
 		ExcludeSites []string `json:"exclude_sites"`
+		Torrent      struct {
+			NoTorrentLinks bool `json:"no_torrent_links"`
+		} `json:"torrent"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&st); err != nil {
 		return native.Reply{Error: "unreadable settings: " + err.Error()}
@@ -338,5 +341,6 @@ func relayConfig(client *http.Client) native.Reply {
 	if st.ExcludeSites == nil {
 		st.ExcludeSites = []string{}
 	}
-	return native.Reply{OK: true, Config: &native.Config{FileTypes: st.FileTypes, ExcludeSites: st.ExcludeSites}}
+	return native.Reply{OK: true, Config: &native.Config{FileTypes: st.FileTypes, ExcludeSites: st.ExcludeSites,
+		Torrents: !st.Torrent.NoTorrentLinks}}
 }

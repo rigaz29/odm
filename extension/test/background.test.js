@@ -31,6 +31,26 @@ test("totalSize", () => {
   assert.equal(bg.totalSize([{ name: "Content-Range", value: "bytes 0-9/*" }, { name: "Content-Length", value: "10" }]), 10);
 });
 
+test("torrents", () => {
+  assert.ok(bg.isMagnet("magnet:?xt=urn:btih:abc"));
+  assert.ok(bg.isMagnet("MAGNET:?xt=urn:btih:abc"));
+  assert.ok(!bg.isMagnet("https://example.org/magnet:?x"));
+  assert.ok(!bg.isMagnet(undefined));
+  assert.ok(bg.isTorrentFile("https://example.org/get?id=5", "", "application/x-bittorrent; charset=binary"));
+  assert.ok(bg.isTorrentFile("https://example.org/debian.torrent?key=1", "", ""));
+  assert.ok(bg.isTorrentFile("https://example.org/get?id=5", "C:\\Downloads\\debian.torrent", ""));
+  assert.ok(!bg.isTorrentFile("https://example.org/debian.iso", "debian.iso", "application/octet-stream"));
+  // ODM takes a .torrent when it downloads those as torrents, or when the
+  // type is on its list.
+  const on = { fileTypes: ["zip"], torrents: true };
+  const off = { fileTypes: ["zip"], torrents: false };
+  assert.ok(bg.takes(on, "https://example.org/debian.torrent", "", ""));
+  assert.ok(!bg.takes(off, "https://example.org/debian.torrent", "", ""));
+  assert.ok(bg.takes({ fileTypes: ["torrent"] }, "https://example.org/debian.torrent", "", ""));
+  assert.ok(bg.takes(off, "https://example.org/a.zip", "", ""));
+  assert.ok(!bg.takes(on, "https://example.org/a.pdf", "", ""));
+});
+
 test("exclusions", () => {
   assert.ok(bg.hostMatches("download.windowsupdate.com", "*.windowsupdate.com"));
   assert.ok(bg.hostMatches("windowsupdate.com", "*.windowsupdate.com"));

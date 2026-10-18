@@ -88,7 +88,10 @@ the system tray first. Then:
   off in *Options → Downloads*). Sites listed there under "leaves downloads
   from these sites alone" are skipped. **Alt-click** a link to let the
   browser download it this once. If ODM cannot be reached or started, the
-  browser keeps the download.
+  browser keeps the download. A `.torrent` file (by its name or its
+  `application/x-bittorrent` type) goes to ODM as a torrent, whatever the
+  list says, unless ODM's *Options → Torrents* downloads such addresses
+  as files.
 - **Click "Download this video"** over a player. The button appears when the
   page loads a video or audio file of at least 512 KB; with several, it
   lists them. An HLS/DASH stream is listed with each quality its playlist
@@ -121,6 +124,8 @@ the system tray first. Then:
   ODM has answered, after the menu was opened once (at once for an FLV
   stream): ODM is not asked about every page you visit.
 - **Right-click** a link, video, audio or image → **Download with ODM**.
+  On a `magnet:` link this hands ODM the torrent; nothing but the link goes
+  with it.
 - **Toolbar popup:** the icon's badge counts the media the page has loaded
   (up to 15, from every frame), and the popup lists them, streams with
   their qualities, with how long ago each was seen. Use it when there is no button: audio-only pages, players

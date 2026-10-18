@@ -119,6 +119,9 @@ type StreamQuality struct {
 type Config struct {
 	FileTypes    []string `json:"fileTypes"`
 	ExcludeSites []string `json:"excludeSites"`
+	// Torrents says ODM downloads a .torrent file as a torrent, so the
+	// extension hands it over whatever FileTypes says.
+	Torrents bool `json:"torrents"`
 }
 
 // ReadMessage reads one framed message.

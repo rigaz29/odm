@@ -113,6 +113,29 @@ func TestRelayPingAsksODM(t *testing.T) {
 	}
 }
 
+func TestRelayConfigTorrents(t *testing.T) {
+	settings := func(body string) *http.Client {
+		return &http.Client{Transport: roundTrip(func(*http.Request) (*http.Response, error) {
+			return &http.Response{StatusCode: http.StatusOK, Body: io.NopCloser(strings.NewReader(body))}, nil
+		})}
+	}
+	r := relayConfig(settings(`{"file_types":["zip"]}`))
+	if !r.OK || !r.Config.Torrents || r.Config.ExcludeSites == nil {
+		t.Fatalf("default settings: %+v", r.Config)
+	}
+	r = relayConfig(settings(`{"file_types":["zip"],"torrent":{"no_torrent_links":true}}`))
+	if !r.OK || r.Config.Torrents {
+		t.Fatalf(".torrent files kept as files: %+v", r.Config)
+	}
+}
+
+func TestRelayMagnet(t *testing.T) {
+	got, reply := relayed(t, native.Message{Type: "download", URL: "magnet:?xt=urn:btih:abc&dn=x"})
+	if !reply.OK || got["url"] != "magnet:?xt=urn:btih:abc&dn=x" || got["file_name"] != "" || got["headers"] != nil {
+		t.Fatalf("reply %+v, posted %+v", reply, got)
+	}
+}
+
 func TestRelayStreams(t *testing.T) {
 	var sent map[string]any
 	reply := func(code int, body string) *http.Client {

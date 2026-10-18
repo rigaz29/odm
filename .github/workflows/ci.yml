@@ -18,20 +18,24 @@ jobs:
       - run: go vet ./...
       - name: Extension tests
         run: node --test extension/test/*.test.js
-      # The torrent tests run the newest odm-libtorrent release of this
-      # ODM's protocol (helper/libtorrent); they skip without one.
-      - name: odm-libtorrent
+      - run: go test ./...
+      # ODM's torrent tests (internal/torrent) run the newest odm-libtorrent
+      # release of its protocol, as people get it. The program's own tests
+      # (helper/libtorrent) run in odm-libtorrent.yml, on what it builds.
+      - name: Torrent tests
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName             -q '[.[] | select(.tagName | startswith("odm-libtorrent-p1-"))][0].tagName')
-          if [ -n "$tag" ]; then
-            gh release download "$tag" -R "$GITHUB_REPOSITORY" -p odm-libtorrent-linux-amd64.tar.gz -D "$RUNNER_TEMP/lt"
-            tar -xzf "$RUNNER_TEMP/lt/odm-libtorrent-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lt"
-            echo "ODM_LIBTORRENT=$RUNNER_TEMP/lt/odm-libtorrent" >> "$GITHUB_ENV"
-            echo "$tag"
+          tag=$(gh release list -R "$GITHUB_REPOSITORY" --limit 100 --json tagName \
+            -q '[.[] | select(.tagName | startswith("odm-libtorrent-p1-"))][0].tagName')
+          if [ -z "$tag" ]; then
+            echo "no odm-libtorrent release"
+            exit 0
           fi
-      - run: go test ./...
+          echo "$tag"
+          gh release download "$tag" -R "$GITHUB_REPOSITORY" -p odm-libtorrent-linux-amd64.tar.gz -D "$RUNNER_TEMP/lt"
+          tar -xzf "$RUNNER_TEMP/lt/odm-libtorrent-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lt"
+          ODM_LIBTORRENT="$RUNNER_TEMP/lt/odm-libtorrent" go test -count=1 -v ./internal/torrent/
       - name: Build CLI
         run: CGO_ENABLED=0 go build -o /tmp/odm ./cmd/odm
 

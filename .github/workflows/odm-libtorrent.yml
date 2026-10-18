@@ -209,9 +209,31 @@ jobs:
           name: odm-libtorrent-${{ matrix.label }}
           path: odm-libtorrent-${{ matrix.label }}.*
 
+  # The Linux build comes from Ubuntu 22.04 so that it runs on older
+  # distributions; this runs its tests on the newest Ubuntu too, whose
+  # libraries may behave otherwise (glibc 2.39 made exit() hang once).
+  newer-linux:
+    name: odm-libtorrent linux-amd64 on the newest Ubuntu
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: odm-libtorrent-linux-amd64
+          path: ${{ runner.temp }}/lt
+      - name: Test
+        run: |
+          tar -xzf "$RUNNER_TEMP/lt/odm-libtorrent-linux-amd64.tar.gz" -C "$RUNNER_TEMP/lt"
+          ODM_LIBTORRENT="$RUNNER_TEMP/lt/odm-libtorrent" go test -count=1 -v ./helper/libtorrent/
+
   release:
     if: startsWith(github.ref, 'refs/tags/odm-libtorrent-p')
-    needs: build
+    needs: [build, newer-linux]
     runs-on: ubuntu-latest
     permissions:
       contents: write

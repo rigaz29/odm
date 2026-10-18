@@ -13,6 +13,8 @@
 #include <libtorrent/version.hpp>
 
 #include <csignal>
+#include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <iostream>
 #include <string>
@@ -51,11 +53,17 @@ int main(int argc, char* argv[]) {
       return 2;
     }
   }
+  int code = 1;
   try {
     odm::Helper helper(state);
-    return helper.run();
+    code = helper.run();
   } catch (std::exception const& e) {
     std::cerr << "odm-libtorrent: " << e.what() << '\n';
-    return 1;
   }
+  // Everything is saved. Leave without exit()'s clean-up: the thread that
+  // reads stdin may still be waiting in it after "quit", and glibc 2.39's
+  // exit() waits for that stream's lock, so the program never ended.
+  std::cout.flush();
+  std::fflush(nullptr);
+  std::_Exit(code);
 }

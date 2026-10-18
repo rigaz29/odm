@@ -636,13 +636,24 @@ Tahap 1: program `odm-libtorrent` dan rilisnya
 
 Tahap 2: engine
 
-- [ ] `internal/torrent` dan `tools.Keeper`. **S** Isinya:
+- [x] `internal/torrent` dan `tools.Keeper`. **S** Isinya:
       - menjalankan `odm-libtorrent` dan menerjemahkan protokolnya;
       - memeriksa versi protokol program;
       - entri `odm-libtorrent` di `tools.Keeper`: diunduh saat dibutuhkan,
         dengan progres, lalu diperbarui seperti yt-dlp;
       - `odm-libtorrent` dicantumkan di jendela Setup.
-- [ ] Jenis unduhan `Torrent` di engine (seperti `Site` dan `Stream`).
+
+      Selesai 2026-10-18:
+      - `tools.Libtorrent` mengambil rilis `odm-libtorrent-p1-…` (`.zip`
+        atau `.tar.gz`). Tandanya `OnDemand`: tidak ikut "perbarui semua"
+        sebelum pernah dipasang;
+      - `torrent.Session` menjalankan program saat torrent pertama
+        membutuhkannya, di job object di Windows, dan menjalankannya lagi
+        setelah program berhenti. Unduhan yang sedang berjalan saat itu
+        mendapat error, dan Resume melanjutkannya;
+      - jendela Setup mencantumkan `odm-libtorrent` dengan tombol Pasang
+        sendiri.
+- [x] Jenis unduhan `Torrent` di engine (seperti `Site` dan `Stream`).
       **B** Isinya:
       - masukan file `.torrent` (dari disk atau URL) dan magnet (`btih`
         dan `btmh`);
@@ -652,20 +663,68 @@ Tahap 2: engine
       - jeda, lanjut, dan lanjut setelah ODM ditutup;
       - antrean, batas kecepatan (semua unduhan dan per unduhan), dan aksi
         selesai.
-- [ ] Penamaan dan keamanan. **S** Isinya:
+
+      Selesai 2026-10-18 (`internal/engine/torrent.go`). Engine mengenal
+      `odm-libtorrent` hanya lewat `engine.Torrents`, jadi tetap pada
+      pustaka standar. Catatan:
+      - torrent yang selesai langsung keluar dari sesi, karena seeding
+        baru ada di Tahap 3;
+      - port masih dipilih acak di setiap run; port tetap juga di Tahap 3;
+      - batas kecepatan semua unduhan diterapkan terpisah oleh ODM (HTTP)
+        dan oleh libtorrent (torrent). Kalau keduanya berjalan bersamaan,
+        totalnya bisa sampai dua kali batas;
+      - kategori diambil dari file terbesar, dan file yang dipilih sebelum
+        metadata tiba (untuk UI di Tahap 4) tetap dihormati.
+- [x] Penamaan dan keamanan. **S** Isinya:
       - nama dari torrent disaring per bagian jalur: `SanitizeName`, `..`,
         jalur absolut, nama terlarang Windows, karakter arah teks;
       - file atau folder `.odmpart`, lalu diganti nama saat selesai;
       - Mark-of-the-Web untuk tiap file (`MarkFile`);
       - metainfo disimpan sebagai `<id>.torrent` di samping state, supaya
         magnet tidak perlu mengambil metadata lagi.
-- [ ] `-add` dan API menerima magnet dan URL `.torrent`. `-add` tanpa UI
-      selesai saat unduhannya selesai, tanpa seeding. **K**
-- [ ] Test tanpa internet: seeder dan ODM di localhost di dalam test,
+
+      Selesai 2026-10-18. `.torrent` disimpan di `<config>/odm/torrents/`.
+      Untuk magnet, metadatanya ikut tersimpan di resume data. Kalau nama
+      tujuan sudah terpakai saat unduhan selesai, ODM memakai nama
+      berikutnya ("Album (2)"). Part file dihapus setelah torrent keluar
+      dari sesi.
+- [x] `-add` dan API menerima magnet dan URL `.torrent`. `-add` tanpa UI
+      selesai saat unduhannya selesai, tanpa seeding. **K** Selesai
+      2026-10-18:
+      - magnet selalu jadi torrent;
+      - URL atau path `.torrent` jadi torrent lewat `-add`, atau lewat
+        field `"torrent": true` di API;
+      - selama jendela Unduhan Baru belum mengenal torrent (Tahap 4),
+        permintaan dari API untuk torrent langsung ditambahkan tanpa
+        jendela.
+- [x] Test tanpa internet: seeder dan ODM di localhost di dalam test,
       dengan `odm-libtorrent` hasil build CI. **S** Kasusnya: satu file,
       banyak file, pilihan file, jeda, restart, piece rusak, dan
       `odm-libtorrent` yang crash. Test dilewati, dengan keterangan, kalau
       programnya tidak ada.
+
+      Selesai 2026-10-18:
+      - `internal/engine/torrent_test.go` memakai backend tiruan: satu
+        file, folder dengan nama yang disaring, magnet ditahan, jeda,
+        lanjut dan hapus, error, torrent yang sudah lengkap saat
+        ditambahkan;
+      - `internal/torrent/session_test.go` memakai `odm-libtorrent`
+        sungguhan: satu file, folder tanpa file yang tidak dicentang,
+        magnet, ODM di-restart di tengah unduhan, dan program yang
+        dimatikan lalu dijalankan lagi;
+      - CI menjalankan test integrasi dengan rilis `odm-libtorrent`
+        terbaru, sama seperti yang diterima pengguna;
+      - kasus "piece rusak" ditangani dan dihitung libtorrent sendiri
+        (`failed_bytes`), jadi tidak diuji terpisah.
+
+      Dua bug `odm-libtorrent` ketemu dan sudah diperbaiki, tetapi belum
+      dirilis:
+      - menghapus torrent hibrida yang ditambahkan dari magnet tidak
+        pernah selesai, karena hash v2 baru datang bersama metadata;
+      - di glibc baru (Ubuntu 24.04), program macet setelah `quit`,
+        karena `exit()` menunggu kunci stdin yang dipegang thread
+        pembaca. Workflow-nya kini juga menguji build Linux di Ubuntu
+        terbaru.
 
 Tahap 3: seeding dan jaringan
 

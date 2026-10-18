@@ -741,6 +741,9 @@ void Helper::on_metadata(Torrent& t) {
   auto ti = t.handle.torrent_file();
   if (!ti) return;
   t.has_metadata = true;
+  // A magnet link names one info hash; a hybrid torrent's metadata brings
+  // the other, and libtorrent's alerts carry both from now on.
+  t.info_hashes = t.handle.info_hashes();
   std::vector<std::string> trackers;
   for (auto const& e : t.handle.trackers()) trackers.push_back(e.url);
   json j = metadata(*ti, trackers);
@@ -812,7 +815,12 @@ Torrent* Helper::find(lt::torrent_handle const& h) {
 
 Torrent* Helper::find_removing(lt::info_hash_t const& ih) {
   for (auto& [key, t] : torrents_) {
-    if (t.removing && t.info_hashes == ih) return &t;
+    if (!t.removing) continue;
+    // Either hash will do: an alert may carry one more than was known.
+    if ((ih.has_v1() && t.info_hashes.has_v1() && ih.v1 == t.info_hashes.v1) ||
+        (ih.has_v2() && t.info_hashes.has_v2() && ih.v2 == t.info_hashes.v2)) {
+      return &t;
+    }
   }
   return nullptr;
 }

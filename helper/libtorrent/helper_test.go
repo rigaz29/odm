@@ -517,6 +517,11 @@ func TestMagnetHeldUntilFilesAreChosen(t *testing.T) {
 	h.call(msg{"cmd": "priorities", "key": "m", "priorities": []int{4}})
 	h.event("finished", 60*time.Second, nil)
 	sameFile(t, filepath.Join(got, "data.bin.odmpart"), want)
+
+	// The torrent is hybrid: its metadata brought a v2 info hash the magnet
+	// link did not name, which removing it must still find.
+	h.call(msg{"cmd": "remove", "key": "m"})
+	h.event("removed", 10*time.Second, func(m msg) bool { return m.str("key") == "m" })
 }
 
 func TestRemoveDeletesFiles(t *testing.T) {

@@ -349,7 +349,7 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
     case "progress":
       return (
         <div role="gridcell" className="min-w-0 pr-4">
-          {k === "complete" ? (
+          {k === "complete" || k === "seeding" ? (
             <span className="text-xs text-muted-foreground">100%</span>
           ) : k === "recording" || d.total <= 0 ? (
             <span className="block truncate text-xs text-muted-foreground">{tf("%s so far", humanBytes(d.done) || "0 B")}</span>
@@ -362,6 +362,10 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
         </div>
       );
     case "speed":
+      if (d.seeding) {
+        // A finished torrent uploads: its upload speed, marked.
+        return <div role="gridcell" className="truncate pr-3 tabular-nums text-teal-700 dark:text-teal-300">↑ {speedText(d.uploadSpeed) || "0 B/s"}</div>;
+      }
       return <div role="gridcell" className="truncate pr-3 tabular-nums">{speedText(d.speed) || <span className="text-muted-foreground">—</span>}</div>;
     case "eta":
       return <div role="gridcell" className={cn(muted, "tabular-nums")}>{etaText(d) || "—"}</div>;

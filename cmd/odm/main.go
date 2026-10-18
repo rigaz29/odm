@@ -3,9 +3,11 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -69,6 +71,9 @@ func main() {
 		fmt.Printf("%s %s (%s/%s, %s)\n", version.Name, version.Version, runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return
 	}
+	// A magnet link or a .torrent file given to ODM (opening one with it)
+	// goes to the New Download window.
+	openURL := openArg(flag.Args())
 
 	baseDir := configBaseDir()
 	if *nativeHost {
@@ -92,7 +97,14 @@ func main() {
 		// Launching ODM again (e.g. from the Start menu while it sits in the
 		// tray) should bring the running window forward, not do nothing.
 		// -hidden (login, a browser download) asks for no window.
-		if !*hidden {
+		if openURL != "" {
+			// The running ODM opens its New Download window for it.
+			body, _ := json.Marshal(map[string]any{"url": openURL, "prompt": true})
+			resp, perr := ipc.Client(ipc.SocketPath(baseDir), 10*time.Second).Post(ipc.BaseURL+"/api/downloads", "application/json", bytes.NewReader(body))
+			if perr == nil {
+				resp.Body.Close()
+			}
+		} else if !*hidden {
 			resp, perr := ipc.Client(ipc.SocketPath(baseDir), 3*time.Second).Post(ipc.BaseURL+"/api/show", "", nil)
 			if perr == nil {
 				resp.Body.Close()
@@ -285,6 +297,9 @@ func main() {
 		// Browser hand-offs open the New Download window. The hook exists
 		// only while the window runs; headless ODM adds them directly.
 		promptUI := make(chan engine.AddOptions, 16)
+		if openURL != "" {
+			promptUI <- openOptions(openURL)
+		}
 		srv.OnPrompt = func(o engine.AddOptions) bool {
 			select {
 			case promptUI <- o:
@@ -300,11 +315,43 @@ func main() {
 		return
 	}
 
+	if openURL != "" {
+		mgr.AddAuto(openOptions(openURL)) // no window to ask in
+	}
 	if webUI {
 		openUI(webURL)
 	}
 	<-ctx.Done()
 	stopServers()
+}
+
+// openArg is the magnet link or .torrent file among ODM's arguments (an
+// absolute path), "" for none.
+func openArg(args []string) string {
+	if len(args) != 1 {
+		return ""
+	}
+	a := strings.TrimSpace(args[0])
+	switch {
+	case engine.IsMagnet(a):
+		return a
+	case engine.IsTorrentFile(a):
+		if abs, err := filepath.Abs(a); err == nil {
+			return abs
+		}
+		return a
+	}
+	return ""
+}
+
+// openOptions is the download for a magnet link or .torrent file ODM was
+// opened with.
+func openOptions(u string) engine.AddOptions {
+	o := engine.AddOptions{URL: u, Start: true}
+	if !engine.IsMagnet(u) {
+		o.Torrent = &engine.TorrentJob{}
+	}
+	return o
 }
 
 // libtorrentProgram is the odm-libtorrent to run: ODM_LIBTORRENT when set

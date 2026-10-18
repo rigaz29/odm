@@ -2,6 +2,7 @@ package torrent
 
 import (
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"math/rand/v2"
@@ -654,6 +655,32 @@ func (s *Session) Remove(ctx context.Context, id string, deleteFiles bool) error
 		return fmt.Errorf("deleting the files: %s", ev.Error)
 	}
 	return nil
+}
+
+// Detail is a torrent's pieces and each file's bytes downloaded.
+func (s *Session) Detail(ctx context.Context, id string) (engine.TorrentDetail, error) {
+	c := s.in(id)
+	if c == nil {
+		return engine.TorrentDetail{}, errors.New("the torrent is not running")
+	}
+	var p struct {
+		Count int    `json:"count"`
+		Have  string `json:"have"`
+	}
+	if err := c.Call(ctx, "pieces", map[string]any{"key": id}, &p); err != nil {
+		return engine.TorrentDetail{}, err
+	}
+	bits, err := base64.StdEncoding.DecodeString(p.Have)
+	if err != nil {
+		return engine.TorrentDetail{}, err
+	}
+	var f struct {
+		Files []int64 `json:"files"`
+	}
+	if err := c.Call(ctx, "file_progress", map[string]any{"key": id}, &f); err != nil {
+		return engine.TorrentDetail{}, err
+	}
+	return engine.TorrentDetail{Pieces: bits, Count: p.Count, FileDone: f.Files}, nil
 }
 
 // Close stops the program, which first saves its torrents' resume data.

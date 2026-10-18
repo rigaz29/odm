@@ -122,9 +122,14 @@ func Run(ctx context.Context, mgr *engine.Manager, opts Options) error {
 		Frameless:        runtime.GOOS == "windows",
 		Hidden:           opts.Hidden,
 		BackgroundColour: background,
+		// A .torrent file dropped on the list opens the New Download window.
+		EnableFileDrop: true,
 		Windows: application.WindowsWindow{
 			Theme: windowTheme(look.Theme),
 		},
+	})
+	win.OnWindowEvent(events.Common.WindowFilesDropped, func(e *application.WindowEvent) {
+		svc.openTorrentPaths(e.Context().DroppedFiles())
 	})
 
 	windows := &appWindows{app: app, background: background, theme: windowTheme(look.Theme)}

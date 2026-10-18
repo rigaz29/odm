@@ -68,10 +68,11 @@ export function since(iso: string, now = Date.now()): number {
   return isNaN(at) || at < Date.parse("2000-01-01") ? 0 : (now - at) / 1000;
 }
 
-export type StatusKind = "downloading" | "recording" | "paused" | "queued" | "error" | "complete" | "verifying";
+export type StatusKind = "downloading" | "recording" | "paused" | "queued" | "error" | "complete" | "verifying" | "seeding";
 
 export function statusKind(d: Item): StatusKind {
   if (d.verifying) return "verifying";
+  if (d.seeding) return "seeding"; // a finished torrent uploading
   if (d.status === "downloading") return d.live ? "recording" : "downloading";
   return (["paused", "queued", "error", "complete"].includes(d.status) ? d.status : "queued") as StatusKind;
 }
@@ -92,6 +93,8 @@ export function statusLabel(k: StatusKind): string {
       return t("Complete");
     case "verifying":
       return t("Verifying checksum");
+    case "seeding":
+      return t("Seeding");
   }
 }
 

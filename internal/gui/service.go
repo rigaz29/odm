@@ -37,6 +37,14 @@ type Item struct {
 	Site        bool      `json:"site"`
 	Stream      string    `json:"stream"`
 	Verifying   bool      `json:"verifying"`
+	// A torrent: Seeding while it uploads after finishing, at UploadSpeed;
+	// Uploaded in all; Peers and Seeds connected.
+	Torrent     bool  `json:"torrent"`
+	Seeding     bool  `json:"seeding"`
+	Uploaded    int64 `json:"uploaded"`
+	UploadSpeed int64 `json:"uploadSpeed"`
+	Peers       int   `json:"peers"`
+	Seeds       int   `json:"seeds"`
 	CreatedAt   time.Time `json:"createdAt"`
 	// UpdatedAt is the last attempt: when the download last started,
 	// stopped or failed.
@@ -124,6 +132,9 @@ type Service struct {
 	prefills map[string]engine.AddOptions
 	probes   map[string]*probed
 	statuses map[string]engine.Status
+	// The window's looks at torrents (torrent.go), by address.
+	tmu      sync.Mutex
+	torrents map[string]*torrentProbe
 
 	// windows opens ODM's other windows; nil in tests. keeper keeps
 	// yt-dlp and ffmpeg; nil in builds without it. Both under mu.
@@ -212,6 +223,10 @@ func itemOf(d engine.Info) Item {
 		Category: d.Category, Queue: d.Queue, Order: d.Order, Description: d.Description,
 		Live: d.Live, Site: d.Site, Stream: d.Stream, Verifying: d.Verifying,
 		CreatedAt: d.CreatedAt, UpdatedAt: d.UpdatedAt,
+		Torrent: d.Torrent, Seeding: d.Seeding, Uploaded: d.Uploaded,
+	}
+	if d.Status == engine.StatusDownloading || d.Seeding {
+		it.UploadSpeed, it.Peers, it.Seeds = d.UploadSpeed, d.Peers, d.Seeds
 	}
 	// The engine keeps a paused download's last speed; only a running one
 	// has a speed to show.

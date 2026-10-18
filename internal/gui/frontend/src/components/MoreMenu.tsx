@@ -15,6 +15,7 @@ import {
   Info,
   Keyboard,
   ListPlus,
+  Magnet,
   MoreHorizontal,
   PanelLeft,
   RefreshCw,
@@ -49,6 +50,7 @@ export function MoreMenu(props: {
   on: {
     newQueue(): void;
     grab(): void;
+    openTorrent(): void;
     exportList(): void;
     importList(): void;
     shortcuts(): void;
@@ -71,6 +73,9 @@ export function MoreMenu(props: {
         </DropdownMenuItem>
         <DropdownMenuItem onSelect={on.grab}>
           <Globe /> {t("Grab site…")}
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={on.openTorrent}>
+          <Magnet /> {t("Open .torrent file…")}
         </DropdownMenuItem>
         <DropdownMenuSeparator />
         <DropdownMenuItem onSelect={props.onResumeAll}>

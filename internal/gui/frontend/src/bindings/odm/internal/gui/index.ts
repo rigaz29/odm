@@ -39,6 +39,10 @@ export {
     SiteLogin,
     Snapshot,
     ToolStatus,
+    TorrentDetail,
+    TorrentFileDetail,
+    TorrentFileRow,
+    TorrentProbe,
     UpdateInfo,
     ZipEntry,
     ZipListing

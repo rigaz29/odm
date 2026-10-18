@@ -214,6 +214,9 @@ func TestSessionDownloadsAFile(t *testing.T) {
 	info := h.m.Create(engine.AddOptions{URL: tf, Torrent: &engine.TorrentJob{}, Start: true})
 	got := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
 	sameFile(t, filepath.Join(h.dir, "data.bin"), want)
+	if _, live := h.m.TorrentDetail(context.Background(), info.ID); live {
+		t.Fatal("detail of a torrent that left the session")
+	}
 	if got.FileName != "data.bin" || got.Done != int64(len(want)) || !got.Torrent {
 		t.Fatalf("info: %+v", got)
 	}
@@ -435,6 +438,10 @@ func TestSessionSeedsUntilTheRatio(t *testing.T) {
 	got := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
 	if !got.Seeding || h.s.in(info.ID) == nil {
 		t.Fatalf("not seeding: %+v", got)
+	}
+	det, live := h.m.TorrentDetail(context.Background(), info.ID)
+	if !live || det.Count != 32 || len(det.Pieces) != 4 || det.Pieces[0] != 0xff || len(det.FileDone) != 1 || det.FileDone[0] != 1<<20 {
+		t.Fatalf("detail while seeding: %v %+v", live, det)
 	}
 	// The first seeder goes: a second peer can only get the file from ODM.
 	sd.c.Close(10 * time.Second)

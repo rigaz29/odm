@@ -87,6 +87,8 @@ type ProbeResult struct {
 	Quality   int       `json:"quality"` // the one to select
 	// Zip offers a preview of the archive's contents.
 	Zip bool `json:"zip"`
+	// Torrent is what a torrent holds (Kind "torrent").
+	Torrent *TorrentProbe `json:"torrent"`
 }
 
 // CreateRequest is the form, sent by Start Download and Download Later.
@@ -105,6 +107,8 @@ type CreateRequest struct {
 	Start       bool   `json:"start"`
 	// Again adds an address already in the list once more.
 	Again bool `json:"again"`
+	// Skip lists the files of a torrent left out, by index.
+	Skip []int `json:"skip"`
 }
 
 // CreateResult is the new download, or the one already in the list with
@@ -213,6 +217,8 @@ func (s *Service) Probe(address, token string) ProbeResult {
 	case addr == "":
 		res.Card = Card{State: "idle", Title: "No address yet", Detail: "Paste or type one: ODM checks the file's size and type before adding it."}
 		return res
+	case s.isTorrentAddress(addr):
+		return s.probeTorrent(addr, pre.Headers)
 	case !strings.HasPrefix(addr, "http"):
 		res.Card = Card{State: "warn", Title: "Not checked", Detail: "Only http and https addresses are checked before they are added."}
 		return res
@@ -266,6 +272,9 @@ func (s *Service) Probe(address, token string) ProbeResult {
 	if err != nil {
 		res.Card = Card{State: "problem", Title: "The file could not be checked", Error: err.Error()}
 		return res
+	}
+	if s.torrentType(p.ContentType) {
+		return s.probeTorrent(addr, pre.Headers)
 	}
 	s.remember(addr, &probed{})
 	res.Kind = "file"
@@ -380,6 +389,9 @@ func (s *Service) Create(r CreateRequest) (CreateResult, error) {
 	sum, err := engine.ParseChecksum(r.Checksum)
 	if err != nil {
 		return CreateResult{}, err
+	}
+	if s.hasTorrentProbe(addr) || s.isTorrentAddress(addr) {
+		return s.createTorrent(r, addr)
 	}
 	pre := s.prefill(r.Token)
 	fromBrowser := pre.URL != "" && addr == strings.TrimSpace(pre.URL)

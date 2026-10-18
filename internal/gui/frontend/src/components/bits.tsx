@@ -42,6 +42,7 @@ const badgeStyle: Record<StatusKind, string> = {
   error: "bg-red-500/10 text-red-700 ring-red-500/25 dark:text-red-400",
   complete: "bg-emerald-500/10 text-emerald-700 ring-emerald-500/25 dark:text-emerald-400",
   verifying: "bg-sky-500/10 text-sky-700 ring-sky-500/25 dark:text-sky-300",
+  seeding: "bg-teal-500/10 text-teal-700 ring-teal-500/25 dark:text-teal-300",
 };
 
 export function StatusBadge({ d }: { d: Item }) {
@@ -50,6 +51,7 @@ export function StatusBadge({ d }: { d: Item }) {
     <span className={cn("inline-flex items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-0.5 text-xs font-medium ring-1 ring-inset", badgeStyle[k])}>
       {k === "recording" && <span className="size-1.5 animate-pulse rounded-full bg-rose-500" />}
       {k === "downloading" && <span className="accent-gradient size-1.5 rounded-full" />}
+      {k === "seeding" && <span className="size-1.5 rounded-full bg-teal-500" />}
       {statusLabel(k)}
     </span>
   );

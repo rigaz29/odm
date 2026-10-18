@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"odm/internal/engine"
 	"odm/internal/ipc"
 	"odm/internal/media"
 	"odm/internal/native"
@@ -177,6 +178,11 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	}
 	if len(headers) > 0 {
 		payload["headers"] = headers
+	}
+	if strings.EqualFold(m.Mime, "application/x-bittorrent") || engine.IsTorrentFile(m.Filename) {
+		// A .torrent file: ODM downloads the torrent unless its Options
+		// say to keep the file.
+		payload["torrent_link"] = true
 	}
 	if len(m.SiteCookies) > 0 {
 		payload["site_cookies"] = m.SiteCookies

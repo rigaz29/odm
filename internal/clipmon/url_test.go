@@ -14,6 +14,8 @@ func TestClipboardURL(t *testing.T) {
 		{"no links here", "", false},
 		{"https://host/file.zip.", "https://host/file.zip", true},
 		{"ftp://host/file.zip", "", false},
+		{"grab magnet:?xt=urn:btih:ab12&dn=Ubuntu+24.04 please", "magnet:?xt=urn:btih:ab12&dn=Ubuntu+24.04", true},
+		{"magnet:?dn=no-hash", "", false},
 	}
 	for _, c := range cases {
 		got, ok := ClipboardURL(c.text)

@@ -922,6 +922,10 @@ type AddOptions struct {
 	// Torrent makes this a torrent: URL is then a magnet link (which makes
 	// it one by itself), or the address or path of a .torrent file.
 	Torrent *TorrentJob
+	// TorrentFile and TorrentResume are a .torrent file and resume data
+	// read already (the New Download window's look at the torrent), kept
+	// for the download so that it need not fetch its metadata again.
+	TorrentFile, TorrentResume string
 	// StreamQuality is the label of the quality picked before the New
 	// Download window opened (in the browser's menu), which the window
 	// then selects. "" leaves the window's own choice.
@@ -998,11 +1002,64 @@ func (m *Manager) Create(o AddOptions) Info {
 	m.downloads[d.ID] = d
 	m.order = append(m.order, d.ID)
 	m.mu.Unlock()
+	if d.Torrent != nil {
+		keepTorrentFile(o.TorrentFile, torrentPath(d.ID, ".torrent"))
+		keepTorrentFile(o.TorrentResume, torrentPath(d.ID, ".resume"))
+	}
 	// Saved now, not only at its first change: a download added stopped
 	// ("Download Later") may not change before ODM closes.
 	m.changed(d)
 	m.pump()
 	return d.Info()
+}
+
+// keepTorrentFile copies src, when there is one, to dst in TorrentDir.
+func keepTorrentFile(src, dst string) {
+	if src == "" || TorrentDir == "" {
+		return
+	}
+	data, err := os.ReadFile(src)
+	if err != nil || len(data) > maxTorrentFile {
+		return
+	}
+	if os.MkdirAll(TorrentDir, 0o755) == nil {
+		_ = os.WriteFile(dst, data, 0o644)
+	}
+}
+
+// Torrent returns a copy of the download id's torrent; false when id is not
+// a torrent.
+func (m *Manager) Torrent(id string) (TorrentJob, bool) {
+	d := m.get(id)
+	if d == nil {
+		return TorrentJob{}, false
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.Torrent == nil {
+		return TorrentJob{}, false
+	}
+	tj := *d.Torrent
+	tj.Files = append([]TorrentFile(nil), d.Torrent.Files...)
+	return tj, true
+}
+
+// TorrentDetail is the download id's pieces and files while it runs or
+// seeds; false otherwise.
+func (m *Manager) TorrentDetail(ctx context.Context, id string) (TorrentDetail, bool) {
+	b := Torrents
+	d := m.get(id)
+	if b == nil || d == nil {
+		return TorrentDetail{}, false
+	}
+	d.mu.Lock()
+	live := d.Torrent != nil && (d.Status == StatusDownloading || d.Torrent.Seeding)
+	d.mu.Unlock()
+	if !live {
+		return TorrentDetail{}, false
+	}
+	det, err := b.Detail(ctx, id)
+	return det, err == nil
 }
 
 // Probe inspects a URL without creating a download.

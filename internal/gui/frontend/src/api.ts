@@ -32,6 +32,7 @@ import {
   type SetupTool,
   type Snapshot,
   type ToolStatus,
+  type TorrentProbe,
   type ZipListing,
 } from "./bindings/odm/internal/gui/models";
 import * as Service from "./bindings/odm/internal/gui/service";
@@ -69,6 +70,13 @@ export interface Api {
   create(req: CreateRequest): Promise<CreateResult>;
   zipPreview(address: string, token: string): Promise<ZipListing>;
   pickFolder(current: string): Promise<string>;
+  // A torrent the form reads (torrent.go): what it holds now, and the end
+  // of reading it.
+  torrentProbe(address: string): Promise<TorrentProbe>;
+  dropTorrentProbe(address: string): Promise<void>;
+  openTorrentFile(): Promise<void>;
+  stopSeeding(id: string): Promise<void>;
+  torrentMagnet(id: string): Promise<string>;
 
   // The progress and download complete windows (detail.go).
   detail(id: string): Promise<Detail>;
@@ -189,6 +197,11 @@ const wailsApi: Api = {
   create: (req) => Service.Create(req),
   zipPreview: (address, token) => Service.ZipPreview(address, token),
   pickFolder: (current) => Service.PickFolder(current),
+  torrentProbe: (address) => Service.TorrentProbe(address),
+  dropTorrentProbe: (address) => Service.DropTorrentProbe(address),
+  openTorrentFile: () => Service.OpenTorrentFile(),
+  stopSeeding: (id) => Service.StopSeeding(id),
+  torrentMagnet: (id) => Service.TorrentMagnet(id),
   detail: (id) => Service.Detail(id),
   setDownloadLimit: (id, bps) => Service.SetDownloadLimit(id, bps),
   setOpenWhenDone: (id, on) => Service.SetOpenWhenDone(id, on),

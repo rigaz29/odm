@@ -122,6 +122,14 @@ export function DropPrefill(token: string): $CancellablePromise<void> {
 }
 
 /**
+ * DropTorrentProbe ends the look at addr's torrent: the window closed or
+ * the address changed.
+ */
+export function DropTorrentProbe(address: string): $CancellablePromise<void> {
+    return $Call.ByID(577919429, address);
+}
+
+/**
  * ExportList saves the list to a file the person names; it returns the
  * file, "" when cancelled.
  */
@@ -221,6 +229,14 @@ export function OpenScheduler(newQueue: boolean): $CancellablePromise<void> {
  */
 export function OpenSetup(): $CancellablePromise<void> {
     return $Call.ByID(3902340993);
+}
+
+/**
+ * OpenTorrentFile asks for a .torrent file and opens the New Download
+ * window for it.
+ */
+export function OpenTorrentFile(): $CancellablePromise<void> {
+    return $Call.ByID(116351988);
 }
 
 /**
@@ -478,6 +494,13 @@ export function StopQueue(name: string): $CancellablePromise<void> {
 }
 
 /**
+ * StopSeeding ends the seeding of the finished torrent id.
+ */
+export function StopSeeding(id: string): $CancellablePromise<void> {
+    return $Call.ByID(509518807, id);
+}
+
+/**
  * ToolStatus checks the program tool ("ffmpeg" or "yt-dlp") at typed, or
  * where ODM looks for it when typed is empty, and runs it for its version.
  * odm-libtorrent is only ever ODM's own copy.
@@ -485,6 +508,24 @@ export function StopQueue(name: string): $CancellablePromise<void> {
 export function ToolStatus(tool: string, typed: string): $CancellablePromise<$models.ToolStatus> {
     return $Call.ByID(1580169712, tool, typed).then(($result: any) => {
         return $$createType23($result);
+    });
+}
+
+/**
+ * TorrentMagnet is a magnet link to the torrent id, for the clipboard; ""
+ * when it has none yet.
+ */
+export function TorrentMagnet(id: string): $CancellablePromise<string> {
+    return $Call.ByID(576231596, id);
+}
+
+/**
+ * TorrentProbe returns what the window knows of addr's torrent now, for a
+ * magnet link waiting for its metadata.
+ */
+export function TorrentProbe(address: string): $CancellablePromise<$models.TorrentProbe> {
+    return $Call.ByID(77980764, address).then(($result: any) => {
+        return $$createType24($result);
     });
 }
 
@@ -507,7 +548,7 @@ export function UpdateTools(): $CancellablePromise<void> {
  */
 export function ZipPreview(address: string, token: string): $CancellablePromise<$models.ZipListing> {
     return $Call.ByID(1010280861, address, token).then(($result: any) => {
-        return $$createType24($result);
+        return $$createType25($result);
     });
 }
 
@@ -536,4 +577,5 @@ const $$createType20 = $Create.Array($$createType19);
 const $$createType21 = $models.SetupStatus.createFrom;
 const $$createType22 = $models.Snapshot.createFrom;
 const $$createType23 = $models.ToolStatus.createFrom;
-const $$createType24 = $models.ZipListing.createFrom;
+const $$createType24 = $models.TorrentProbe.createFrom;
+const $$createType25 = $models.ZipListing.createFrom;

@@ -153,6 +153,10 @@ func (f *fakeTorrents) SetLimits(ctx context.Context, id string, down, up int64)
 
 func (f *fakeTorrents) Reconfigure() {}
 
+func (f *fakeTorrents) Detail(ctx context.Context, id string) (TorrentDetail, error) {
+	return TorrentDetail{Pieces: []byte{0x80}, Count: 1, FileDone: []int64{1}}, nil
+}
+
 func (f *fakeTorrents) Remove(ctx context.Context, id string, deleteFiles bool) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
@@ -577,5 +581,44 @@ func TestTorrentSettingsDefaults(t *testing.T) {
 		if got := seeded(ts, c.size, c.uploaded, c.seeding); got != c.want {
 			t.Errorf("seeded(%d, %d, %v) = %v", c.size, c.uploaded, c.seeding, got)
 		}
+	}
+}
+
+func TestTorrentMagnetLink(t *testing.T) {
+	if got := (&TorrentJob{Magnet: "magnet:?xt=urn:btih:ab"}).MagnetLink("x"); got != "magnet:?xt=urn:btih:ab" {
+		t.Errorf("its own: %q", got)
+	}
+	if got := (&TorrentJob{}).MagnetLink("x"); got != "" {
+		t.Errorf("before the metadata: %q", got)
+	}
+	got := (&TorrentJob{InfoHash: "aa", InfoHashV2: "bb"}).MagnetLink("A b")
+	if got != "magnet:?dn=A+b&xt=urn:btih:aa&xt=urn:btmh:1220bb" {
+		t.Errorf("made: %q", got)
+	}
+}
+
+func TestTorrentTakesWhatTheWindowRead(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "orig", InfoHash: "c1", Files: []TorrentFile{{Path: "orig/a", Size: 5}, {Path: "orig/b", Size: 6}}})
+	src := dotTorrent(t)
+	resume := filepath.Join(t.TempDir(), "probe.resume")
+	os.WriteFile(resume, []byte("resume"), 0o644)
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
+	info := m.Create(AddOptions{URL: "magnet:?xt=urn:btih:c1", Torrent: &TorrentJob{Name: "Chosen",
+		Files: []TorrentFile{{Path: "orig/a", Size: 5, Skip: true}, {Path: "orig/b", Size: 6}}},
+		TorrentFile: src, TorrentResume: resume, Start: true})
+	if data, _ := os.ReadFile(filepath.Join(TorrentDir, info.ID+".resume")); string(data) != "resume" {
+		t.Fatalf("resume data not kept: %q", data)
+	}
+	f.waitAdd(t)
+	meta := f.meta
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventMetadata, Meta: &meta})
+	waitUntil(t, "files named", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return len(f.setFiles) == 1 })
+	d := m.get(info.ID)
+	if i := d.Info(); i.FileName != "Chosen" || i.Total != 6 {
+		t.Fatalf("info: %+v", i)
+	}
+	tj, ok := m.Torrent(info.ID)
+	if !ok || !tj.Files[0].Skip || tj.Files[1].Skip {
+		t.Fatalf("files: %+v", tj.Files)
 	}
 }

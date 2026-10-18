@@ -67,6 +67,8 @@ type TorrentBackend interface {
 	// Reconfigure applies ODM's settings to the session again: they
 	// changed.
 	Reconfigure()
+	// Detail is what a running torrent's progress window shows.
+	Detail(ctx context.Context, id string) (TorrentDetail, error)
 	// Remove takes the torrent out of the session, deleting what it
 	// downloaded when deleteFiles is set, and returns once it is gone. A
 	// torrent that is not in the session is not an error.
@@ -132,6 +134,16 @@ type TorrentStatus struct {
 	Error       string
 }
 
+// TorrentDetail is a torrent's pieces and files, for its progress window.
+type TorrentDetail struct {
+	// Pieces has a bit for each piece the torrent has, the first piece in
+	// the high bit of the first byte; Count is how many pieces it has.
+	Pieces []byte
+	Count  int
+	// FileDone is each file's bytes downloaded.
+	FileDone []int64
+}
+
 // Kinds of TorrentEvent.
 const (
 	TorrentEventMetadata = "metadata"
@@ -155,7 +167,10 @@ type TorrentEvent struct {
 type TorrentJob struct {
 	// Magnet is the magnet link it was added from; "" for a .torrent file,
 	// kept as <id>.torrent in TorrentDir.
-	Magnet     string `json:"magnet,omitempty"`
+	Magnet string `json:"magnet,omitempty"`
+	// Name is the name chosen for it before its metadata came, "" for the
+	// torrent's own.
+	Name       string `json:"name,omitempty"`
 	InfoHash   string `json:"info_hash,omitempty"`
 	InfoHashV2 string `json:"info_hash_v2,omitempty"`
 	// Folder: the torrent has several files, and FileName is a folder.
@@ -302,6 +317,28 @@ func magnetName(link string) string {
 
 func torrentPath(id, ext string) string {
 	return filepath.Join(TorrentDir, id+ext)
+}
+
+// MagnetLink is a magnet link to the torrent: the one it came from, else
+// one made of its info hashes and name. "" before its metadata.
+func (tj *TorrentJob) MagnetLink(name string) string {
+	if tj.Magnet != "" {
+		return tj.Magnet
+	}
+	if !tj.adopted() {
+		return ""
+	}
+	q := url.Values{}
+	if tj.InfoHash != "" {
+		q.Add("xt", "urn:btih:"+tj.InfoHash)
+	}
+	if tj.InfoHashV2 != "" {
+		q.Add("xt", "urn:btmh:1220"+tj.InfoHashV2) // multihash: SHA-256, 32 bytes
+	}
+	if name != "" {
+		q.Set("dn", name)
+	}
+	return "magnet:?" + strings.NewReplacer("%3A", ":").Replace(q.Encode())
 }
 
 // adopted reports whether the torrent's metadata is in (adoptTorrent):
@@ -545,7 +582,10 @@ func (d *Download) adoptTorrent(m TorrentMeta) error {
 	}
 	d.Torrent.Files, d.Torrent.Folder = files, folder
 	d.Torrent.InfoHash, d.Torrent.InfoHashV2 = m.InfoHash, m.InfoHashV2
-	name := SanitizeName(m.Name)
+	name := SanitizeName(d.Torrent.Name)
+	if name == "" {
+		name = SanitizeName(m.Name)
+	}
 	if name == "" {
 		name = SanitizeName(m.InfoHash)
 	}

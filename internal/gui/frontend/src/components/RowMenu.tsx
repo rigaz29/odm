@@ -1,7 +1,7 @@
 // The list's context menu, for the selected downloads, as the Fyne UI's
 // row menu.
 
-import { Activity, ArrowDown, ArrowUp, Copy, FolderOpen, Link2, ListOrdered, Pause, Play, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
+import { Activity, ArrowDown, ArrowUp, CircleStop, Copy, FolderOpen, Link2, ListOrdered, Magnet, Pause, Play, SquareArrowOutUpRight, Trash2, X } from "lucide-react";
 import type { Item } from "../bindings/odm/internal/gui/models";
 import { t } from "../i18n";
 import {
@@ -20,6 +20,8 @@ export interface RowActions {
   readdress(): void;
   folder(): void;
   copy(): void;
+  copyMagnet(): void; // the torrent's magnet link
+  stopSeeding(): void;
   resume(): void;
   pause(): void;
   moveTo(queue: string): void;
@@ -34,7 +36,7 @@ export function RowMenu({ chosen, current, queues, can, on }: { chosen: Item[]; 
   const readdress = !!current && !["complete", "downloading", "queued"].includes(current.status);
   return (
     <>
-      <ContextMenuItem disabled={!current || current.status === "complete"} onSelect={on.progress}>
+      <ContextMenuItem disabled={!current || (current.status === "complete" && !current.seeding)} onSelect={on.progress}>
         <Activity /> {t("Show progress")}
         {current?.status !== "complete" && <ContextMenuShortcut>Enter</ContextMenuShortcut>}
       </ContextMenuItem>
@@ -49,7 +51,17 @@ export function RowMenu({ chosen, current, queues, can, on }: { chosen: Item[]; 
         <Copy /> {t("Copy address")}
         <ContextMenuShortcut>Ctrl+C</ContextMenuShortcut>
       </ContextMenuItem>
-      <ContextMenuItem disabled={!readdress} onSelect={on.readdress}>
+      {current?.torrent && (
+        <ContextMenuItem onSelect={on.copyMagnet}>
+          <Magnet /> {t("Copy magnet link")}
+        </ContextMenuItem>
+      )}
+      {chosen.some((d) => d.seeding) && (
+        <ContextMenuItem onSelect={on.stopSeeding}>
+          <CircleStop /> {t("Stop seeding")}
+        </ContextMenuItem>
+      )}
+      <ContextMenuItem disabled={!readdress || current?.torrent} onSelect={on.readdress}>
         <Link2 /> {t("Refresh download address…")}
       </ContextMenuItem>
       <ContextMenuSeparator />

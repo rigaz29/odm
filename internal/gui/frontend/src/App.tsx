@@ -66,7 +66,7 @@ import { t, tf } from "./i18n";
 import { cn } from "./lib/utils";
 import type { Command } from "./palette";
 
-const rank: Record<string, number> = { downloading: 0, recording: 0, verifying: 1, queued: 2, paused: 3, error: 4, complete: 5 };
+const rank: Record<string, number> = { downloading: 0, recording: 0, verifying: 1, queued: 2, paused: 3, error: 4, seeding: 5, complete: 5 };
 const text = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 
 // compareBy orders the list by a column.
@@ -245,6 +245,12 @@ export function App() {
     readdress: () => current && setReaddress({ item: current, url: current.url, error: "", busy: false }),
     folder: () => current && void api.showInFolder(current.id),
     copy: () => chosen.length > 0 && void api.copyText(chosen.map((d) => d.url).join("\n")),
+    copyMagnet: () =>
+      current &&
+      void api.torrentMagnet(current.id).then((m) => {
+        if (m) void api.copyText(m);
+      }),
+    stopSeeding: () => chosen.filter((d) => d.seeding).forEach((d) => void api.stopSeeding(d.id)),
     resume: () => void api.resume(resumable.map((d) => d.id)),
     pause: () => void api.pause(pausable.map((d) => d.id)),
     moveTo: (q: string) =>
@@ -331,6 +337,7 @@ export function App() {
     scheduler: () => void api.openScheduler(false),
     newQueue: () => void api.openScheduler(true),
     grab: () => setDialog("grab"),
+    openTorrent: () => void api.openTorrentFile(),
     exportList: () =>
       void api.exportList().then(
         (path) => path && setMessage({ title: t("Export download list…"), text: tf("The list was saved to %s.", path) }),
@@ -398,7 +405,9 @@ export function App() {
   ];
 
   return (
-    <div className="aurora flex h-full flex-col bg-background font-sans text-foreground">
+    // A .torrent file dropped anywhere on the window opens the New
+    // Download window (Wails' drop target, app.go).
+    <div className="aurora flex h-full flex-col bg-background font-sans text-foreground" data-file-drop-target="">
       <TitleBar
         query={query}
         onQuery={setQuery}

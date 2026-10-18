@@ -95,6 +95,9 @@ type TorrentSettings struct {
 	SeedMinutes int    `json:"seed_minutes,omitempty"`
 	// UploadLimit caps the torrents' upload in bytes per second; 0 is none.
 	UploadLimit int64 `json:"upload_limit,omitempty"`
+	// NoTorrentLinks downloads the address of a .torrent file as the file,
+	// not as the torrent it describes (which is the default).
+	NoTorrentLinks bool `json:"no_torrent_links,omitempty"`
 }
 
 // Kinds of TorrentSettings.Seed.

@@ -100,6 +100,15 @@ type OptionsForm struct {
 	ProxyPass string `json:"proxyPass"`
 	// Site logins
 	Logins []SiteLogin `json:"logins"`
+	// Torrents: Seed is "", "never" or "forever" (engine.TorrentSettings).
+	Seed           string `json:"seed"`
+	SeedRatio      int    `json:"seedRatio"` // percent
+	SeedMinutes    int    `json:"seedMinutes"`
+	TorrentPort    int    `json:"torrentPort"` // 0 until a torrent ran
+	Incoming       bool   `json:"incoming"`
+	PortForwarding bool   `json:"portForwarding"`
+	UploadLimitKB  int    `json:"uploadLimitKB"` // 0 for none
+	TorrentLinks   bool   `json:"torrentLinks"`  // .torrent addresses as torrents
 
 	// What this system offers, not saved: a sound to play, and ODM's own
 	// copies of yt-dlp and ffmpeg.
@@ -128,6 +137,9 @@ func (s *Service) Options() OptionsForm {
 		CapOn: st.Limits.Enabled, CapMB: st.Limits.MB, CapHours: st.Limits.Hours, CapWarning: !st.Limits.NoWarning,
 		ProxyMode: st.Proxy.Mode, ProxyHost: st.Proxy.Host, ProxyPort: st.Proxy.Port,
 		ProxyUser: st.Proxy.User, ProxyPass: st.Proxy.Pass,
+		Seed: st.Torrent.Seed, SeedRatio: st.Torrent.SeedRatio, SeedMinutes: st.Torrent.SeedMinutes,
+		TorrentPort: st.Torrent.Port, Incoming: !st.Torrent.NoIncoming, PortForwarding: !st.Torrent.NoPortForwarding,
+		UploadLimitKB: int(st.Torrent.UploadLimit / 1024), TorrentLinks: !st.Torrent.NoTorrentLinks,
 		CanSound: runtime.GOOS == "windows", CanTools: s.tools() != nil,
 	}
 	if o.Theme == "" || o.Language == "" {
@@ -236,6 +248,12 @@ func (s *Service) SaveOptions(o OptionsForm) SaveResult {
 		}
 	}
 	next.Limits = engine.DownloadLimits{Enabled: o.CapOn, MB: o.CapMB, Hours: o.CapHours, NoWarning: !o.CapWarning}
+	next.Torrent = engine.TorrentSettings{Seed: o.Seed, SeedRatio: o.SeedRatio, SeedMinutes: o.SeedMinutes,
+		Port: o.TorrentPort, NoIncoming: !o.Incoming, NoPortForwarding: !o.PortForwarding,
+		UploadLimit: int64(max(0, o.UploadLimitKB)) * 1024, NoTorrentLinks: !o.TorrentLinks}
+	if next.Torrent.Port == 0 {
+		next.Torrent.Port = was.Torrent.Port // picked while the window was open
+	}
 	next.Proxy = engine.ProxyConfig{Mode: o.ProxyMode}
 	if o.ProxyMode == engine.ProxyHTTP || o.ProxyMode == engine.ProxySOCKS5 {
 		next.Proxy = engine.ProxyConfig{Mode: o.ProxyMode, Host: strings.TrimSpace(o.ProxyHost), Port: o.ProxyPort,

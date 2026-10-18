@@ -154,6 +154,7 @@ export function AddForm(props: {
         audio,
         start,
         again,
+        skip: [],
       });
       if (res.duplicate) {
         setDuplicate({ item: res.duplicate, start });

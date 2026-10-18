@@ -68,6 +68,8 @@ type Detail struct {
 	Chunks       []Chunk `json:"chunks"`
 	// CompleteDialog is the setting "Show the download complete dialog".
 	CompleteDialog bool `json:"completeDialog"`
+	// Torrent is a torrent's peers, pieces and files.
+	Torrent *TorrentDetail `json:"torrent"`
 }
 
 // Detail returns the download id for its progress window.
@@ -90,6 +92,9 @@ func (s *Service) Detail(id string) (Detail, error) {
 	}
 	for _, c := range d.Chunks {
 		out.Chunks = append(out.Chunks, Chunk{Start: c.Start, End: c.End, Done: c.Done, State: c.State})
+	}
+	if d.Torrent {
+		out.Torrent = s.torrentDetail(d)
 	}
 	return out, nil
 }

@@ -182,3 +182,9 @@ textarea {
     animation: none;
   }
 }
+
+/* A file dragged over the window, which takes .torrent files (App.tsx). */
+.file-drop-target-active {
+  outline: 2px dashed var(--color-violet-500);
+  outline-offset: -6px;
+}

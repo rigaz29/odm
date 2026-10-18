@@ -40,6 +40,7 @@ import {
   ToolStatus,
   ZipEntry,
   ZipListing,
+  TorrentProbe,
 } from "./bindings/odm/internal/gui/models";
 
 const categories = ["Video", "Audio", "Documents", "Programs", "Compressed", "Images", "Disk Images", "Other"];
@@ -337,6 +338,11 @@ export function mockApi(): Api {
       });
     },
     pickFolder: async (current) => String.raw`${current}\Video`,
+    torrentProbe: async () => new TorrentProbe({ name: "", waiting: true }),
+    dropTorrentProbe: async () => {},
+    openTorrentFile: async () => {},
+    stopSeeding: async () => {},
+    torrentMagnet: async () => "magnet:?xt=urn:btih:0000",
 
     detail: async (id) => {
       const d = items.find((x) => x.id === id) ?? items[0];

@@ -1,24 +1,31 @@
 // The New Download form, as the Fyne UI's (internal/ui/dialogs_desktop.go,
 // newAddForm): the address, where and under what name to save it, and for a
-// stream or a video page its quality and audio. Typing the address checks
-// it (after a pause) and the card says what it is; Start Download adds and
-// starts it, Download Later only adds it. The main window shows the form in
-// a dialog, a download from the browser in a window of its own.
+// stream or a video page its quality and audio, for a torrent its files.
+// Typing the address checks it (after a pause) and the card says what it
+// is; Start Download adds and starts it, Download Later only adds it. The
+// main window shows the form in a dialog, a download from the browser in a
+// window of its own.
 
-import { Download, FolderOpen, ListPlus } from "lucide-react";
+import { Download, FolderOpen, ListPlus, LoaderCircle } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
-import type { AddDefaults, AddPrefill, Item, ProbeResult } from "../bindings/odm/internal/gui/models";
+import { type AddDefaults, type AddPrefill, type Item, ProbeResult } from "../bindings/odm/internal/gui/models";
 import { categoryLabel, displayName, humanBytes, statusKind, statusLabel, withExt } from "../format";
 import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
 import { ProbeCard } from "./ProbeCard";
+import { TorrentFiles } from "./TorrentFiles";
 import { ZipPreview } from "./ZipPreview";
 import { Button } from "./ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./ui/dialog";
 import { Input, Select } from "./ui/input";
 
 const CHECK_DELAY = 600; // ms after the last key before the address is checked
+const TORRENT_POLL = 1000; // ms between looks at a magnet link waiting for its files
+
+// checked says whether the form checks addr before it is added: a web
+// address, a magnet link or a .torrent file.
+const checked = (addr: string) => addr.startsWith("http") || /^magnet:\?/i.test(addr) || /\.torrent$/i.test(addr);
 
 function Row({ label, htmlFor, children }: { label: string; htmlFor?: string; children: React.ReactNode }) {
   return (
@@ -56,6 +63,9 @@ export function AddForm(props: {
   const [busy, setBusy] = useState(false);
   const [duplicate, setDuplicate] = useState<{ item: Item; start: boolean } | null>(null);
   const [zipOpen, setZipOpen] = useState(false);
+  // A torrent's files left out, by index, and odm-libtorrent installing.
+  const [skip, setSkip] = useState<Set<number>>(new Set());
+  const [installing, setInstalling] = useState(false);
   const urlRef = useRef<HTMLInputElement>(null);
   // The category before a stream or video page set Video, to put back
   // when the address changes.
@@ -88,6 +98,25 @@ export function AddForm(props: {
     if (defaults) urlRef.current?.focus();
   }, [defaults]);
 
+  // apply takes the check of addr in, unless the address changed since.
+  const apply = (addr: string, r: ProbeResult) => {
+    if (asked.current !== addr) return;
+    setChecking(false);
+    setProbe(r);
+    setQuality(r.quality);
+    setAudio(0);
+    setName((n) => {
+      const v = n || r.fileName;
+      return r.kind === "site" && r.qualities[r.quality] ? withExt(v, r.qualities[r.quality].ext) : v;
+    });
+    if (!latest.current.catTouched) {
+      if (r.video) {
+        before.current = latest.current.category;
+        setCategory("Video");
+      } else if (r.category) setCategory(r.category);
+    }
+  };
+
   // Check the address once typing pauses; a result for an address since
   // changed is dropped.
   const asked = useRef("");
@@ -105,36 +134,69 @@ export function AddForm(props: {
       setChecking(false);
       return;
     }
-    setChecking(addr.startsWith("http"));
+    setChecking(checked(addr));
+    setSkip(new Set());
     const timer = setTimeout(() => {
-      void api.probe(addr, props.token).then((r) => {
-        if (asked.current !== addr) return;
-        setChecking(false);
-        setProbe(r);
-        setQuality(r.quality);
-        setAudio(0);
-        setName((n) => {
-          const v = n || r.fileName;
-          return r.kind === "site" && r.qualities[r.quality] ? withExt(v, r.qualities[r.quality].ext) : v;
-        });
-        if (!latest.current.catTouched) {
-          if (r.video) {
-            before.current = latest.current.category;
-            setCategory("Video");
-          } else if (r.category) setCategory(r.category);
-        }
-      });
+      void api.probe(addr, props.token).then((r) => apply(addr, r));
     }, CHECK_DELAY);
     return () => clearTimeout(timer);
     // Only a new address (or the defaults arriving) checks again; the
     // other fields are read as they are when the answer comes.
   }, [url, defaults]);
 
+  const torrent = probe?.kind === "torrent" ? probe.torrent : null;
+  // ODM lets go of a torrent it read once the address changes or the form
+  // closes (after Start, it is the download's already).
+  useEffect(() => {
+    if (probe?.kind !== "torrent") return;
+    const addr = probe.url;
+    return () => void api.dropTorrentProbe(addr);
+  }, [probe?.kind, probe?.url]);
+  // A magnet link's files come from its peers: look again until they are
+  // there, then check the address once more for its name and category.
+  useEffect(() => {
+    if (!probe || !torrent?.waiting) return;
+    const addr = probe.url;
+    const timer = setInterval(() => {
+      void api.torrentProbe(addr).then(
+        (tp) => {
+          if (asked.current !== addr) return;
+          if (!tp.waiting) {
+            clearInterval(timer);
+            void api.probe(addr, props.token).then((r) => apply(addr, r));
+            return;
+          }
+          setProbe((p) => (p && p.url === addr && p.torrent ? new ProbeResult({ ...p, torrent: tp }) : p));
+        },
+        () => clearInterval(timer),
+      );
+    }, TORRENT_POLL);
+    return () => clearInterval(timer);
+  }, [probe?.url, torrent?.waiting]);
+
+  const installTorrents = async () => {
+    setInstalling(true);
+    setError("");
+    try {
+      await api.installTool("odm-libtorrent");
+      const addr = url.trim();
+      apply(addr, await api.probe(addr, props.token));
+    } catch (e) {
+      setError(String((e as Error)?.message ?? e));
+    } finally {
+      setInstalling(false);
+    }
+  };
+
   const qualities = probe?.qualities ?? [];
   const audios = qualities[quality]?.audios ?? [];
   // A playlist or page the browser sent shows its rows before it is read.
   const waiting = !probe && (pre?.site || pre?.stream) && url.trim() === pre?.url.trim();
   const showQuality = qualities.length > 0 || waiting || probe?.kind === "stream" || probe?.kind === "site";
+  // A torrent with its files listed and every one left out has nothing to
+  // download.
+  const realFiles = (torrent?.files ?? []).filter((f) => !f.pad).length;
+  const noFiles = realFiles > 0 && (torrent?.files ?? []).every((f, i) => f.pad || skip.has(i));
 
   const create = async (start: boolean, again: boolean) => {
     setBusy(true);
@@ -154,7 +216,7 @@ export function AddForm(props: {
         audio,
         start,
         again,
-        skip: [],
+        skip: torrent ? [...skip] : [],
       });
       if (res.duplicate) {
         setDuplicate({ item: res.duplicate, start });
@@ -169,7 +231,7 @@ export function AddForm(props: {
   };
 
   if (!defaults) return <div className="h-96" />;
-  const canAdd = url.trim() !== "" && !busy;
+  const canAdd = url.trim() !== "" && !busy && !torrent?.needsProgram && !noFiles;
 
   return (
     <form
@@ -248,40 +310,69 @@ export function AddForm(props: {
         <Row label={t("Description")} htmlFor="add-desc">
           <Input id="add-desc" value={description} onChange={(e) => setDescription(e.target.value)} />
         </Row>
-        <Row label={t("Connections")} htmlFor="add-conns">
-          <div className="flex items-center gap-3">
-            <Input id="add-conns" inputMode="numeric" className="w-20" value={connections} onChange={(e) => setConnections(e.target.value.replace(/\D/g, ""))} />
-            <label htmlFor="add-queue" className="text-sm text-muted-foreground">
-              {t("Queue")}
-            </label>
-            <Select id="add-queue" className="flex-1" value={queue} onChange={(e) => setQueue(e.target.value)}>
+        {probe?.kind === "torrent" ? (
+          <Row label={t("Queue")} htmlFor="add-queue">
+            <Select id="add-queue" value={queue} onChange={(e) => setQueue(e.target.value)}>
               {defaults.queues.map((q) => (
                 <option key={q} value={q}>
                   {q}
                 </option>
               ))}
             </Select>
-          </div>
-        </Row>
-        <Row label={t("Checksum")} htmlFor="add-sum">
-          <Input id="add-sum" value={checksum} onChange={(e) => setChecksum(e.target.value)} placeholder={t("SHA-256, SHA-1 or MD5 (optional)")} spellCheck={false} />
-        </Row>
+          </Row>
+        ) : (
+          <>
+            <Row label={t("Connections")} htmlFor="add-conns">
+              <div className="flex items-center gap-3">
+                <Input id="add-conns" inputMode="numeric" className="w-20" value={connections} onChange={(e) => setConnections(e.target.value.replace(/\D/g, ""))} />
+                <label htmlFor="add-queue" className="text-sm text-muted-foreground">
+                  {t("Queue")}
+                </label>
+                <Select id="add-queue" className="flex-1" value={queue} onChange={(e) => setQueue(e.target.value)}>
+                  {defaults.queues.map((q) => (
+                    <option key={q} value={q}>
+                      {q}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            </Row>
+            <Row label={t("Checksum")} htmlFor="add-sum">
+              <Input id="add-sum" value={checksum} onChange={(e) => setChecksum(e.target.value)} placeholder={t("SHA-256, SHA-1 or MD5 (optional)")} spellCheck={false} />
+            </Row>
+          </>
+        )}
       </div>
 
       <div className="mt-4">
         <ProbeCard
           card={probe?.card ?? null}
+          torrent={torrent}
           checking={checking}
           name={name}
           category={category}
           action={
-            probe?.zip && (
-              <Button type="button" size="sm" onClick={() => setZipOpen(true)}>
-                {t("Preview…")}
+            torrent?.needsProgram ? (
+              <Button type="button" size="sm" disabled={installing} onClick={() => void installTorrents()}>
+                {installing ? <LoaderCircle className="animate-spin" /> : <Download />} {t("Install")}
               </Button>
+            ) : (
+              probe?.zip && (
+                <Button type="button" size="sm" onClick={() => setZipOpen(true)}>
+                  {t("Preview…")}
+                </Button>
+              )
             )
           }
         />
+        {torrent && realFiles > 0 && (
+          <div className="mt-3">
+            <TorrentFiles files={torrent.files} skip={skip} onSkip={setSkip} />
+          </div>
+        )}
+        {torrent?.firstTorrent && (
+          <p className="mt-2 text-xs text-muted-foreground">{t("Windows may ask whether odm-libtorrent may use the network: allow it, so that peers can reach ODM.")}</p>
+        )}
       </div>
 
       <div className={cn("mt-auto flex items-center gap-2 pt-4", props.footerClassName)}>

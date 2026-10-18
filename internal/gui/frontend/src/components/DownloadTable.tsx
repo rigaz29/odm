@@ -364,7 +364,13 @@ function Cell({ id, d, className }: { id: ColumnId; d: Item; className?: string 
     case "speed":
       if (d.seeding) {
         // A finished torrent uploads: its upload speed, marked.
-        return <div role="gridcell" className="truncate pr-3 tabular-nums text-teal-700 dark:text-teal-300">↑ {speedText(d.uploadSpeed) || "0 B/s"}</div>;
+        const up = speedText(d.uploadSpeed) || "0 B/s";
+        return (
+          <div role="gridcell" className="flex min-w-0 items-center gap-0.5 pr-3 tabular-nums text-teal-700 dark:text-teal-300" title={up}>
+            <ArrowUp className="size-3 shrink-0" />
+            <span className="truncate">{up}</span>
+          </div>
+        );
       }
       return <div role="gridcell" className="truncate pr-3 tabular-nums">{speedText(d.speed) || <span className="text-muted-foreground">—</span>}</div>;
     case "eta":

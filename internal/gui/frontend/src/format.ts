@@ -114,6 +114,8 @@ export function displayName(d: Item): string {
 }
 
 export function host(d: Item): string {
+  // A torrent's data comes from its peers, not from the site of its address.
+  if (d.torrent) return "Torrent";
   try {
     return new URL(d.url).hostname.replace(/^www\./, "");
   } catch {

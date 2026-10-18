@@ -3,7 +3,7 @@
 
 import { AlertTriangle, CircleX, Loader2, Search } from "lucide-react";
 import type { ReactNode } from "react";
-import type { Card } from "../bindings/odm/internal/gui/models";
+import type { Card, TorrentProbe } from "../bindings/odm/internal/gui/models";
 import { humanBytes } from "../format";
 import { markT, t, tf } from "../i18n";
 import { cn } from "../lib/utils";
@@ -26,6 +26,10 @@ export const CARD_TEXTS = [
   markT("This video cannot be downloaded"),
   markT("yt-dlp could not read the page just now"),
   markT("Start lets yt-dlp pick the best quality when it runs"),
+  markT("This ODM cannot download torrents"),
+  markT("Torrents need odm-libtorrent"),
+  markT("ODM downloads it once from its releases."),
+  markT("The torrent could not be read"),
 ];
 
 function Shell({ icon, title, detail, badge, action, tone }: { icon: ReactNode; title: string; detail?: string; badge?: ReactNode; action?: ReactNode; tone?: "warn" | "problem" }) {
@@ -63,7 +67,21 @@ const roundIcon = (I: typeof Search, className?: string) => (
 // withError joins a translated text and the engine's reason.
 const withError = (detail: string, error: string) => [detail && t(detail), error].filter(Boolean).join(" · ");
 
-export function ProbeCard({ card, checking, name, category, action }: { card: Card | null; checking: boolean; name: string; category: string; action?: ReactNode }) {
+export function ProbeCard({
+  card,
+  torrent,
+  checking,
+  name,
+  category,
+  action,
+}: {
+  card: Card | null;
+  torrent?: TorrentProbe | null;
+  checking: boolean;
+  name: string;
+  category: string;
+  action?: ReactNode;
+}) {
   if (checking) return <Shell icon={roundIcon(Loader2, "[&_svg]:animate-spin text-muted-foreground")} title={t("Checking the address…")} />;
   if (!card || card.state === "idle") return <Shell icon={roundIcon(Search, "text-muted-foreground")} title={t(card?.title || "No address yet")} detail={t(card?.detail || "Paste or type one: ODM checks the file's size and type before adding it.")} />;
   switch (card.state) {
@@ -100,8 +118,22 @@ export function ProbeCard({ card, checking, name, category, action }: { card: Ca
           detail={tf("%s video · downloaded by yt-dlp", card.site || t("Video site"))}
         />
       );
+    case "torrent": {
+      if (torrent?.waiting) {
+        return (
+          <Shell
+            icon={roundIcon(Loader2, "[&_svg]:animate-spin text-muted-foreground")}
+            title={name || card.name || t("Torrent")}
+            detail={withError(tf("Getting its files from its peers: %d connected. Start downloads every file.", torrent.peers), torrent.error)}
+          />
+        );
+      }
+      const files = (torrent?.files ?? []).filter((f) => !f.pad).length;
+      const parts = [humanBytes(card.size) || "", files === 1 ? t("1 file") : tf("%d files", files), torrent?.private ? t("Private torrent") : ""].filter(Boolean);
+      return <Shell icon={<FileTile category={category} size="size-8" icon="size-4" />} title={name || card.name || t("Torrent")} detail={parts.join(" · ")} />;
+    }
     case "warn":
-      return <Shell tone="warn" icon={roundIcon(AlertTriangle, "text-amber-600 dark:text-amber-400")} title={t(card.title)} detail={withError(card.detail, card.error)} />;
+      return <Shell tone="warn" icon={roundIcon(AlertTriangle, "text-amber-600 dark:text-amber-400")} title={t(card.title)} detail={withError(card.detail, card.error)} action={action} />;
     default:
       return <Shell tone="problem" icon={roundIcon(CircleX, "text-red-600 dark:text-red-400")} title={t(card.title)} detail={withError(card.detail, card.error)} />;
   }

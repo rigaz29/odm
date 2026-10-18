@@ -1,15 +1,17 @@
 // A download's progress window (?view=progress&id=…), as the Fyne UI's
 // (internal/ui/dialogs_desktop.go, openProgressWindow): its status, speed
 // limiter and what happens when it is done, the progress bar, Pause and
-// Cancel, and the details: the connection map and each connection's part.
+// Cancel, and the details: the connection map and each connection's part,
+// or a torrent's pieces and files.
 // Closing the window leaves the download running; Cancel pauses it. ODM
 // closes the window when the download finishes.
 
-import { ChevronDown, ChevronUp, Pause, Play, Square } from "lucide-react";
+import { ChevronDown, ChevronUp, CircleStop, Pause, Play, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Chunk, Detail } from "../bindings/odm/internal/gui/models";
 import { FileTile, Sparkline } from "../components/bits";
+import { PieceMap } from "../components/TorrentFiles";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { Input } from "../components/ui/input";
@@ -61,10 +63,11 @@ export function ProgressWindow({ id }: { id: string }) {
 
   const it = d?.item;
   const recording = !!it && it.live && it.status === "downloading";
+  const seeding = !!it?.seeding;
   useEffect(() => {
     if (!it) return;
-    api.setTitle(recording ? tf("Recording %s", displayName(it)) : `${Math.floor(it.progress)}% ${displayName(it)}`);
-  }, [it?.progress, it?.fileName, recording]);
+    api.setTitle(recording ? tf("Recording %s", displayName(it)) : seeding ? tf("Seeding %s", displayName(it)) : `${Math.floor(it.progress)}% ${displayName(it)}`);
+  }, [it?.progress, it?.fileName, recording, seeding]);
 
   if (!d || !it) return <div className="h-full bg-background" />;
 
@@ -77,7 +80,9 @@ export function ProgressWindow({ id }: { id: string }) {
     ? t("Verifying checksum…")
     : recording
       ? t("Recording live stream…")
-      : ({ queued: t("Queued"), downloading: t("Receiving data…"), paused: t("Paused"), complete: t("Complete"), error: t("Error") } as Record<string, string>)[it.status] ?? it.status;
+      : seeding
+        ? t("Seeding: uploading to other peers…")
+        : ({ queued: t("Queued"), downloading: t("Receiving data…"), paused: t("Paused"), complete: t("Complete"), error: t("Error") } as Record<string, string>)[it.status] ?? it.status;
   const rate = speedText(it.speed) || "-";
   const pct = it.total > 0 ? Math.min(100, it.progress) : 0;
 
@@ -86,9 +91,16 @@ export function ProgressWindow({ id }: { id: string }) {
     [t("File size"), humanBytes(it.total) || "-"],
     [t("Downloaded"), it.live ? humanBytes(it.done) || "-" : `${humanBytes(it.done) || "-"} (${decimalText(it.progress, 2)} %)`],
     [t("Transfer rate"), rate],
-    [t("Time left"), it.live ? "-" : etaText(it) || "-"],
+    [t("Time left"), it.live || seeding ? "-" : etaText(it) || "-"],
     [t("Resumable"), d.resumable ? t("Yes") : t("No")],
   ];
+  const tor = d.torrent;
+  if (tor) {
+    // A torrent always resumes; its peers and what it uploaded say more.
+    rows.splice(5, 1, [t("Peers"), tf("%d connected (%d seeds)", tor.peers, tor.seeds)]);
+    rows.push([t("Uploaded"), `${humanBytes(tor.uploaded) || "0 B"} · ${tf("ratio %s", decimalText(tor.ratio, 2))}`]);
+    rows.push([t("Upload rate"), speedText(tor.uploadSpeed) || "-"]);
+  }
 
   const tabs: [Tab, string][] = [
     ["status", t("Download status")],
@@ -214,13 +226,19 @@ export function ProgressWindow({ id }: { id: string }) {
           {details ? <ChevronUp /> : <ChevronDown />} {details ? t("Hide details") : t("Show details")}
         </Button>
         <span className="flex-1" />
-        <Button
-          onClick={() => void (running || recording ? api.pause([id]) : api.resume([id]))}
-          disabled={it.status === "complete"}
-          variant={running || recording ? "outline" : "brand"}
-        >
-          {recording ? <Square /> : running ? <Pause /> : <Play />} {recording ? t("Stop") : running ? t("Pause") : t("Start")}
-        </Button>
+        {seeding ? (
+          <Button variant="outline" onClick={() => void api.stopSeeding(id)}>
+            <CircleStop /> {t("Stop seeding")}
+          </Button>
+        ) : (
+          <Button
+            onClick={() => void (running || recording ? api.pause([id]) : api.resume([id]))}
+            disabled={it.status === "complete"}
+            variant={running || recording ? "outline" : "brand"}
+          >
+            {recording ? <Square /> : running ? <Pause /> : <Play />} {recording ? t("Stop") : running ? t("Pause") : t("Start")}
+          </Button>
+        )}
         <Button
           onClick={() => {
             void api.pause([id]);
@@ -231,8 +249,42 @@ export function ProgressWindow({ id }: { id: string }) {
         </Button>
       </div>
 
-      {details && <Connections d={d} />}
+      {details && (d.torrent ? <TorrentParts d={d} /> : <Connections d={d} />)}
     </main>
+  );
+}
+
+// TorrentParts is a torrent's pieces map and its files, each with how much
+// of it is in.
+function TorrentParts({ d }: { d: Detail }) {
+  const tor = d.torrent!;
+  return (
+    <div className="flex min-h-0 flex-1 flex-col gap-1.5">
+      <p className="text-center text-xs text-muted-foreground">{tor.pieceCount > 0 ? tf("Pieces: %d", tor.pieceCount) : t("Pieces")}</p>
+      {tor.pieceCount > 0 ? <PieceMap pieces={tor.pieces} count={tor.pieceCount} /> : <div className="h-4 rounded-md bg-muted ring-1 ring-inset ring-border" />}
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
+        <table className="w-full table-fixed text-sm">
+          <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
+            <tr>
+              <th className="px-3 py-1.5 text-left font-medium">{t("File")}</th>
+              <th className="w-24 px-3 py-1.5 text-right font-medium">{t("Size")}</th>
+              <th className="w-24 px-3 py-1.5 text-right font-medium">{t("Downloaded")}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {tor.files.map((f) => (
+              <tr key={f.name} className={cn("border-t border-border", f.skip && "text-muted-foreground")}>
+                <td className="truncate px-3 py-1" title={f.name}>
+                  {f.name}
+                </td>
+                <td className="px-3 py-1 text-right tabular-nums">{humanBytes(f.size) || "0 B"}</td>
+                <td className="px-3 py-1 text-right tabular-nums">{f.skip ? t("Skipped") : `${f.size > 0 ? Math.floor((f.done / f.size) * 100) : 100}%`}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
   );
 }
 

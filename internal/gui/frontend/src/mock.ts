@@ -40,6 +40,9 @@ import {
   ToolStatus,
   ZipEntry,
   ZipListing,
+  TorrentDetail,
+  TorrentFileDetail,
+  TorrentFileRow,
   TorrentProbe,
 } from "./bindings/odm/internal/gui/models";
 
@@ -67,7 +70,31 @@ const seeds: Seed[] = [
   ["wallpaper-aurora-8k.png", "Images", 24 * MB, "complete", 100, 0, "unsplash.com"],
   ["android-studio-2026.1-windows.exe", "Programs", 1.4 * GB, "complete", 100, 0, "dl.google.com"],
   ["album-lofi-chill-vol3.zip", "Compressed", 512 * MB, "complete", 100, 0, "bandcamp.com"],
+  [
+    "debian-13.7.0-amd64-netinst.iso", "Disk Images", 754 * MB, "complete", 100, 0, "cdimage.debian.org",
+    { url: "magnet:?xt=urn:btih:6d4795dee70aeb88e03e5336ca7c9fcf0a1e206d&dn=debian-13.7.0-amd64-netinst.iso", torrent: true, seeding: true, uploaded: 412 * MB, uploadSpeed: 1.6 * MB, peers: 6, seeds: 1 },
+  ],
 ];
+
+// A torrent the New Download form reads: a magnet link shows its files once
+// its made-up peers answered, a few seconds after it was first asked.
+const torrentAsked = new Map<string, number>();
+function torrentLook(url: string): TorrentProbe {
+  const dn = /[?&]dn=([^&]+)/.exec(url)?.[1];
+  const name = dn ? decodeURIComponent(dn.replace(/\+/g, " ")) : decodeURIComponent(url.split("/").pop() || "").replace(/\.torrent$/i, "");
+  if (!torrentAsked.has(url)) torrentAsked.set(url, Date.now());
+  if (/^magnet:/i.test(url) && Date.now() - (torrentAsked.get(url) ?? 0) < 2500) {
+    return new TorrentProbe({ name, waiting: true, peers: 3, firstTorrent: true });
+  }
+  const files = [
+    new TorrentFileRow({ path: `${name}/${say("Episode", "Episode")} 01.mkv`, size: 1.4 * GB }),
+    new TorrentFileRow({ path: `${name}/${say("Episode", "Episode")} 02.mkv`, size: 1.3 * GB }),
+    new TorrentFileRow({ path: `${name}/Subs/indonesian.srt`, size: 61 * 1024 }),
+    new TorrentFileRow({ path: `${name}/Subs/english.srt`, size: 58 * 1024 }),
+    new TorrentFileRow({ path: `${name}/README.txt`, size: 2 * 1024 }),
+  ];
+  return new TorrentProbe({ name, size: files.reduce((n, f) => n + f.size, 0), files, firstTorrent: true });
+}
 
 function makeItems(n: number): Item[] {
   const now = Date.now();
@@ -160,6 +187,7 @@ export function mockApi(): Api {
     ffmpegPath: "", ytdlpPath: "", ytdlpCookies: "extension", toolUpdates: true, connections: 8, concurrent: 3, limitOn: false, limitKB: 512,
     hosts: [new HostConnections({ host: "cdn.example.com", connections: 2 })], capOn: false, capMB: 200, capHours: 5, capWarning: true,
     proxyMode: "system", proxyHost: "", proxyPort: 8080, proxyUser: "", proxyPass: "",
+    seed: "", seedRatio: 100, seedMinutes: 30, torrentPort: 51413, incoming: true, portForwarding: true, uploadLimitKB: 0, torrentLinks: true,
     logins: [new SiteLogin({ host: "files.example.com", user: "rigaz", pass: "rahasia" })], canSound: true, canTools: true,
   });
   const openWhenDone = new Set<string>();
@@ -283,6 +311,13 @@ export function mockApi(): Api {
       const url = address.trim();
       const name = decodeURIComponent(url.split("?")[0].split("/").pop() || "");
       if (!url) return new ProbeResult({ url, card: new Card({ state: "idle", title: "No address yet", detail: "Paste or type one: ODM checks the file's size and type before adding it." }) });
+      if (/^magnet:\?/i.test(url) || /\.torrent$/i.test(url)) {
+        if (/needs-libtorrent/.test(url)) {
+          return new ProbeResult({ url, kind: "torrent", card: new Card({ state: "warn", title: "Torrents need odm-libtorrent", detail: "ODM downloads it once from its releases." }), torrent: new TorrentProbe({ needsProgram: true }) });
+        }
+        const tp = torrentLook(url);
+        return new ProbeResult({ url, kind: "torrent", fileName: tp.name, category: tp.waiting ? "" : "Video", card: new Card({ state: "torrent", name: tp.name, size: tp.size }), torrent: tp });
+      }
       if (/youtube\.com|youtu\.be/.test(url)) {
         return new ProbeResult({
           url, kind: "site", video: true, fileName: "Siaran NASA — ISS Earth View",
@@ -338,10 +373,14 @@ export function mockApi(): Api {
       });
     },
     pickFolder: async (current) => String.raw`${current}\Video`,
-    torrentProbe: async () => new TorrentProbe({ name: "", waiting: true }),
+    torrentProbe: async (address) => torrentLook(address.trim()),
     dropTorrentProbe: async () => {},
     openTorrentFile: async () => {},
-    stopSeeding: async () => {},
+    stopSeeding: async (id) => {
+      const d = items.find((x) => x.id === id);
+      if (d) Object.assign(d, { seeding: false, uploadSpeed: 0, peers: 0, seeds: 0 });
+      push();
+    },
     torrentMagnet: async () => "magnet:?xt=urn:btih:0000",
 
     detail: async (id) => {
@@ -355,6 +394,13 @@ export function mockApi(): Api {
       return new Detail({
         item: new Item(d), path: d.filePath, checksum: "", checksumName: "", resumable: true, speedLimit: limits.get(id) ?? 0,
         openWhenDone: openWhenDone.has(id), segments: d.live ? 0 : 0, segmentsDone: d.live ? 1270 : 0, chunks, completeDialog,
+        torrent: d.torrent
+          ? new TorrentDetail({
+              seeding: d.seeding, peers: d.peers, seeds: d.seeds, uploadSpeed: d.uploadSpeed, uploaded: d.uploaded, ratio: d.uploaded / d.total,
+              pieces: btoa(String.fromCharCode(...new Array(Math.ceil(377 / 8)).fill(255))), pieceCount: 377, magnet: d.url,
+              files: [new TorrentFileDetail({ name: d.fileName, size: d.total, done: d.total })],
+            })
+          : null,
       });
     },
     setDownloadLimit: async (id, bps) => void limits.set(id, Math.max(0, bps)),

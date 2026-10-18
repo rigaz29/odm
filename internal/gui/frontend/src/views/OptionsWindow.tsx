@@ -15,6 +15,7 @@ import {
   FolderTree,
   Globe,
   KeyRound,
+  Magnet,
   Plus,
   Puzzle,
   RefreshCw,
@@ -33,7 +34,7 @@ import { categoryLabel } from "../format";
 import { markT, t, tf } from "../i18n";
 import { cn } from "../lib/utils";
 
-type Tab = "general" | "types" | "save" | "downloads" | "programs" | "connection" | "proxy" | "logins";
+type Tab = "general" | "types" | "save" | "downloads" | "programs" | "connection" | "proxy" | "torrents" | "logins";
 
 const TABS: [Tab, string, typeof Settings2][] = [
   ["general", markT("General"), Settings2],
@@ -43,6 +44,7 @@ const TABS: [Tab, string, typeof Settings2][] = [
   ["programs", markT("Programs"), AppWindow],
   ["connection", markT("Connection"), Wifi],
   ["proxy", markT("Proxy / Socks"), Globe],
+  ["torrents", markT("Torrents"), Magnet],
   ["logins", markT("Site logins"), KeyRound],
 ];
 
@@ -146,6 +148,7 @@ export function OptionsWindow({ tab: first }: { tab: string }) {
           {tab === "programs" && <Programs o={o} set={set} />}
           {tab === "connection" && <Connection o={o} set={set} />}
           {tab === "proxy" && <Proxy o={o} set={set} />}
+          {tab === "torrents" && <Torrents o={o} set={set} />}
           {tab === "logins" && <Logins o={o} set={set} />}
         </div>
         <div className="flex items-center gap-2 border-t border-border px-5 py-3">
@@ -637,6 +640,48 @@ function Connection({ o, set }: TabProps) {
           {t("hours")}
         </div>
         <Check label={t("Show a warning when downloads are stopped")} checked={o.capWarning} disabled={!o.capOn} onChange={(v) => set({ capWarning: v })} />
+      </Section>
+    </>
+  );
+}
+
+function Torrents({ o, set }: TabProps) {
+  const target = o.seed === "";
+  return (
+    <>
+      <Section title={t("Seeding")}>
+        <Field label={t("After a torrent finishes")} htmlFor="opt-seed">
+          <Select id="opt-seed" value={o.seed} onChange={(e) => set({ seed: e.target.value })}>
+            <option value="">{t("Seed until a ratio or a time")}</option>
+            <option value="never">{t("Do not seed")}</option>
+            <option value="forever">{t("Seed until stopped")}</option>
+          </Select>
+        </Field>
+        <Field label={t("Until the ratio")} htmlFor="opt-ratio">
+          <div className={cn("flex items-center gap-2 text-sm", !target && "opacity-50")}>
+            <Input id="opt-ratio" className="w-20" inputMode="numeric" disabled={!target} value={o.seedRatio || ""} onChange={(e) => set({ seedRatio: num(e.target.value) })} />
+            % {t("or for")}
+            <Input className="w-20" inputMode="numeric" disabled={!target} value={o.seedMinutes || ""} onChange={(e) => set({ seedMinutes: num(e.target.value) })} aria-label={t("minutes")} />
+            {t("minutes")}
+          </div>
+        </Field>
+        <Hint>{t("A finished torrent shares what it downloaded, so that others get it too. A ratio of 100 uploads as much as the torrent's size.")}</Hint>
+      </Section>
+      <Section title={t("Network")}>
+        <Field label={t("Port")} htmlFor="opt-port">
+          <Input id="opt-port" className="w-24" inputMode="numeric" placeholder={t("Not yet")} value={o.torrentPort || ""} onChange={(e) => set({ torrentPort: Math.min(65535, num(e.target.value)) })} />
+        </Field>
+        <Check label={t("Accept connections from peers")} checked={o.incoming} onChange={(v) => set({ incoming: v })} />
+        <Check label={t("Open the port on the router (UPnP, NAT-PMP)")} checked={o.portForwarding} disabled={!o.incoming} onChange={(v) => set({ portForwarding: v })} />
+        <Field label={t("Upload limit")} htmlFor="opt-up">
+          <div className="flex items-center gap-2">
+            <Input id="opt-up" className="w-24" inputMode="numeric" placeholder={t("None")} value={o.uploadLimitKB || ""} onChange={(e) => set({ uploadLimitKB: num(e.target.value) })} />
+            <span className="text-sm text-muted-foreground">KB/s</span>
+          </div>
+        </Field>
+        <Check label={t("Download the addresses of .torrent files as torrents")} checked={o.torrentLinks} onChange={(v) => set({ torrentLinks: v })} />
+        <Hint>{t("Peers see this computer's IP address. A SOCKS5 proxy (Proxy / Socks) carries every torrent connection; an HTTP proxy or the system's only reaches trackers.")}</Hint>
+        <Hint>{t("Torrents run in odm-libtorrent, which Windows' firewall may ask about the first time.")}</Hint>
       </Section>
     </>
   );

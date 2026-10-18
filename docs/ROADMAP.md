@@ -728,14 +728,57 @@ Tahap 2: engine
 
 Tahap 3: seeding dan jaringan
 
-- [ ] Seeding dengan target rasio dan waktu, tanda `Seeding`, aksi
-      "Hentikan seeding", dan lanjut setelah restart. **S**
-- [ ] `odm-libtorrent` hanya jalan saat dibutuhkan. **S** Juga: port
+- [x] Seeding dengan target rasio dan waktu, tanda `Seeding`, aksi
+      "Hentikan seeding", dan lanjut setelah restart. **S** Selesai
+      2026-10-18:
+      - torrent langsung berstatus selesai, lalu seeding di goroutine
+        terpisah, jadi tidak memakan slot antrean;
+      - target ada di `Settings.Torrent`: rasio (persen ukuran, bawaan
+        100) atau menit (bawaan 30), "tidak seeding", atau "sampai
+        dihentikan". Target dicek ulang setiap status masuk dan setiap 30
+        detik, dan perubahan pengaturan langsung berlaku;
+      - `Manager.StopSeeding` dan aksi API `stop-seeding`;
+      - total unggahan dan lama seeding ikut tersimpan, jadi seeding yang
+        belum mencapai target dilanjutkan setelah ODM dibuka lagi, dengan
+        file di tempat akhirnya;
+      - begitu seeding selesai, torrent keluar dari sesi dan part file
+        dihapus.
+- [x] `odm-libtorrent` hanya jalan saat dibutuhkan. **S** Juga: port
       tetap, UPnP/NAT-PMP, koneksi masuk yang bisa dimatikan, batas
       unggah, dan proxy ODM. Torrent privat (flag `private`) tidak
-      diumumkan lewat DHT dan PEX.
-- [ ] Tracker dan web seed ke jaringan lokal: `ssrf_mitigation` dan
-      penyaringan oleh ODM, seperti di rancangan. **K**
+      diumumkan lewat DHT dan PEX. Selesai 2026-10-18:
+      - program berhenti satu menit setelah tidak ada torrent yang
+        diunduh atau di-seed (torrent yang dijeda tidak dihitung). Saat
+        berhenti ia menyimpan resume data, dan torrent berikutnya
+        menjalankannya lagi;
+      - port diacak sekali di rentang 20000–59999, lalu disimpan.
+        Kalau port itu sedang dipakai program lain, libtorrent memakai
+        port lain sendiri;
+      - `torrent.SettingsFrom` meneruskan pengaturan ke program saat
+        mulai dan setiap kali pengaturan berubah (`Reconfigure`). Proxy
+        SOCKS5 dipakai untuk semua koneksi; proxy HTTP dan proxy sistem
+        hanya untuk tracker;
+      - torrent privat sudah ditangani libtorrent sendiri: tidak
+        diumumkan lewat DHT dan LSD, dan plugin PEX tidak dipasang
+        (`torrent::should_announce_dht`, `lsd_announce`,
+        `create_ut_pex_plugin`). Tidak perlu kode tambahan.
+- [x] Tracker dan web seed ke jaringan lokal: `ssrf_mitigation` dan
+      penyaringan oleh ODM, seperti di rancangan. **K** Selesai
+      2026-10-18:
+      - ODM memeriksa setiap tracker dan web seed dengan pengecek alamat
+        netguard: nama `localhost`, atau alamat literal dalam bentuk apa
+        pun yang bukan publik (`0x7f.1` juga tertangkap). Yang lokal
+        dikirim sebagai `drop_trackers`/`drop_web_seeds` dan dibuang
+        `odm-libtorrent`;
+      - `.torrent` yang diambil dari alamat di jaringan lokal boleh
+        memakai tracker lokal;
+      - nama host tidak di-resolve, jadi untuk nama yang mengarah ke
+        jaringan lokal masih mengandalkan `ssrf_mitigation`.
+
+      Bagian di `odm-libtorrent` (`drop_*`, web seed di metadata, dan
+      `resume` yang membersihkan error) belum dirilis. Rilis 2.1.2-2
+      mengabaikan field itu, jadi penyaringan baru berlaku setelah rilis
+      berikutnya.
 
 Tahap 4: UI baru
 

@@ -329,9 +329,8 @@ func TestDownloadRenameAndQuit(t *testing.T) {
 	h := start(t)
 	h.listen()
 	got := filepath.Join(dir, "got")
-	state := filepath.Join(dir, "state")
-	resume := filepath.Join(state, "l.resume")
-	r := h.call(msg{"cmd": "add", "key": "l", "torrent": tf, "save_path": got, "part_dir": state,
+	resume := filepath.Join(dir, "state", "l.resume")
+	r := h.call(msg{"cmd": "add", "key": "l", "torrent": tf, "save_path": got,
 		"names": msg{"0": "data.bin.odmpart"}, "peers": peer(port), "resume": resume})
 	if r.str("info_hash") == "" || r.flag("resumed") {
 		t.Fatalf("add: %v", r)
@@ -405,7 +404,7 @@ func TestSelectFilesAndMove(t *testing.T) {
 	}
 	part := filepath.Join(dir, "got", "Album.odmpart")
 	h.call(msg{"cmd": "add", "key": "l", "torrent": tf, "save_path": part, "names": names,
-		"priorities": prio, "peers": peer(port), "part_dir": filepath.Join(dir, "state")})
+		"priorities": prio, "peers": peer(port)})
 	h.event("finished", 60*time.Second, nil)
 	sameFile(t, filepath.Join(part, "a.bin"), a)
 	sameFile(t, filepath.Join(part, "c.bin"), c)

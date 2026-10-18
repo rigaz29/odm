@@ -437,7 +437,6 @@ Helper::json Helper::cmd_add(json const& msg) {
   }
 
   atp.save_path = native(msg.at("save_path").get<std::string>());
-  if (msg.contains("part_dir")) atp.part_file_dir = native(msg["part_dir"].get<std::string>());
   int files = atp.ti ? atp.ti->num_files() : -1;
   if (msg.contains("names")) {
     if (!atp.ti) throw std::runtime_error("names need the torrent's metadata; rename once it is there");

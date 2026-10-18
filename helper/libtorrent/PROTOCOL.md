@@ -71,7 +71,6 @@ the torrent has one) and `resumed`.
 | `torrent` / `magnet` | a .torrent file or a magnet link |
 | `resume` | where the torrent's resume data is kept. If it can be read, the torrent continues from it (`"resumed": true`), and its metadata comes from it too; neither `torrent` nor `magnet` is then needed. The program rewrites it whenever the torrent's state changes |
 | `save_path` | required: where the files go |
-| `part_dir` | where data of files not downloaded is kept (pieces shared with a wanted file), instead of a hidden file in `save_path` |
 | `names` | `{"<index>": "<relative path>"}`: files under other names. Needs the metadata (a .torrent or resume data); for a magnet link, use `rename` |
 | `priorities` | a priority for each file |
 | `hold` | for a magnet link: download no file until `priorities` gives them |
@@ -81,6 +80,11 @@ the torrent has one) and `resumed`.
 
 ODM runs its own queue: the program never starts or stops torrents by
 itself.
+
+Pieces that a wanted file shares with a file not downloaded are kept in
+`.<info hash>.parts` in `save_path`, and move with the files. Only
+`remove` with `delete_files` deletes it; otherwise it is ODM's to delete
+once the torrent is removed.
 
 ### remove
 

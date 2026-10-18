@@ -1,0 +1,12 @@
+{
+  "name": "odm-libtorrent",
+  "version-string": "0",
+  "dependencies": [
+    {
+      "name": "libtorrent",
+      "default-features": false
+    },
+    "nlohmann-json"
+  ],
+  "builtin-baseline": "bf19794383e8fb95eba5aa553235bc8ec2271688"
+}

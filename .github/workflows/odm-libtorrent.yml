@@ -1,0 +1,236 @@
+# Builds odm-libtorrent, ODM's companion program for torrents
+# (helper/libtorrent, docs/ROADMAP.md Fase 8), on libtorrent built statically
+# with vcpkg, and tests it on each target.
+#
+# A tag publishes it as a release, which ODM finds by the tag's prefix:
+#
+#   git tag odm-libtorrent-p1-2.1.2-1 && git push origin odm-libtorrent-p1-2.1.2-1
+#
+# p1 is the protocol (helper/libtorrent/PROTOCOL.md), 2.1.2 the libtorrent
+# version and 1 the build. The release is a pre-release, so that it never
+# counts as this repository's latest release, which ODM's update check
+# reads. Each archive comes with its SHA-256, and carries the licences of
+# libtorrent, Boost, OpenSSL and nlohmann/json.
+name: odm-libtorrent
+
+on:
+  push:
+    branches: [main]
+    tags: ["odm-libtorrent-p*"]
+    paths:
+      - "helper/libtorrent/**"
+      - ".github/workflows/odm-libtorrent.yml"
+  pull_request:
+    paths:
+      - "helper/libtorrent/**"
+      - ".github/workflows/odm-libtorrent.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: odm-libtorrent ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            label: windows-amd64
+            triplet: x64-windows-static
+          # Ubuntu 22.04: the oldest glibc of the runners, so that the
+          # program runs on older distributions too.
+          - os: ubuntu-22.04
+            label: linux-amd64
+            triplet: x64-linux
+          - os: ubuntu-22.04-arm
+            label: linux-arm64
+            triplet: arm64-linux
+          - os: macos-latest
+            label: darwin-arm64
+            triplet: arm64-osx
+          # Intel Macs: cross-compiled on the arm64 runner, and tested there
+          # through Rosetta.
+          - os: macos-latest
+            label: darwin-amd64
+            triplet: x64-osx
+            osx_arch: x86_64
+    env:
+      VCPKG_COMMIT: bf19794383e8fb95eba5aa553235bc8ec2271688
+      VCPKG_ROOT: ${{ github.workspace }}/vcpkg
+      VCPKG_BINARY_SOURCES: clear;files,${{ github.workspace }}/vcpkg-cache,readwrite
+      VCPKG_DISABLE_METRICS: "1"
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Version
+        run: |
+          case "$GITHUB_REF" in
+            refs/tags/odm-libtorrent-p*)
+              rest="${GITHUB_REF_NAME#odm-libtorrent-p}"   # 1-2.1.2-1
+              echo "PROTOCOL=${rest%%-*}" >> "$GITHUB_ENV"
+              echo "VERSION=${rest#*-}" >> "$GITHUB_ENV" ;;
+            *)
+              echo "VERSION=dev-${GITHUB_SHA::8}" >> "$GITHUB_ENV" ;;
+          esac
+
+      - name: Linux tools
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends ninja-build pkg-config zip unzip
+          if [ "$(uname -m)" = "aarch64" ]; then
+            # vcpkg has no tools of its own for arm64 Linux.
+            pip3 install --user cmake
+            echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+            echo "VCPKG_FORCE_SYSTEM_BINARIES=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: vcpkg
+        run: |
+          git init -q vcpkg
+          git -C vcpkg fetch -q --depth 1 https://github.com/microsoft/vcpkg "$VCPKG_COMMIT"
+          git -C vcpkg checkout -q FETCH_HEAD
+          mkdir -p vcpkg-cache
+
+      - name: Bootstrap vcpkg (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: .\vcpkg\bootstrap-vcpkg.bat -disableMetrics
+
+      - name: Bootstrap vcpkg
+        if: runner.os != 'Windows'
+        run: ./vcpkg/bootstrap-vcpkg.sh -disableMetrics
+
+      # vcpkg's binary cache: packages already built are not built again,
+      # also when vcpkg.json gains a dependency.
+      - name: Restore built packages
+        id: restore
+        uses: actions/cache/restore@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('helper/libtorrent/vcpkg.json') }}
+          restore-keys: vcpkg-${{ matrix.triplet }}-${{ env.VCPKG_COMMIT }}-
+
+      # Configuring installs libtorrent, Boost, OpenSSL and nlohmann/json
+      # through vcpkg.
+      - name: Configure
+        run: |
+          args=(-DCMAKE_BUILD_TYPE=Release
+                -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+                -DVCPKG_TARGET_TRIPLET=${{ matrix.triplet }}
+                -DODM_LIBTORRENT_VERSION="$VERSION")
+          if [ -n "${{ matrix.osx_arch }}" ]; then
+            args+=(-DCMAKE_OSX_ARCHITECTURES=${{ matrix.osx_arch }})
+          fi
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            args+=(-A x64)
+          fi
+          cmake -S helper/libtorrent -B build "${args[@]}"
+
+      - name: Save built packages
+        if: steps.restore.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: vcpkg-cache
+          key: vcpkg-${{ matrix.triplet }}-${{ env.VCPKG_COMMIT }}-${{ hashFiles('helper/libtorrent/vcpkg.json') }}
+
+      - name: Build
+        run: |
+          cmake --build build --config Release --parallel
+          # An absolute path, as go test runs in the package's folder; on
+          # Windows in Windows' form, for Go.
+          exe=$(pwd)/build/odm-libtorrent
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            exe=$(pwd -W)/build/Release/odm-libtorrent.exe
+          else
+            strip "$exe"
+          fi
+          echo "EXE=$exe" >> "$GITHUB_ENV"
+          "$exe" --version
+          echo "$(wc -c < "$exe") bytes"
+
+      - name: Test
+        run: |
+          if [ -n "${PROTOCOL:-}" ] && ! "$EXE" --version | grep -q "(protocol $PROTOCOL,"; then
+            echo "::error::the tag says protocol $PROTOCOL, the program another"
+            exit 1
+          fi
+          ODM_LIBTORRENT="$EXE" go test -count=1 -v ./helper/libtorrent/
+
+      - name: Package
+        run: |
+          name=odm-libtorrent-${{ matrix.label }}
+          share=build/vcpkg_installed/${{ matrix.triplet }}/share
+          mkdir -p pkg/licenses
+          cp "$EXE" pkg/
+          cp LICENSE pkg/licenses/odm-libtorrent.txt
+          for port in libtorrent boost-asio openssl nlohmann-json; do
+            cp "$share/$port/copyright" "pkg/licenses/$port.txt"
+          done
+          {
+            echo "odm-libtorrent $VERSION, the companion program Ochi Download Manager"
+            echo "runs for torrents, built from"
+            echo "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/tree/$GITHUB_SHA/helper/libtorrent"
+            echo
+            "$EXE" --version
+            echo "libtorrent and its dependencies are built statically with vcpkg"
+            echo "$VCPKG_COMMIT."
+            echo
+            echo "Licences (licenses/): odm-libtorrent MIT, libtorrent BSD-3-Clause,"
+            echo "Boost BSL-1.0, OpenSSL Apache-2.0, nlohmann/json MIT."
+          } > pkg/README.txt
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            pwsh -NoProfile -Command "Compress-Archive -Path pkg/* -DestinationPath '$name.zip'"
+            archive=$name.zip
+          else
+            tar -czf "$name.tar.gz" -C pkg .
+            archive=$name.tar.gz
+          fi
+          if command -v sha256sum > /dev/null; then
+            sha256sum "$archive" > "$archive.sha256"
+          else
+            shasum -a 256 "$archive" > "$archive.sha256"
+          fi
+          ls -l "$archive"
+          cat "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: odm-libtorrent-${{ matrix.label }}
+          path: odm-libtorrent-${{ matrix.label }}.*
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/odm-libtorrent-p')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: odm-libtorrent-*
+          path: dist
+          merge-multiple: true
+
+      - name: Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          rest="${GITHUB_REF_NAME#odm-libtorrent-p}"
+          protocol="${rest%%-*}"
+          version="${rest#*-}"
+          ls -l dist
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "odm-libtorrent $version for ODM (protocol $protocol)" \
+            --notes "The companion program ODM downloads to handle torrents, on libtorrent built statically. Source: helper/libtorrent." \
+            --prerelease --latest=false

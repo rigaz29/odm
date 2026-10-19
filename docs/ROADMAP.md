@@ -851,12 +851,21 @@ Tahap 5: ekstensi dan asosiasi
         menanganinya (browser tidak meneruskan skema yang tidak dikenal),
         dan dihapus hanya kalau masih milik ODM.
 
-      Kotak di Options → Torrent hanya tercentang kalau yang terdaftar
-      adalah exe ini sendiri, jadi build uji tidak mengambil alih atau
-      menghapus registrasi ODM utama. Tombol "Pilih di Windows…" membuka
+      Atas permintaan pemilik (2026-10-19), opsi ini aktif secara bawaan:
+      - UI baru mendaftarkan ODM saat mulai kalau belum ada ODM yang
+        terdaftar, atau exe yang terdaftar sudah tidak ada. Salinan ODM
+        lain yang masih ada tetap memegangnya, jadi build uji tidak
+        mengambil alih ODM utama. UI Fyne tidak mendaftar, karena tidak
+        punya jendela torrent.
+      - Kotak di Options → Torrent mengikuti pengaturan `no_associate`.
+        Mencentangnya lagi mendaftarkan exe ini, walau salinan lain sudah
+        terdaftar. Mematikannya hanya mencabut registrasi exe ini sendiri.
+
+      Tombol "Pilih di Windows…" membuka
       `ms-settings:defaultapps?registeredAppUser=Ochi Download Manager`
-      (di Windows 10 halaman Aplikasi default biasa). Klik tautan magnet
-      sungguhan di browser diuji di Tahap 6.
+      (di Windows 10 halaman Aplikasi default biasa). Sudah diuji oleh
+      pemilik: klik tautan magnet di browser membuka Unduhan Baru, dan
+      halaman Aplikasi default menampilkan ODM.
 
 Tahap 6: uji jalan dan rilis
 

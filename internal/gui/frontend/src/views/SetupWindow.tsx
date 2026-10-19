@@ -10,6 +10,7 @@ import { type ReactNode, useEffect, useState } from "react";
 import { api } from "../api";
 import type { ExtensionStep, SetupBrowser, SetupStatus, SetupTool } from "../bindings/odm/internal/gui/models";
 import { Button } from "../components/ui/button";
+import { ToolBar, type ToolDone, toolDoneText, useToolProgress } from "../components/ToolProgress";
 import { Checkbox } from "../components/ui/checkbox";
 import { t, tf } from "../i18n";
 
@@ -81,9 +82,8 @@ function Tools({ status }: { status: SetupStatus }) {
   const [auto, setAuto] = useState(status.toolMode === "auto" || (status.toolMode === "" && missing.length > 0));
   // busy is the button's label while installing: the list it was for.
   const [busy, setBusy] = useState("");
-  const [progress, setProgress] = useState<Record<string, number>>({});
+  const [progress, setProgress] = useToolProgress();
   const [error, setError] = useState("");
-  useEffect(() => api.onSetupProgress((p) => setProgress((m) => ({ ...m, [p.tool]: p.total > 0 ? p.done / p.total : -1 }))), []);
 
   const label = missing.length > 1 ? t("Install all") : missing.length === 1 ? tf("Install %s", missing[0].name) : "";
   const install = async () => {
@@ -91,7 +91,7 @@ function Tools({ status }: { status: SetupStatus }) {
     setError("");
     try {
       for (const tool of missing) {
-        setProgress((m) => ({ ...m, [tool.name]: 0 }));
+        setProgress(tool.name, { done: 0, total: 0 });
         const after = await api.installTool(tool.name);
         setTools((list) => list.map((x) => (x.name === after.name ? after : x)));
       }
@@ -133,7 +133,7 @@ function Tools({ status }: { status: SetupStatus }) {
   );
 }
 
-function ToolRow({ tool, progress }: { tool: SetupTool; progress?: number }) {
+function ToolRow({ tool, progress }: { tool: SetupTool; progress?: ToolDone }) {
   const what =
     tool.name === "yt-dlp"
       ? t("Downloads videos from YouTube, TikTok and other sites.")
@@ -154,8 +154,9 @@ function ToolRow({ tool, progress }: { tool: SetupTool; progress?: number }) {
           <CircleCheck className="size-4" /> {tool.version || t("Installed")}
         </span>
       ) : progress !== undefined ? (
-        <span className="h-1.5 w-32 shrink-0 overflow-hidden rounded-full bg-muted" role="progressbar" aria-label={tool.name}>
-          <span className="accent-gradient block h-full transition-[width]" style={{ width: `${Math.max(progress, 0.03) * 100}%` }} />
+        <span className="flex w-40 shrink-0 flex-col items-end gap-1">
+          <ToolBar p={progress} label={tool.name} className="w-full" />
+          <span className="h-3.5 text-[11px] leading-none tabular-nums text-muted-foreground">{toolDoneText(progress)}</span>
         </span>
       ) : (
         <span className="shrink-0 text-xs text-muted-foreground">{tool.canInstall ? t("Not installed") : t("Not installed: ODM cannot download it here")}</span>

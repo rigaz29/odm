@@ -37,7 +37,10 @@ type Keeper struct {
 	Ask func(tool string)
 	// OnInstalled is told about each install or update that happened.
 	OnInstalled func(t Tool, version string, first bool)
-	Log         func(format string, args ...any)
+	// OnProgress gives the progress function for an install no one else
+	// follows (one a download or the daily check starts); nil for none.
+	OnProgress func(t Tool) Progress
+	Log        func(format string, args ...any)
 
 	asked sync.Once
 	kick  chan struct{}
@@ -100,6 +103,9 @@ func (k *Keeper) Install(ctx context.Context, name string, progress Progress) (s
 }
 
 func (k *Keeper) install(ctx context.Context, t Tool, progress Progress) (string, error) {
+	if progress == nil && k.OnProgress != nil {
+		progress = k.OnProgress(t)
+	}
 	before := k.Installer.Installed(t)
 	v, err := k.Installer.Install(ctx, t, progress)
 	if err != nil {

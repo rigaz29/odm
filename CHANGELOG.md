@@ -13,6 +13,11 @@ All notable changes to ODM are documented here. The format is based on
   all of them in, it stays closed. After a start in the tray it waits for
   the main window to be shown. A box in the window turns this off.
   Install all takes odm-libtorrent too.
+- Downloading yt-dlp, ffmpeg or odm-libtorrent shows an animated bar
+  with how far it is ("45% · 1.70 MB / 3.75 MB"): in the Setup window, in
+  ODM's questions (the one about yt-dlp and ffmpeg now stays open until
+  they are in, instead of closing at once), and in the main window's
+  status bar, also for the downloads and updates ODM does by itself.
 
 ## [0.6.0] - 2026-10-19
 

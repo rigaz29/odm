@@ -40,6 +40,7 @@ import { RunningCards } from "./components/RunningCards";
 import { Sidebar } from "./components/Sidebar";
 import { SpeedLimiter } from "./components/SpeedLimiter";
 import { TitleBar } from "./components/TitleBar";
+import { ToolActivity } from "./components/ToolProgress";
 import { categoryIcon } from "./components/bits";
 import { Button } from "./components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "./components/ui/dialog";
@@ -557,6 +558,7 @@ export function App() {
       <footer className="flex h-7 shrink-0 items-center gap-4 border-t border-border px-4 text-xs text-muted-foreground">
         <span className="truncate">{left}</span>
         {!inODM && <span className="rounded bg-muted px-1.5">{t("Sample data")}</span>}
+        <ToolActivity />
         <span className="ml-auto flex shrink-0 items-center gap-1.5">
           <span className={cn("size-1.5 rounded-full", running.length > 0 ? "accent-gradient" : "bg-zinc-400")} /> {tf("%d active", running.length)}
         </span>

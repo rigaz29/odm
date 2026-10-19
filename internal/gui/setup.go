@@ -167,20 +167,9 @@ func (s *Service) InstallTool(name string) (SetupTool, error) {
 	if k == nil {
 		return SetupTool{}, errNoTools
 	}
-	s.mu.Lock()
-	emit := s.emit
-	s.mu.Unlock()
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
 	defer cancel()
-	var last time.Time
-	_, err := k.Install(ctx, name, func(done, total int64) {
-		// A few times a second is enough for a bar.
-		if now := time.Now(); emit != nil && (now.Sub(last) >= 150*time.Millisecond || done == total) {
-			last = now
-			emit(SetupProgressEvent, SetupProgress{Tool: name, Done: done, Total: total})
-		}
-	})
-	if err != nil {
+	if _, err := k.Install(ctx, name, s.progressOf(name)); err != nil {
 		return SetupTool{}, err
 	}
 	return s.setupTool(name), nil
@@ -339,5 +328,21 @@ func (s *Service) offerSetup() {
 	s.mu.Unlock()
 	if first || !s.mgr.Settings().NoSetupAtStart && len(s.missing()) > 0 {
 		s.OpenSetup()
+	}
+}
+
+// progressOf sends the download of the program name to the windows, a few
+// times a second, which is enough for a bar: the Setup window, ODM's
+// questions and the main window's status bar show it.
+func (s *Service) progressOf(name string) tools.Progress {
+	s.mu.Lock()
+	emit := s.emit
+	s.mu.Unlock()
+	var last time.Time
+	return func(done, total int64) {
+		if now := time.Now(); emit != nil && (now.Sub(last) >= 150*time.Millisecond || done == total) {
+			last = now
+			emit(SetupProgressEvent, SetupProgress{Tool: name, Done: done, Total: total})
+		}
 	}
 }

@@ -522,6 +522,7 @@
   "Downloaded from their official releases and checked against their checksums.": "Diunduh dari rilis resminya dan dicocokkan dengan checksum-nya.",
   "Keep them up to date automatically": "Perbarui otomatis",
   "Install all": "Pasang semua",
+  "Downloading %s": "Mengunduh %s",
   "Install %s": "Pasang %s",
   "Downloads videos from YouTube, TikTok and other sites.": "Mengunduh video dari YouTube, TikTok, dan situs lain.",
   "Joins a video with its audio and saves live streams as MP4.": "Menggabungkan video dengan audionya dan menyimpan siaran live sebagai MP4.",

@@ -243,6 +243,7 @@ func (d *desk) hookTools(k *tools.Keeper) {
 			w.openNotice(url.Values{"kind": {"program"}, "name": {tool}})
 		}
 	}
+	k.OnProgress = func(t tools.Tool) tools.Progress { return d.svc.progressOf(t.Name) }
 	k.OnInstalled = func(t tools.Tool, version string, first bool) {
 		if first {
 			tr := d.svc.translator()

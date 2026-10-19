@@ -188,3 +188,42 @@ textarea {
   outline: 2px dashed var(--color-violet-500);
   outline-offset: -6px;
 }
+
+/* A companion program's download (components/ToolProgress.tsx): a light
+   runs over the filled part while bytes come in, and a segment slides
+   back and forth while the size is unknown. Still for those who ask for
+   less motion. */
+.odm-progress-run {
+  position: relative;
+  overflow: hidden;
+}
+.odm-progress-run::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.5), transparent);
+  transform: translateX(-100%);
+  animation: odm-progress-shine 1.3s ease-in-out infinite;
+}
+@keyframes odm-progress-shine {
+  to {
+    transform: translateX(100%);
+  }
+}
+.odm-progress-slide {
+  animation: odm-progress-slide 1.2s ease-in-out infinite alternate;
+}
+@keyframes odm-progress-slide {
+  from {
+    left: 0;
+  }
+  to {
+    left: 66.6667%;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .odm-progress-run::after,
+  .odm-progress-slide {
+    animation: none;
+  }
+}

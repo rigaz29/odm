@@ -11,5 +11,7 @@ export default defineConfig({
   base: "./",
   build: { outDir: "dist", emptyOutDir: true, chunkSizeWarningLimit: 2000 },
   server: { fs: { allow: ["..", "../../i18n"] } },
-  test: { environment: "node" },
+  // The first Intl.NumberFormat loads its locale data, which once took a
+  // Windows runner 7 s: more than vitest's 5 s for a test.
+  test: { environment: "node", testTimeout: 30000 },
 });

@@ -17,11 +17,12 @@ arsitektur, cara build dan uji, isi tiap tahap, serta risikonya.
    | Memori | 338 MB | ±365 MB |
 
    Tetapi tampilan Fluent dinilai kurang bagus.
-2. **Tiga mockup** jendela utama dibandingkan di cabang `ui-mockups`
-   (folder `mockups/`): A shadcn/ui, B Material Design 3, D desain sendiri
-   "Aurora".
-3. **Pilihan pengguna: A ditambah sentuhan D**: halaman `mockups/ad.html`,
-   tangkapan `mockups/screenshots/ad-dark.jpg` dan `ad-light.jpg`.
+2. **Tiga mockup** jendela utama dibandingkan di cabang `ui-mockups`:
+   A shadcn/ui, B Material Design 3, D desain sendiri "Aurora".
+3. **Pilihan pengguna: A ditambah sentuhan D.**
+
+Cabang `ui-fluent`, `ui-mockups` dan `ui-next` dihapus pada 2026-10-19.
+Isi `ui-fluent` dan `ui-next` ada di `main`; mockup-nya tidak disimpan.
 
 ## Tujuan
 

@@ -283,7 +283,7 @@ layanan, atau privasi: tanggung jawab pemakai.
 
 Tujuan: jendela yang modern, rapi, dan konsisten, tetap Go dan satu exe.
 Gaya dipilih pengguna pada 2026-10-16: **A (shadcn/ui) ditambah sentuhan D
-(Aurora)**, lihat mockup `mockups/ad.html` di cabang `ui-mockups`. Rencana
+(Aurora)**, dari tiga mockup yang dibandingkan (cabangnya sudah dihapus). Rencana
 lengkap (riwayat, bahasa desain, arsitektur, build, uji, risiko) ada di
 [GUI.md](GUI.md).
 

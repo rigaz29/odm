@@ -56,8 +56,12 @@ func (w *appWindows) openAdd(token string) {
 	w.open("add-"+token, "New Download", "add", url.Values{"token": {token}}, 640, 600, true)
 }
 
-func (w *appWindows) openProgress(id string) {
-	w.open("progress-"+id, "Download", "progress", url.Values{"id": {id}}, 580, 620, false)
+func (w *appWindows) openProgress(id string, torrent bool) {
+	height := 620
+	if torrent {
+		height = 720 // the files of a torrent need the room
+	}
+	w.open("progress-"+id, "Download", "progress", url.Values{"id": {id}}, 580, height, false)
 }
 
 func (w *appWindows) closeProgress(id string) {

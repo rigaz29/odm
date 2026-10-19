@@ -559,6 +559,10 @@ document.addEventListener("keydown", (e) => {
 /* ---------- New Download ---------- */
 
 let probeTimer, probeSeq = 0;
+// torrentUpload is a .torrent file picked or dropped on this computer, which
+// is sent instead of the address. catTouched: the category was chosen by
+// hand; otherwise a torrent's largest file chooses it.
+let torrentUpload = null, catTouched = false;
 function fillSelect(sel, list, selected) {
   sel.replaceChildren(...list.map((name) => {
     const o = document.createElement("option");
@@ -584,6 +588,8 @@ function idleCard() {
 }
 function openAdd() {
   const s = state.settings;
+  torrentUpload = null;
+  catTouched = false;
   $("url").value = "";
   $("fname").value = "";
   $("desc").value = "";
@@ -613,11 +619,43 @@ async function probe(url, seq) {
     if (seq === probeSeq) card("error", "The file could not be checked", e.message, { iconLook: "err" });
   }
 }
+// pickTorrent makes the New Download add the .torrent file f.
+function pickTorrent(f) {
+  torrentUpload = f;
+  clearTimeout(probeTimer);
+  ++probeSeq;
+  $("url").value = f.name;
+  card("download", f.name, `${humanBytes(f.size) || "0 B"} · a .torrent file from this computer`, { badge: "Torrent", badgeLook: "ok" });
+}
+$("torrentPick").addEventListener("click", () => $("torrentFile").click());
+$("torrentFile").addEventListener("change", () => {
+  const f = $("torrentFile").files[0];
+  $("torrentFile").value = "";
+  if (f) pickTorrent(f);
+});
+$("category").addEventListener("change", () => { catTouched = true; });
+// A .torrent file dropped on the page opens the New Download with it.
+const isTorrent = (f) => /\.torrent$/i.test(f.name) || f.type === "application/x-bittorrent";
+document.addEventListener("dragover", (e) => {
+  if ([...e.dataTransfer.items].some((i) => i.kind === "file")) e.preventDefault();
+});
+document.addEventListener("drop", (e) => {
+  const f = [...e.dataTransfer.files].find(isTorrent);
+  if (!f) return;
+  e.preventDefault();
+  if (!$("addDialog").open) openAdd();
+  pickTorrent(f);
+});
 $("url").addEventListener("input", () => {
   clearTimeout(probeTimer);
+  torrentUpload = null;
   const url = $("url").value.trim();
   const seq = ++probeSeq;
   if (!url) { idleCard(); return; }
+  if (/^magnet:\?/i.test(url)) {
+    card("download", "Magnet link", "ODM gets the torrent's files from its peers once it starts.", { badge: "Torrent", badgeLook: "ok" });
+    return;
+  }
   if (!/^https?:\/\//i.test(url)) {
     card("warning", "Not checked", "Only http and https addresses are checked before they are added.", { iconLook: "warn" });
     return;
@@ -641,8 +679,18 @@ $("addForm").addEventListener("submit", async (e) => {
     start: kind === "ok",
   };
   if (!body.url) { $("url").focus(); return; }
+  // A torrent's largest file chooses its category, unless one was picked.
+  if ((torrentUpload || /^magnet:\?/i.test(body.url)) && !catTouched) body.category = "";
+  let req = { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) };
+  if (torrentUpload) {
+    const form = new FormData();
+    form.append("torrent", torrentUpload);
+    for (const k of ["dir", "file_name", "description", "category", "queue"]) form.append(k, body[k]);
+    form.append("start", String(body.start));
+    req = { method: "POST", body: form };
+  }
   try {
-    const res = await fetch("/api/downloads", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+    const res = await fetch(torrentUpload ? "/api/torrents" : "/api/downloads", req);
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || res.statusText);
     const info = await res.json();
     $("addDialog").close();

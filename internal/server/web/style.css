@@ -204,6 +204,8 @@ dialog::backdrop { background: rgba(0, 0, 0, .45); backdrop-filter: blur(2px); }
 .section { font-weight: 600; text-align: right; border-bottom: 1px solid var(--line); padding-bottom: 4px; margin-top: 4px; }
 .inline { display: flex; gap: 10px; align-items: center; }
 .inline input[type="number"] { width: 120px; }
+.inline > input[type="text"] { flex: 1; min-width: 0; }
+.inline > button { flex: none; }
 input[type="text"], input[type="number"], select {
   width: 100%; height: 30px; padding: 0 8px; font: inherit; color: var(--fg);
   background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px;

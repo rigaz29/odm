@@ -362,7 +362,7 @@ func (s *Service) DropTorrentProbe(address string) {
 // look: a magnet link's held torrent must leave odm-libtorrent before the
 // download adds the same torrent. done deletes what o was given, once the
 // download has its copies.
-func (s *Service) takeProbe(addr string, o *engine.AddOptions, skip []int) (done func()) {
+func (s *Service) takeProbe(addr string, o *engine.AddOptions, skip []int, prio map[int]int) (done func()) {
 	s.tmu.Lock()
 	p := s.torrents[addr]
 	delete(s.torrents, addr)
@@ -379,6 +379,11 @@ func (s *Service) takeProbe(addr string, o *engine.AddOptions, skip []int) (done
 		for _, i := range skip {
 			if i >= 0 && i < len(files) {
 				files[i].Skip = true
+			}
+		}
+		for i, p := range prio {
+			if i >= 0 && i < len(files) && (p == engine.PriorityLow || p == engine.PriorityHigh) {
+				files[i].Priority = p
 			}
 		}
 		o.Torrent.Files = files
@@ -414,6 +419,17 @@ func (s *Service) takeProbe(addr string, o *engine.AddOptions, skip []int) (done
 func (s *Service) StopSeeding(id string) {
 	s.mgr.StopSeeding(id)
 	s.poke()
+}
+
+// SetTorrentFiles changes which files of the torrent id download and how
+// soon, by index: 0 leaves a file out, else engine.PriorityLow,
+// PriorityNormal or PriorityHigh.
+func (s *Service) SetTorrentFiles(id string, priorities map[int]int) error {
+	if err := s.mgr.SetTorrentFiles(id, priorities); err != nil {
+		return err
+	}
+	s.poke()
+	return nil
 }
 
 // TorrentMagnet is a magnet link to the torrent id, for the clipboard; ""
@@ -470,12 +486,17 @@ type TorrentDetail struct {
 	Magnet     string              `json:"magnet"`
 }
 
-// TorrentFileDetail is a torrent's file with how much of it is there.
+// TorrentFileDetail is a torrent's file with how much of it is there, and
+// how soon it downloads: Priority is 0 when it is left out (Skip), else
+// engine.PriorityLow, PriorityNormal or PriorityHigh. Index is its place in
+// the torrent, which SetTorrentFiles names it by.
 type TorrentFileDetail struct {
-	Name string `json:"name"`
-	Size int64  `json:"size"`
-	Done int64  `json:"done"`
-	Skip bool   `json:"skip"`
+	Index    int    `json:"index"`
+	Name     string `json:"name"`
+	Size     int64  `json:"size"`
+	Done     int64  `json:"done"`
+	Skip     bool   `json:"skip"`
+	Priority int    `json:"priority"`
 }
 
 func (s *Service) torrentDetail(d engine.Info) *TorrentDetail {
@@ -502,7 +523,7 @@ func (s *Service) torrentDetail(d engine.Info) *TorrentDetail {
 		if name == "" {
 			name = f.Path
 		}
-		fd := TorrentFileDetail{Name: name, Size: f.Size, Skip: f.Skip}
+		fd := TorrentFileDetail{Index: i, Name: name, Size: f.Size, Skip: f.Skip, Priority: f.Prio()}
 		switch {
 		case live && i < len(det.FileDone):
 			fd.Done = det.FileDone[i]
@@ -538,7 +559,7 @@ func (s *Service) createTorrent(r CreateRequest, addr string) (CreateResult, err
 	o := engine.AddOptions{URL: addr, Dir: folder, Description: strings.TrimSpace(r.Description),
 		Category: r.Category, Queue: r.Queue, Start: r.Start, Headers: s.prefill(r.Token).Headers,
 		Torrent: &engine.TorrentJob{Name: engine.SanitizeName(r.FileName)}}
-	done := s.takeProbe(addr, &o, r.Skip)
+	done := s.takeProbe(addr, &o, r.Skip, r.Priorities)
 	info := s.mgr.Create(o)
 	done()
 	s.mgr.NoteSaveFolder(folder)
@@ -547,7 +568,7 @@ func (s *Service) createTorrent(r CreateRequest, addr string) (CreateResult, err
 	}
 	s.poke()
 	if w := s.opener(); r.Start && !s.mgr.Settings().NoProgressDialog && w != nil {
-		w.openProgress(info.ID)
+		w.openProgress(info.ID, true)
 	}
 	return CreateResult{ID: info.ID}, nil
 }

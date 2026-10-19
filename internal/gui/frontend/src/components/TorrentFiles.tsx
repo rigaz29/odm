@@ -1,17 +1,53 @@
 // A torrent's files in the New Download window, each with a box to leave it
-// out, and the pieces map of its progress window.
+// out and its priority, and the pieces map of its progress window.
 
 import type { TorrentFileRow } from "../bindings/odm/internal/gui/models";
 import { humanBytes } from "../format";
 import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
 import { Checkbox } from "./ui/checkbox";
+import { Select } from "./ui/input";
+
+// A file's priorities, as the engine counts them (engine.PriorityLow…); 0
+// leaves a file out.
+export const PRIORITY_LOW = 1;
+export const PRIORITY_NORMAL = 4;
+export const PRIORITY_HIGH = 7;
+
+// PrioritySelect picks how soon a file downloads.
+export function PrioritySelect({ value, onChange, disabled }: { value: number; onChange: (p: number) => void; disabled?: boolean }) {
+  return (
+    <Select
+      className="w-24 shrink-0 [&>select]:h-6 [&>select]:pl-2 [&>select]:text-xs [&>svg]:right-1.5 [&>svg]:size-3.5"
+      value={value || PRIORITY_NORMAL}
+      disabled={disabled}
+      aria-label={t("Priority")}
+      onChange={(e) => onChange(Number(e.target.value))}
+    >
+      <option value={PRIORITY_HIGH}>{t("High")}</option>
+      <option value={PRIORITY_NORMAL}>{t("Normal")}</option>
+      <option value={PRIORITY_LOW}>{t("Low")}</option>
+    </Select>
+  );
+}
 
 // inFolder is a file's path without the torrent's own folder, as it is
 // saved.
 const inFolder = (path: string) => (path.includes("/") ? path.slice(path.indexOf("/") + 1) : path);
 
-export function TorrentFiles({ files, skip, onSkip }: { files: TorrentFileRow[]; skip: Set<number>; onSkip: (s: Set<number>) => void }) {
+export function TorrentFiles({
+  files,
+  skip,
+  onSkip,
+  prio,
+  onPrio,
+}: {
+  files: TorrentFileRow[];
+  skip: Set<number>;
+  onSkip: (s: Set<number>) => void;
+  prio: Record<number, number>;
+  onPrio: (p: Record<number, number>) => void;
+}) {
   const real = files.map((f, i) => ({ ...f, i })).filter((f) => !f.pad);
   const chosen = real.filter((f) => !skip.has(f.i));
   const size = chosen.reduce((n, f) => n + f.size, 0);
@@ -26,6 +62,7 @@ export function TorrentFiles({ files, skip, onSkip }: { files: TorrentFileRow[];
         />
         <span className="flex-1">{tf("%d of %d files", chosen.length, real.length)}</span>
         <span className="tabular-nums">{humanBytes(size) || "0 B"}</span>
+        <span className="w-24 shrink-0 pl-2">{t("Priority")}</span>
       </label>
       <ul className="max-h-36 overflow-auto">
         {real.map((f) => (
@@ -44,6 +81,7 @@ export function TorrentFiles({ files, skip, onSkip }: { files: TorrentFileRow[];
                 {inFolder(f.path)}
               </span>
               <span className="shrink-0 text-xs tabular-nums text-muted-foreground">{humanBytes(f.size) || "0 B"}</span>
+              <PrioritySelect value={prio[f.i] ?? PRIORITY_NORMAL} disabled={skip.has(f.i)} onChange={(p) => onPrio({ ...prio, [f.i]: p })} />
             </label>
           </li>
         ))}

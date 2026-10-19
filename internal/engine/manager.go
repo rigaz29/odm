@@ -1019,7 +1019,7 @@ func keepTorrentFile(src, dst string) {
 		return
 	}
 	data, err := os.ReadFile(src)
-	if err != nil || len(data) > maxTorrentFile {
+	if err != nil || len(data) > MaxTorrentFile {
 		return
 	}
 	if os.MkdirAll(TorrentDir, 0o755) == nil {
@@ -1060,6 +1060,28 @@ func (m *Manager) TorrentDetail(ctx context.Context, id string) (TorrentDetail, 
 	}
 	det, err := b.Detail(ctx, id)
 	return det, err == nil
+}
+
+// SetTorrentFiles changes which files of the torrent id download, and how
+// soon: prio gives a file, by its index in the torrent, 0 to leave it out or
+// PriorityLow, PriorityNormal or PriorityHigh. Files it leaves out keep
+// theirs. A complete torrent cannot change, and one file at least stays.
+func (m *Manager) SetTorrentFiles(id string, prio map[int]int) error {
+	d := m.get(id)
+	if d == nil {
+		return fmt.Errorf("download not found")
+	}
+	live, all, err := d.setFiles(prio)
+	if err != nil {
+		return err
+	}
+	if b := Torrents; b != nil && live {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		err = b.SetFiles(ctx, id, nil, all)
+		cancel()
+	}
+	m.changed(d)
+	return err
 }
 
 // Probe inspects a URL without creating a download.

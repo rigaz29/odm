@@ -72,7 +72,8 @@ app, or headless with a JSON API.
   *Open .torrent file…*, or dropped on the window), open the *New
   Download* window. A magnet link first gets its list of files from its
   peers, the number connected shown meanwhile. Then the files can be
-  ticked one by one, next to the folder, category and queue.
+  ticked one by one, each with a priority (high, normal or low), next to
+  the folder, category and queue.
 - Torrents run in `odm-libtorrent`, a small companion program on
   [libtorrent](https://www.libtorrent.org/) (`helper/libtorrent`). ODM
   downloads it the first time a torrent needs it (about 4 MB, from ODM's
@@ -87,8 +88,10 @@ app, or headless with a JSON API.
   Torrents* changes the ratio and the time, or seeds never or until
   stopped. *Stop seeding* is in the list's menu and the progress window.
 - The progress window shows the peers and seeds, what was uploaded and the
-  ratio, the pieces, and each file. The list marks a seeding torrent and
-  its upload speed.
+  ratio, the pieces, and each file. Until the torrent is complete, a file
+  can be left out or taken in again there, or given another priority; a
+  file left out keeps what it had downloaded. The list marks a seeding
+  torrent and its upload speed.
 - *Options → Torrents* also has the port (picked at random once), incoming
   connections, opening the port on the router (UPnP, NAT-PMP), an upload
   limit, and whether an address that turns out to be a `.torrent` file is
@@ -357,14 +360,17 @@ Requests from any other `Origin` are refused.
 
 Builds without the desktop UI (`./scripts/build.sh cli`), or runs with
 `-serve`, serve a basic web UI and this JSON API. The web UI covers
-adding, pausing and removing downloads. Scheduler and most Options are desktop
-only.
+adding, pausing and removing downloads, and adds a `.torrent` file from the
+computer it runs on (*.torrent…* in New Download, or dropped on the page).
+Scheduler and most Options are desktop only.
 
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | GET / PUT | `/api/settings` | Read or update settings (applied immediately) |
 | GET / POST | `/api/downloads` | List downloads, or add `{"url","dir","connections","headers","speed_limit"}`; a magnet link is a torrent, and `"torrent": true` makes a `.torrent` address one |
+| POST | `/api/torrents` | Add a `.torrent` file sent as `multipart/form-data` in the field `torrent`, with `dir`, `file_name`, `category`, `queue`, `description` and `start` (`false` adds it stopped) |
 | GET / DELETE | `/api/downloads/{id}` | One download; `DELETE ?file=true` also deletes the file |
+| GET / POST | `/api/downloads/{id}/files` | A torrent's files (`index`, `path`, `size`, `done`, `priority`), or change them: `{"priorities": {"<index>": 0}}` leaves one out, 1 is low, 4 normal, 7 high |
 | POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` \| `/stop-seeding` | Control a download |
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |

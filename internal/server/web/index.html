@@ -71,7 +71,11 @@
   <form method="dialog" id="addForm" class="dlg">
     <h2>New Download</h2>
     <div class="form">
-      <label for="url">URL</label><input id="url" type="text" autocomplete="off" placeholder="https://host/file.zip" />
+      <label for="url">URL</label>
+      <div class="inline">
+        <input id="url" type="text" autocomplete="off" placeholder="https://host/file.zip or a magnet link" />
+        <button type="button" id="torrentPick" class="ghost" data-icon="folderOpen" title="Add a .torrent file from this computer">.torrent…</button>
+      </div>
       <label for="category">Category</label><select id="category"></select>
       <label for="dir">Save folder</label><input id="dir" type="text" />
       <label for="fname">File name</label><input id="fname" type="text" />
@@ -80,6 +84,7 @@
       <label for="queue">Queue</label><select id="queue"></select>
       <label for="checksum">Checksum</label><input id="checksum" type="text" autocomplete="off" placeholder="SHA-256, SHA-1 or MD5 (optional)" />
     </div>
+    <input id="torrentFile" type="file" accept=".torrent,application/x-bittorrent" hidden />
     <div class="card" id="probeCard">
       <div class="card-icon" id="pcIcon"></div>
       <div class="card-text">

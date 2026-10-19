@@ -463,6 +463,12 @@ func (s *Session) Add(ctx context.Context, a engine.TorrentAdd) error {
 		return err
 	}
 	if s.in(a.ID) == c {
+		// The files to download may have changed while it was paused.
+		if a.Priorities != nil && !a.Hold {
+			if err := c.Call(ctx, "priorities", map[string]any{"key": a.ID, "priorities": a.Priorities}, nil); err != nil {
+				return err
+			}
+		}
 		if err := c.Call(ctx, "resume", map[string]any{"key": a.ID}, nil); err != nil {
 			return err
 		}

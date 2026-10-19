@@ -77,6 +77,9 @@ export interface Api {
   openTorrentFile(): Promise<void>;
   stopSeeding(id: string): Promise<void>;
   torrentMagnet(id: string): Promise<string>;
+  // setTorrentFiles gives files of a torrent, by index, a priority: 0
+  // leaves one out, then PRIORITY_LOW, PRIORITY_NORMAL or PRIORITY_HIGH.
+  setTorrentFiles(id: string, priorities: Record<number, number>): Promise<void>;
   openAssociationSettings(): Promise<void>;
 
   // The progress and download complete windows (detail.go).
@@ -206,6 +209,7 @@ const wailsApi: Api = {
   openTorrentFile: () => Service.OpenTorrentFile(),
   stopSeeding: (id) => Service.StopSeeding(id),
   torrentMagnet: (id) => Service.TorrentMagnet(id),
+  setTorrentFiles: (id, priorities) => Service.SetTorrentFiles(id, priorities),
   openAssociationSettings: () => Service.OpenAssociationSettings(),
   detail: (id) => Service.Detail(id),
   setDownloadLimit: (id, bps) => Service.SetDownloadLimit(id, bps),

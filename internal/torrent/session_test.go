@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -259,6 +260,52 @@ func TestSessionDownloadsAFolderWithoutAFileLeftOut(t *testing.T) {
 	}
 	if left, _ := filepath.Glob(filepath.Join(h.dir, "Album", ".*.parts")); len(left) > 0 {
 		t.Fatalf("part file left: %v", left)
+	}
+}
+
+// A file raised while the torrent runs is taken at once, and one left out
+// while it is paused in the session stays out when it resumes.
+func TestSessionTakesFilesChosenAfterTheAdd(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "seed", "Set")
+	a := makeFile(t, filepath.Join(root, "a.bin"), 1<<20)
+	makeFile(t, filepath.Join(root, "b.bin"), 2<<20)
+	c := makeFile(t, filepath.Join(root, "c.bin"), 1<<20)
+	tf := filepath.Join(dir, "set.torrent")
+	createTorrent(t, root, tf)
+	// 1 MiB/s: the download takes about four seconds.
+	sd := seed(t, tf, filepath.Join(dir, "seed"), 1<<20)
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), filepath.Join(dir, "got"))
+	info := h.m.Create(engine.AddOptions{URL: tf, Torrent: &engine.TorrentJob{}, Start: true})
+	h.wait(info.ID, sd, 30*time.Second, "256 KiB", func(i engine.Info) bool { return i.Done >= 256<<10 })
+	tj, _ := h.m.Torrent(info.ID)
+	index := map[string]int{}
+	for i, f := range tj.Files {
+		index[path.Base(f.Path)] = i
+	}
+	if err := h.m.SetTorrentFiles(info.ID, map[int]int{index["c.bin"]: engine.PriorityHigh}); err != nil {
+		t.Fatal(err)
+	}
+	h.m.Pause(info.ID)
+	h.wait(info.ID, nil, 10*time.Second, "a pause", func(i engine.Info) bool { return i.Status == engine.StatusPaused })
+	if h.s.in(info.ID) == nil {
+		t.Fatal("the paused torrent left the session")
+	}
+	if err := h.m.SetTorrentFiles(info.ID, map[int]int{index["b.bin"]: 0}); err != nil {
+		t.Fatal(err)
+	}
+	h.m.Resume(info.ID)
+	got := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
+	if got.Total != int64(len(a)+len(c)) {
+		t.Fatalf("total %d, want %d", got.Total, len(a)+len(c))
+	}
+	sameFile(t, filepath.Join(h.dir, "Set", "a.bin"), a)
+	sameFile(t, filepath.Join(h.dir, "Set", "c.bin"), c)
+	if st, err := os.Stat(filepath.Join(h.dir, "Set", "b.bin")); err == nil && st.Size() >= 2<<20 {
+		if b, _ := os.ReadFile(filepath.Join(h.dir, "Set", "b.bin")); bytes.Count(b, []byte{0}) < len(b)/4 {
+			t.Fatal("b.bin, left out, was downloaded whole")
+		}
 	}
 }
 

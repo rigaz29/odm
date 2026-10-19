@@ -18,7 +18,9 @@ import (
 // and tests leave it nil.
 type windowOpener interface {
 	openAdd(token string)
-	openProgress(id string)
+	// openProgress opens a download's progress window, taller for a
+	// torrent's list of files.
+	openProgress(id string, torrent bool)
 	closeProgress(id string)
 	openComplete(id string)
 	openOptions(tab string)
@@ -122,7 +124,8 @@ func (s *Service) SetCompleteDialog(on bool) {
 // OpenProgress opens (or brings forward) the download id's progress window.
 func (s *Service) OpenProgress(id string) {
 	if w := s.opener(); w != nil {
-		w.openProgress(id)
+		_, torrent := s.mgr.Torrent(id)
+		w.openProgress(id, torrent)
 	}
 }
 

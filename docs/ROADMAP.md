@@ -888,11 +888,20 @@ Nanti
 
 - [ ] Sisa uji jalan torrent: proxy SOCKS5, pemakaian memori, seeding
       sampai target di exe, dan Linux lewat harness WSL. **S**
-- [ ] Prioritas per file, dan unduh berurutan untuk menonton sambil
-      mengunduh (keduanya sudah ada di libtorrent). **S**
+- [x] Prioritas per file, dan memilih ulang file setelah unduhan
+      berjalan. **S** Jendela progres: kotak centang dan prioritas
+      (tinggi, normal, rendah) per file sampai torrent selesai; Unduhan
+      Baru ikut memberi prioritas. Torrent yang di-pause lalu dilanjutkan
+      kini memakai pilihan terbaru (sebelumnya pilihan lama tetap jalan).
+      API: `GET/POST /api/downloads/{id}/files`.
+- [ ] Unduh berurutan untuk menonton sambil mengunduh, potongan pertama
+      dan terakhir lebih dulu. Butuh helper protokol p2. **S**
 - [ ] Asosiasi `magnet:` dan `.torrent` di Linux dan macOS (butuh file
       `.desktop` dan `.app`). **S**
-- [ ] Unggah file `.torrent` di web UI `-serve`. **K**
+- [x] Unggah file `.torrent` di web UI `-serve`. **K** Tombol
+      *.torrent…* di Unduhan Baru, atau file diseret ke halaman; API
+      `POST /api/torrents` (multipart, field `torrent`). Kategori magnet
+      dan `.torrent` dari web UI kini mengikuti file terbesarnya.
 
 Batasan:
 - Mengunduh dan mengunggah konten berhak cipta lewat torrent bisa

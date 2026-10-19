@@ -107,8 +107,10 @@ type CreateRequest struct {
 	Start       bool   `json:"start"`
 	// Again adds an address already in the list once more.
 	Again bool `json:"again"`
-	// Skip lists the files of a torrent left out, by index.
-	Skip []int `json:"skip"`
+	// Skip lists the files of a torrent left out, by index; Priorities
+	// gives others engine.PriorityLow or engine.PriorityHigh.
+	Skip       []int       `json:"skip"`
+	Priorities map[int]int `json:"priorities"`
 }
 
 // CreateResult is the new download, or the one already in the list with
@@ -475,7 +477,7 @@ func (s *Service) Create(r CreateRequest) (CreateResult, error) {
 	}
 	s.poke()
 	if w := s.opener(); r.Start && !s.mgr.Settings().NoProgressDialog && w != nil {
-		w.openProgress(info.ID)
+		w.openProgress(info.ID, info.Torrent)
 	}
 	return CreateResult{ID: info.ID}, nil
 }

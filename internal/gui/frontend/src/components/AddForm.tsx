@@ -65,6 +65,7 @@ export function AddForm(props: {
   const [zipOpen, setZipOpen] = useState(false);
   // A torrent's files left out, by index, and odm-libtorrent installing.
   const [skip, setSkip] = useState<Set<number>>(new Set());
+  const [prio, setPrio] = useState<Record<number, number>>({});
   const [installing, setInstalling] = useState(false);
   const [installed, setInstalled] = useState(-1); // percent of its download, -1 unknown
   const urlRef = useRef<HTMLInputElement>(null);
@@ -137,6 +138,7 @@ export function AddForm(props: {
     }
     setChecking(checked(addr));
     setSkip(new Set());
+    setPrio({});
     const timer = setTimeout(() => {
       void api.probe(addr, props.token).then((r) => apply(addr, r));
     }, CHECK_DELAY);
@@ -226,6 +228,7 @@ export function AddForm(props: {
         start,
         again,
         skip: torrent ? [...skip] : [],
+        priorities: torrent ? prio : {},
       });
       if (res.duplicate) {
         setDuplicate({ item: res.duplicate, start });
@@ -376,7 +379,7 @@ export function AddForm(props: {
         />
         {torrent && realFiles > 0 && (
           <div className="mt-3">
-            <TorrentFiles files={torrent.files} skip={skip} onSkip={setSkip} />
+            <TorrentFiles files={torrent.files} skip={skip} onSkip={setSkip} prio={prio} onPrio={setPrio} />
           </div>
         )}
         {torrent?.firstTorrent && (

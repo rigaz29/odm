@@ -394,9 +394,11 @@ export class CreateRequest {
     "again": boolean;
 
     /**
-     * Skip lists the files of a torrent left out, by index.
+     * Skip lists the files of a torrent left out, by index; Priorities
+     * gives others engine.PriorityLow or engine.PriorityHigh.
      */
     "skip": number[];
+    "priorities": { [_ in `${number}`]?: number };
 
     /** Creates a new CreateRequest instance. */
     constructor($$source: Partial<CreateRequest> = {}) {
@@ -442,6 +444,9 @@ export class CreateRequest {
         if (!("skip" in $$source)) {
             this["skip"] = [];
         }
+        if (!("priorities" in $$source)) {
+            this["priorities"] = {};
+        }
 
         Object.assign(this, $$source);
     }
@@ -451,9 +456,13 @@ export class CreateRequest {
      */
     static createFrom($$source: any = {}): CreateRequest {
         const $$createField13_0 = $$createType1;
+        const $$createField14_0 = $$createType2;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("skip" in $$parsedSource) {
             $$parsedSource["skip"] = $$createField13_0($$parsedSource["skip"]);
+        }
+        if ("priorities" in $$parsedSource) {
+            $$parsedSource["priorities"] = $$createField14_0($$parsedSource["priorities"]);
         }
         return new CreateRequest($$parsedSource as Partial<CreateRequest>);
     }
@@ -483,7 +492,7 @@ export class CreateResult {
      * Creates a new CreateResult instance from a string or object.
      */
     static createFrom($$source: any = {}): CreateResult {
-        const $$createField1_0 = $$createType3;
+        const $$createField1_0 = $$createType4;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("duplicate" in $$parsedSource) {
             $$parsedSource["duplicate"] = $$createField1_0($$parsedSource["duplicate"]);
@@ -575,9 +584,9 @@ export class Detail {
      * Creates a new Detail instance from a string or object.
      */
     static createFrom($$source: any = {}): Detail {
-        const $$createField0_0 = $$createType2;
-        const $$createField9_0 = $$createType5;
-        const $$createField11_0 = $$createType7;
+        const $$createField0_0 = $$createType3;
+        const $$createField9_0 = $$createType6;
+        const $$createField11_0 = $$createType8;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("item" in $$parsedSource) {
             $$parsedSource["item"] = $$createField0_0($$parsedSource["item"]);
@@ -882,8 +891,8 @@ export class Item {
      * Creates a new Item instance from a string or object.
      */
     static createFrom($$source: any = {}): Item {
-        const $$createField26_0 = $$createType8;
-        const $$createField27_0 = $$createType9;
+        const $$createField26_0 = $$createType9;
+        const $$createField27_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("conns" in $$parsedSource) {
             $$parsedSource["conns"] = $$createField26_0($$parsedSource["conns"]);
@@ -1266,9 +1275,9 @@ export class OptionsForm {
      * Creates a new OptionsForm instance from a string or object.
      */
     static createFrom($$source: any = {}): OptionsForm {
-        const $$createField11_0 = $$createType11;
-        const $$createField27_0 = $$createType13;
-        const $$createField37_0 = $$createType15;
+        const $$createField11_0 = $$createType12;
+        const $$createField27_0 = $$createType14;
+        const $$createField37_0 = $$createType16;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("categories" in $$parsedSource) {
             $$parsedSource["categories"] = $$createField11_0($$parsedSource["categories"]);
@@ -1360,9 +1369,9 @@ export class ProbeResult {
      * Creates a new ProbeResult instance from a string or object.
      */
     static createFrom($$source: any = {}): ProbeResult {
-        const $$createField1_0 = $$createType16;
-        const $$createField6_0 = $$createType18;
-        const $$createField9_0 = $$createType20;
+        const $$createField1_0 = $$createType17;
+        const $$createField6_0 = $$createType19;
+        const $$createField9_0 = $$createType21;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("card" in $$parsedSource) {
             $$parsedSource["card"] = $$createField1_0($$parsedSource["card"]);
@@ -1502,8 +1511,8 @@ export class SaveResult {
      * Creates a new SaveResult instance from a string or object.
      */
     static createFrom($$source: any = {}): SaveResult {
-        const $$createField0_0 = $$createType22;
-        const $$createField1_0 = $$createType24;
+        const $$createField0_0 = $$createType23;
+        const $$createField1_0 = $$createType25;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("refused" in $$parsedSource) {
             $$parsedSource["refused"] = $$createField0_0($$parsedSource["refused"]);
@@ -1621,7 +1630,7 @@ export class Schedule {
      * Creates a new Schedule instance from a string or object.
      */
     static createFrom($$source: any = {}): Schedule {
-        const $$createField6_0 = $$createType25;
+        const $$createField6_0 = $$createType26;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("days" in $$parsedSource) {
             $$parsedSource["days"] = $$createField6_0($$parsedSource["days"]);
@@ -1657,9 +1666,9 @@ export class SchedulerData {
      * Creates a new SchedulerData instance from a string or object.
      */
     static createFrom($$source: any = {}): SchedulerData {
-        const $$createField0_0 = $$createType27;
-        const $$createField1_0 = $$createType29;
-        const $$createField2_0 = $$createType30;
+        const $$createField0_0 = $$createType28;
+        const $$createField1_0 = $$createType30;
+        const $$createField2_0 = $$createType31;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("queues" in $$parsedSource) {
             $$parsedSource["queues"] = $$createField0_0($$parsedSource["queues"]);
@@ -1800,8 +1809,8 @@ export class SetupStatus {
      * Creates a new SetupStatus instance from a string or object.
      */
     static createFrom($$source: any = {}): SetupStatus {
-        const $$createField0_0 = $$createType32;
-        const $$createField2_0 = $$createType34;
+        const $$createField0_0 = $$createType33;
+        const $$createField2_0 = $$createType35;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("tools" in $$parsedSource) {
             $$parsedSource["tools"] = $$createField0_0($$parsedSource["tools"]);
@@ -1947,11 +1956,11 @@ export class Snapshot {
      * Creates a new Snapshot instance from a string or object.
      */
     static createFrom($$source: any = {}): Snapshot {
-        const $$createField0_0 = $$createType35;
+        const $$createField0_0 = $$createType36;
         const $$createField1_0 = $$createType0;
         const $$createField2_0 = $$createType0;
         const $$createField3_0 = $$createType0;
-        const $$createField6_0 = $$createType9;
+        const $$createField6_0 = $$createType10;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("items" in $$parsedSource) {
             $$parsedSource["items"] = $$createField0_0($$parsedSource["items"]);
@@ -2073,7 +2082,7 @@ export class TorrentDetail {
      * Creates a new TorrentDetail instance from a string or object.
      */
     static createFrom($$source: any = {}): TorrentDetail {
-        const $$createField8_0 = $$createType37;
+        const $$createField8_0 = $$createType38;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("files" in $$parsedSource) {
             $$parsedSource["files"] = $$createField8_0($$parsedSource["files"]);
@@ -2083,16 +2092,24 @@ export class TorrentDetail {
 }
 
 /**
- * TorrentFileDetail is a torrent's file with how much of it is there.
+ * TorrentFileDetail is a torrent's file with how much of it is there, and
+ * how soon it downloads: Priority is 0 when it is left out (Skip), else
+ * engine.PriorityLow, PriorityNormal or PriorityHigh. Index is its place in
+ * the torrent, which SetTorrentFiles names it by.
  */
 export class TorrentFileDetail {
+    "index": number;
     "name": string;
     "size": number;
     "done": number;
     "skip": boolean;
+    "priority": number;
 
     /** Creates a new TorrentFileDetail instance. */
     constructor($$source: Partial<TorrentFileDetail> = {}) {
+        if (!("index" in $$source)) {
+            this["index"] = 0;
+        }
         if (!("name" in $$source)) {
             this["name"] = "";
         }
@@ -2104,6 +2121,9 @@ export class TorrentFileDetail {
         }
         if (!("skip" in $$source)) {
             this["skip"] = false;
+        }
+        if (!("priority" in $$source)) {
+            this["priority"] = 0;
         }
 
         Object.assign(this, $$source);
@@ -2216,7 +2236,7 @@ export class TorrentProbe {
      * Creates a new TorrentProbe instance from a string or object.
      */
     static createFrom($$source: any = {}): TorrentProbe {
-        const $$createField2_0 = $$createType39;
+        const $$createField2_0 = $$createType40;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("files" in $$parsedSource) {
             $$parsedSource["files"] = $$createField2_0($$parsedSource["files"]);
@@ -2336,7 +2356,7 @@ export class ZipListing {
      * Creates a new ZipListing instance from a string or object.
      */
     static createFrom($$source: any = {}): ZipListing {
-        const $$createField0_0 = $$createType41;
+        const $$createField0_0 = $$createType42;
         let $$parsedSource = typeof $$source === 'string' ? JSON.parse($$source) : $$source;
         if ("entries" in $$parsedSource) {
             $$parsedSource["entries"] = $$createField0_0($$parsedSource["entries"]);
@@ -2348,43 +2368,44 @@ export class ZipListing {
 // Private type creation functions
 const $$createType0 = $Create.Array($Create.Any);
 const $$createType1 = $Create.Array($Create.Any);
-const $$createType2 = Item.createFrom;
-const $$createType3 = $Create.Nullable($$createType2);
-const $$createType4 = Chunk.createFrom;
-const $$createType5 = $Create.Array($$createType4);
-const $$createType6 = TorrentDetail.createFrom;
-const $$createType7 = $Create.Nullable($$createType6);
-const $$createType8 = $Create.Array($Create.Any);
+const $$createType2 = $Create.Map($Create.Any, $Create.Any);
+const $$createType3 = Item.createFrom;
+const $$createType4 = $Create.Nullable($$createType3);
+const $$createType5 = Chunk.createFrom;
+const $$createType6 = $Create.Array($$createType5);
+const $$createType7 = TorrentDetail.createFrom;
+const $$createType8 = $Create.Nullable($$createType7);
 const $$createType9 = $Create.Array($Create.Any);
-const $$createType10 = CategoryOption.createFrom;
-const $$createType11 = $Create.Array($$createType10);
-const $$createType12 = HostConnections.createFrom;
-const $$createType13 = $Create.Array($$createType12);
-const $$createType14 = SiteLogin.createFrom;
-const $$createType15 = $Create.Array($$createType14);
-const $$createType16 = Card.createFrom;
-const $$createType17 = Quality.createFrom;
-const $$createType18 = $Create.Array($$createType17);
-const $$createType19 = TorrentProbe.createFrom;
-const $$createType20 = $Create.Nullable($$createType19);
-const $$createType21 = OptionsError.createFrom;
-const $$createType22 = $Create.Nullable($$createType21);
-const $$createType23 = Appearance.createFrom;
-const $$createType24 = $Create.Nullable($$createType23);
-const $$createType25 = $Create.Array($Create.Any);
-const $$createType26 = QueueState.createFrom;
-const $$createType27 = $Create.Array($$createType26);
-const $$createType28 = Schedule.createFrom;
-const $$createType29 = $Create.Map($Create.Any, $$createType28);
-const $$createType30 = Limits.createFrom;
-const $$createType31 = SetupTool.createFrom;
-const $$createType32 = $Create.Array($$createType31);
-const $$createType33 = SetupBrowser.createFrom;
-const $$createType34 = $Create.Array($$createType33);
-const $$createType35 = $Create.Array($$createType2);
-const $$createType36 = TorrentFileDetail.createFrom;
-const $$createType37 = $Create.Array($$createType36);
-const $$createType38 = TorrentFileRow.createFrom;
-const $$createType39 = $Create.Array($$createType38);
-const $$createType40 = ZipEntry.createFrom;
-const $$createType41 = $Create.Array($$createType40);
+const $$createType10 = $Create.Array($Create.Any);
+const $$createType11 = CategoryOption.createFrom;
+const $$createType12 = $Create.Array($$createType11);
+const $$createType13 = HostConnections.createFrom;
+const $$createType14 = $Create.Array($$createType13);
+const $$createType15 = SiteLogin.createFrom;
+const $$createType16 = $Create.Array($$createType15);
+const $$createType17 = Card.createFrom;
+const $$createType18 = Quality.createFrom;
+const $$createType19 = $Create.Array($$createType18);
+const $$createType20 = TorrentProbe.createFrom;
+const $$createType21 = $Create.Nullable($$createType20);
+const $$createType22 = OptionsError.createFrom;
+const $$createType23 = $Create.Nullable($$createType22);
+const $$createType24 = Appearance.createFrom;
+const $$createType25 = $Create.Nullable($$createType24);
+const $$createType26 = $Create.Array($Create.Any);
+const $$createType27 = QueueState.createFrom;
+const $$createType28 = $Create.Array($$createType27);
+const $$createType29 = Schedule.createFrom;
+const $$createType30 = $Create.Map($Create.Any, $$createType29);
+const $$createType31 = Limits.createFrom;
+const $$createType32 = SetupTool.createFrom;
+const $$createType33 = $Create.Array($$createType32);
+const $$createType34 = SetupBrowser.createFrom;
+const $$createType35 = $Create.Array($$createType34);
+const $$createType36 = $Create.Array($$createType3);
+const $$createType37 = TorrentFileDetail.createFrom;
+const $$createType38 = $Create.Array($$createType37);
+const $$createType39 = TorrentFileRow.createFrom;
+const $$createType40 = $Create.Array($$createType39);
+const $$createType41 = ZipEntry.createFrom;
+const $$createType42 = $Create.Array($$createType41);

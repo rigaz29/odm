@@ -444,6 +444,15 @@ export function SetToolUpdates(on: boolean): $CancellablePromise<void> {
 }
 
 /**
+ * SetTorrentFiles changes which files of the torrent id download and how
+ * soon, by index: 0 leaves a file out, else engine.PriorityLow,
+ * PriorityNormal or PriorityHigh.
+ */
+export function SetTorrentFiles(id: string, priorities: { [_ in `${number}`]?: number }): $CancellablePromise<void> {
+    return $Call.ByID(2321354861, id, priorities);
+}
+
+/**
  * SetupBrowsers lists the installed browsers and whether each one's
  * extension has talked to ODM. The Setup window asks again every few
  * seconds, so a browser turns connected once the extension is in.

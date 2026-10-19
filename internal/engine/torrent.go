@@ -56,9 +56,9 @@ type TorrentBackend interface {
 	// reader falls behind.
 	Watch(id string) (events <-chan TorrentEvent, stop func())
 	Pause(ctx context.Context, id string) error
-	// SetFiles names the files and gives their priorities, once the
-	// metadata of a torrent added with Hold is in; it returns when they are
-	// renamed.
+	// SetFiles names the files and gives their priorities: once the
+	// metadata of a torrent added with Hold is in (it returns when they are
+	// renamed), or with no names when the files to download change.
 	SetFiles(ctx context.Context, id string, names map[int]string, priorities []int) error
 	// Rename and Move return once the files are renamed or moved.
 	Rename(ctx context.Context, id string, names map[int]string) error
@@ -94,7 +94,9 @@ type TorrentAdd struct {
 	// Names gives files other paths, relative to SavePath, by index. It
 	// needs the metadata: a File, or resume data that has it.
 	Names map[int]string
-	// Priorities gives each file's priority: 0 skips it, 4 is normal.
+	// Priorities gives each file's priority: 0 skips it, then PriorityLow,
+	// PriorityNormal or PriorityHigh. A torrent in the session already takes
+	// them too.
 	Priorities []int
 	// Hold makes a magnet link download nothing until SetFiles.
 	Hold          bool
@@ -198,6 +200,27 @@ type TorrentFile struct {
 	// Skip: not downloaded. Pad: padding between files, never a file.
 	Skip bool `json:"skip,omitempty"`
 	Pad  bool `json:"pad,omitempty"`
+	// Priority is how soon its pieces are fetched, PriorityLow or
+	// PriorityHigh; 0 is PriorityNormal.
+	Priority int `json:"priority,omitempty"`
+}
+
+// A file's priorities, as libtorrent counts them; 0 leaves it out.
+const (
+	PriorityLow    = 1
+	PriorityNormal = 4
+	PriorityHigh   = 7
+)
+
+// Prio is the file's priority: 0 when it is left out.
+func (f TorrentFile) Prio() int {
+	switch {
+	case f.Skip || f.Pad:
+		return 0
+	case f.Priority == PriorityLow || f.Priority == PriorityHigh:
+		return f.Priority
+	}
+	return PriorityNormal
 }
 
 // torrentPolicy is Settings.Torrent, for the downloads to read.
@@ -275,8 +298,8 @@ func torrentDrops(source string, m TorrentMeta) (trackers, webSeeds []string) {
 // errNoTorrents is a torrent download's error where ODM cannot run torrents.
 var errNoTorrents = errors.New("this ODM cannot download torrents")
 
-// maxTorrentFile bounds a .torrent file.
-const maxTorrentFile = 16 << 20
+// MaxTorrentFile bounds a .torrent file.
+const MaxTorrentFile = 16 << 20
 
 // IsMagnet reports whether s is a magnet link.
 func IsMagnet(s string) bool {
@@ -532,7 +555,7 @@ func (d *Download) torrentFile(ctx context.Context) (string, error) {
 		if resp.StatusCode != http.StatusOK {
 			return "", fmt.Errorf("fetching the .torrent file: %s", resp.Status)
 		}
-		data, err = io.ReadAll(io.LimitReader(resp.Body, maxTorrentFile+1))
+		data, err = io.ReadAll(io.LimitReader(resp.Body, MaxTorrentFile+1))
 		if err != nil {
 			return "", fmt.Errorf("fetching the .torrent file: %w", err)
 		}
@@ -541,13 +564,13 @@ func (d *Download) torrentFile(ctx context.Context) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		data, err = io.ReadAll(io.LimitReader(f, maxTorrentFile+1))
+		data, err = io.ReadAll(io.LimitReader(f, MaxTorrentFile+1))
 		f.Close()
 		if err != nil {
 			return "", err
 		}
 	}
-	if len(data) > maxTorrentFile {
+	if len(data) > MaxTorrentFile {
 		return "", errors.New("the .torrent file is too large")
 	}
 	if err := os.MkdirAll(TorrentDir, 0o755); err != nil {
@@ -721,9 +744,7 @@ func (d *Download) torrentLayout(final bool) (save string, names map[int]string,
 		if f.Pad {
 			continue
 		}
-		if !f.Skip {
-			prio[i] = 4
-		}
+		prio[i] = f.Prio()
 		if tj.Folder {
 			names[i] = f.Name
 		} else {
@@ -812,7 +833,7 @@ func (d *Download) finishTorrent(ctx context.Context, b TorrentBackend) error {
 	}
 	if MarkFile != nil {
 		source, referrer := d.origin()
-		for _, p := range torrentPaths(dir, final, folder, files) {
+		for _, p := range torrentPaths(dir, final, folder, files, false) {
 			_ = MarkFile(p, source, referrer)
 		}
 	}
@@ -1002,14 +1023,16 @@ func firstFile(files []TorrentFile) int {
 	return 0
 }
 
-// torrentPaths lists the downloaded files of a torrent named name in dir.
-func torrentPaths(dir, name string, folder bool, files []TorrentFile) []string {
+// torrentPaths lists the downloaded files of a torrent named name in dir;
+// with skipped, also those left out, which may hold what was downloaded
+// before they were.
+func torrentPaths(dir, name string, folder bool, files []TorrentFile, skipped bool) []string {
 	if !folder {
 		return []string{filepath.Join(dir, name)}
 	}
 	var out []string
 	for _, f := range files {
-		if !f.Pad && !f.Skip && f.Name != "" {
+		if !f.Pad && (!f.Skip || skipped) && f.Name != "" {
 			out = append(out, filepath.Join(dir, name, filepath.FromSlash(f.Name)))
 		}
 	}
@@ -1048,7 +1071,7 @@ func (d *Download) removeTorrent(deleteFiles bool) {
 		// What is left of the download: its .odmpart, file or folder.
 		_ = os.RemoveAll(filepath.Join(dir, name+".odmpart"))
 	case deleteFiles:
-		for _, p := range torrentPaths(dir, name, folder, files) {
+		for _, p := range torrentPaths(dir, name, folder, files, true) {
 			_ = os.Remove(p)
 		}
 		if folder {
@@ -1077,4 +1100,64 @@ func removeEmptyDirs(root string, files []TorrentFile) {
 		_ = os.Remove(filepath.Join(root, filepath.FromSlash(p))) // only if empty
 	}
 	_ = os.Remove(root)
+}
+
+// Why SetTorrentFiles refuses a change.
+var (
+	errFilesUnknown  = errors.New("the torrent's files are not known yet")
+	errTorrentDone   = errors.New("the torrent is complete")
+	errNoFileWanted  = errors.New("choose at least one file to download")
+	errBadPriority   = errors.New("a file's priority is 0 (skip), 1 (low), 4 (normal) or 7 (high)")
+	errNoSuchFile    = errors.New("the torrent has no such file")
+	errNotTorrentJob = errors.New("not a torrent")
+)
+
+// setFiles gives the files of the torrent their priorities, by index: 0
+// leaves a file out. It reports whether the torrent runs in the session and
+// is to be told, and the priorities of every file then.
+func (d *Download) setFiles(prio map[int]int) (live bool, all []int, err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	switch {
+	case d.Torrent == nil:
+		return false, nil, errNotTorrentJob
+	case len(d.Torrent.Files) == 0:
+		return false, nil, errFilesUnknown
+	case d.Status == StatusComplete:
+		return false, nil, errTorrentDone
+	}
+	files := append([]TorrentFile(nil), d.Torrent.Files...)
+	for i, p := range prio {
+		if i < 0 || i >= len(files) || files[i].Pad {
+			return false, nil, errNoSuchFile
+		}
+		switch p {
+		case 0:
+			files[i].Skip = true
+		case PriorityLow, PriorityHigh:
+			files[i].Skip, files[i].Priority = false, p
+		case PriorityNormal:
+			files[i].Skip, files[i].Priority = false, 0
+		default:
+			return false, nil, errBadPriority
+		}
+	}
+	tj := TorrentJob{Files: files}
+	if tj.largest() == "" {
+		return false, nil, errNoFileWanted
+	}
+	d.Torrent.Files = files
+	all = make([]int, len(files))
+	for i, f := range files {
+		all[i] = f.Prio()
+	}
+	// A run reports the bytes wanted itself; until then they are counted
+	// here.
+	if d.Status != StatusDownloading {
+		d.Total = tj.wanted()
+		d.streamDone = min(d.streamDone, d.Total)
+	}
+	// Before its metadata, a magnet link's files take these priorities
+	// when it comes.
+	return d.Status == StatusDownloading && d.Torrent.adopted(), all, nil
 }

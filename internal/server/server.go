@@ -5,8 +5,11 @@ import (
 	"embed"
 	"encoding/json"
 	"errors"
+	"io"
 	"io/fs"
 	"net/http"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +56,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("PATCH /api/settings", s.handlePutSettings)
 	mux.HandleFunc("GET /api/downloads", s.handleList)
 	mux.HandleFunc("POST /api/downloads", s.handleAdd)
+	mux.HandleFunc("POST /api/torrents", s.handleUpload)
 	mux.HandleFunc("GET /api/probe", s.handleProbe)
 	mux.HandleFunc("POST /api/probe/stream", s.handleProbeStream)
 	mux.HandleFunc("POST /api/probe/site", s.handleProbeSite)
@@ -60,6 +64,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/downloads/{id}/{action}", s.handleAction)
 	mux.HandleFunc("POST /api/downloads/{id}/limit", s.handleLimit)
 	mux.HandleFunc("POST /api/downloads/{id}/options", s.handleOptions)
+	mux.HandleFunc("GET /api/downloads/{id}/files", s.handleFiles)
+	mux.HandleFunc("POST /api/downloads/{id}/files", s.handleSetFiles)
 	mux.HandleFunc("DELETE /api/downloads/{id}", s.handleDelete)
 	mux.HandleFunc("POST /api/actions/{action}", s.handleBatch)
 	mux.HandleFunc("POST /api/queues/{name}/{action}", s.handleQueue)
@@ -283,6 +289,142 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 		status = http.StatusOK // already in the list; info is the existing entry
 	}
 	writeJSON(w, status, info)
+}
+
+// handleUpload adds a torrent from a .torrent file sent in the form field
+// "torrent" (multipart/form-data), as the web UI's New Download sends one
+// picked on another computer. The fields of POST /api/downloads that a
+// torrent takes come along: dir, file_name (the torrent's name), category
+// (left empty, the torrent's largest file says), queue, description and
+// start ("false" adds it stopped).
+func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
+	// Room for the form's other fields too.
+	r.Body = http.MaxBytesReader(w, r.Body, engine.MaxTorrentFile+1<<20)
+	if err := r.ParseMultipartForm(1 << 20); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "send the .torrent file as multipart/form-data, at most 16 MB: " + err.Error()})
+		return
+	}
+	defer r.MultipartForm.RemoveAll()
+	f, hdr, err := r.FormFile("torrent")
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "the .torrent file goes in the field torrent"})
+		return
+	}
+	data, err := io.ReadAll(io.LimitReader(f, engine.MaxTorrentFile+1))
+	f.Close()
+	switch {
+	case err != nil:
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	case len(data) > engine.MaxTorrentFile:
+		writeJSON(w, http.StatusRequestEntityTooLarge, map[string]string{"error": "the .torrent file is too large"})
+		return
+	case len(data) == 0 || data[0] != 'd':
+		// A .torrent is a bencoded dictionary.
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not a .torrent file"})
+		return
+	}
+	tmp, err := os.CreateTemp("", "odm-*.torrent")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer os.Remove(tmp.Name())
+	_, err = tmp.Write(data)
+	if cerr := tmp.Close(); err == nil {
+		err = cerr
+	}
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	// The download's address is the file's name: what it came from, for
+	// the list. It keeps its own copy of the file (Create).
+	name := engine.SanitizeName(filepath.Base(strings.ReplaceAll(hdr.Filename, "\\", "/")))
+	if name == "" {
+		name = "torrent"
+	}
+	if !engine.IsTorrentFile(name) {
+		name += ".torrent"
+	}
+	info := s.mgr.Create(engine.AddOptions{
+		URL:         name,
+		Dir:         strings.TrimSpace(r.FormValue("dir")),
+		Category:    strings.TrimSpace(r.FormValue("category")),
+		Queue:       strings.TrimSpace(r.FormValue("queue")),
+		Description: strings.TrimSpace(r.FormValue("description")),
+		Start:       r.FormValue("start") != "false",
+		Torrent:     &engine.TorrentJob{Name: engine.SanitizeName(r.FormValue("file_name"))},
+		TorrentFile: tmp.Name(),
+	})
+	s.Broadcast()
+	writeJSON(w, http.StatusCreated, info)
+}
+
+// torrentFile is a file of a torrent download, as GET
+// /api/downloads/{id}/files lists them: Index names it to
+// POST /api/downloads/{id}/files, Priority is 0 when it is left out.
+type torrentFile struct {
+	Index    int    `json:"index"`
+	Path     string `json:"path"`
+	Size     int64  `json:"size"`
+	Done     int64  `json:"done"`
+	Priority int    `json:"priority"`
+}
+
+// handleFiles lists a torrent's files, once its metadata is in.
+func (s *Server) handleFiles(w http.ResponseWriter, r *http.Request) {
+	id := r.PathValue("id")
+	info, ok := s.mgr.Get(id)
+	tj, isTorrent := s.mgr.Torrent(id)
+	if !ok || !isTorrent {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not a torrent"})
+		return
+	}
+	ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+	defer cancel()
+	det, live := s.mgr.TorrentDetail(ctx, id)
+	out := []torrentFile{}
+	for i, f := range tj.Files {
+		if f.Pad {
+			continue
+		}
+		tf := torrentFile{Index: i, Path: f.Name, Size: f.Size, Priority: f.Prio()}
+		if tf.Path == "" {
+			tf.Path = f.Path
+		}
+		switch {
+		case live && i < len(det.FileDone):
+			tf.Done = det.FileDone[i]
+		case info.Status == engine.StatusComplete && !f.Skip:
+			tf.Done = f.Size
+		}
+		out = append(out, tf)
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleSetFiles changes which files of a torrent download and how soon:
+// {"priorities": {"<index>": 0 to leave it out, 1 low, 4 normal or 7 high}}.
+func (s *Server) handleSetFiles(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Priorities map[int]int `json:"priorities"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := s.mgr.Get(id); !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	if err := s.mgr.SetTorrentFiles(id, body.Priorities); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.Broadcast()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 }
 
 // pinQuality makes a stream download the quality labelled label. When the

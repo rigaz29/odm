@@ -6,6 +6,19 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Added
+
+- A torrent's files can be left out, taken in again or given a priority
+  (high, normal, low) in its progress window while it downloads, not only
+  when it is added; the New Download window sets the priority too. A file
+  left out keeps what it had downloaded, and deleting the torrent with its
+  files takes it as well. Torrent progress windows open taller, for the
+  list.
+- The web UI (`-serve`) adds a `.torrent` file from the computer it runs
+  on: *.torrent…* next to the address in New Download, or the file dropped
+  on the page. The API takes one at `POST /api/torrents`, and lists and
+  changes a torrent's files at `/api/downloads/{id}/files`.
+
 ### Changed
 
 - The Setup window opens whenever ODM opens while yt-dlp, ffmpeg or
@@ -21,6 +34,10 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A torrent paused while ODM ran, then resumed, kept downloading the files
+  chosen before the pause.
+- A magnet link added through the web UI went to the Other category
+  instead of the one its largest file says.
 - Hide details in a download's progress window left the window too short:
   a torrent's peers and upload rows lay under the progress bar, and a
   file's last row was cut off. The window now takes the height its

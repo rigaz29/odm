@@ -22,6 +22,7 @@ type fakeTorrents struct {
 	pauses   []string
 	removes  map[string]bool // id -> deleteFiles
 	setFiles []map[int]string
+	prios    [][]int // each SetFiles' priorities
 	limits   [][2]int64
 	watchers map[string]chan TorrentEvent
 	save     map[string]string         // id -> save path
@@ -112,8 +113,11 @@ func (f *fakeTorrents) SetFiles(ctx context.Context, id string, names map[int]st
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.setFiles = append(f.setFiles, names)
-	f.names[id] = names
-	f.writeLocked(id)
+	f.prios = append(f.prios, prio)
+	if names != nil {
+		f.names[id] = names
+		f.writeLocked(id)
+	}
 	return nil
 }
 

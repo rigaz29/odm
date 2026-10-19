@@ -154,8 +154,8 @@ func (w *stubWindows) note(s string) {
 	w.asks = append(w.asks, s)
 	w.mu.Unlock()
 }
-func (w *stubWindows) openAdd(token string)   { w.note("add " + token) }
-func (w *stubWindows) openProgress(id string) { w.note("progress " + id) }
+func (w *stubWindows) openAdd(token string)                 { w.note("add " + token) }
+func (w *stubWindows) openProgress(id string, torrent bool) { w.note("progress " + id) }
 func (w *stubWindows) closeProgress(id string) {
 	w.note("close " + id)
 }

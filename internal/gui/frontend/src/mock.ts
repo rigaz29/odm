@@ -74,7 +74,21 @@ const seeds: Seed[] = [
     "debian-13.7.0-amd64-netinst.iso", "Disk Images", 754 * MB, "complete", 100, 0, "cdimage.debian.org",
     { url: "magnet:?xt=urn:btih:6d4795dee70aeb88e03e5336ca7c9fcf0a1e206d&dn=debian-13.7.0-amd64-netinst.iso", torrent: true, seeding: true, uploaded: 412 * MB, uploadSpeed: 1.6 * MB, peers: 6, seeds: 1 },
   ],
+  [
+    "Nusantara.Documentary.S01.1080p", "Video", 4.2 * GB, "downloading", 38, 5.4 * MB, "torrent",
+    { url: "magnet:?xt=urn:btih:0f3c6a1d9b2e4f5a6b7c8d9e0f1a2b3c4d5e6f70&dn=Nusantara.Documentary.S01.1080p", torrent: true, uploaded: 96 * MB, uploadSpeed: 210 * 1024, peers: 41, seeds: 33 },
+  ],
 ];
+
+// The files of a torrent the progress window lists: a season of episodes for
+// the documentary, else one file.
+function torrentFilesOf(d: Item): TorrentFileDetail[] {
+  if (!d.fileName.startsWith("Nusantara")) return [new TorrentFileDetail({ index: 0, name: d.fileName, size: d.total, done: d.total, priority: 4 })];
+  const ep = (n: number, done: number) => ({ name: `${say("Episode", "Episode")} 0${n}.mkv`, size: 1.3 * GB, done: done * 1.3 * GB });
+  return [ep(1, 1), ep(2, 0.42), ep(3, 0), { name: "Subs/indonesian.srt", size: 64 * 1024, done: 64 * 1024 }, { name: "Subs/english.srt", size: 61 * 1024, done: 0 }, { name: "sample.mkv", size: 280 * MB, done: 0 }].map(
+    (f, i) => new TorrentFileDetail({ ...f, index: i + (i > 2 ? 1 : 0), priority: i === 5 ? 0 : i === 1 ? 7 : 4, skip: i === 5 }),
+  );
+}
 
 // A torrent the New Download form reads: a magnet link shows its files once
 // its made-up peers answered, a few seconds after it was first asked.
@@ -145,6 +159,7 @@ export function mockApi(): Api {
   const limiter = { on: false, saved: 0 };
   let total = wave(9, 19 * MB);
   const limits = new Map<string, number>();
+  const torrentFiles = new Map<string, TorrentFileDetail[]>(); // as setTorrentFiles left them
   const newSchedule = () => ({
     sync: false, onStartup: false, startEnabled: false, startAt: "23:00", once: false, onceDate: "2026-10-17", days: [true, true, true, true, true, true, true],
     repeatEnabled: false, repeatMinutes: 60, stopEnabled: false, stopAt: "07:30", retriesEnabled: false, retries: 10,
@@ -385,6 +400,14 @@ export function mockApi(): Api {
       push();
     },
     torrentMagnet: async () => "magnet:?xt=urn:btih:0000",
+    setTorrentFiles: async (id, change) => {
+      const d = items.find((x) => x.id === id);
+      if (!d) throw new Error("download not found");
+      const files = torrentFiles.get(id) ?? torrentFilesOf(d);
+      const next = files.map((f) => new TorrentFileDetail({ ...f, priority: change[f.index] ?? f.priority, skip: (change[f.index] ?? f.priority) === 0 }));
+      if (!next.some((f) => f.priority > 0)) throw new Error("choose at least one file to download");
+      torrentFiles.set(id, next);
+    },
     openAssociationSettings: async () => {},
 
     detail: async (id) => {
@@ -402,7 +425,7 @@ export function mockApi(): Api {
           ? new TorrentDetail({
               seeding: d.seeding, peers: d.peers, seeds: d.seeds, uploadSpeed: d.uploadSpeed, uploaded: d.uploaded, ratio: d.uploaded / d.total,
               pieces: btoa(String.fromCharCode(...new Array(Math.ceil(377 / 8)).fill(255))), pieceCount: 377, magnet: d.url,
-              files: [new TorrentFileDetail({ name: d.fileName, size: d.total, done: d.total })],
+              files: torrentFiles.get(d.id) ?? torrentFilesOf(d),
             })
           : null,
       });

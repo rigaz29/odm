@@ -11,7 +11,7 @@ import { useEffect, useRef, useState } from "react";
 import { api } from "../api";
 import type { Chunk, Detail } from "../bindings/odm/internal/gui/models";
 import { FileTile, Sparkline } from "../components/bits";
-import { PieceMap } from "../components/TorrentFiles";
+import { PieceMap, PRIORITY_NORMAL, PrioritySelect } from "../components/TorrentFiles";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
 import { Input } from "../components/ui/input";
@@ -20,7 +20,10 @@ import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
 
 const POLL = 500; // ms
-const TALL = 620; // with the details
+// The window's height with the details, as ODM opens it: a torrent's files
+// need more room.
+const TALL = 620;
+const TORRENT_TALL = 720;
 
 type Tab = "status" | "limit" | "done";
 
@@ -35,6 +38,7 @@ export function ProgressWindow({ id }: { id: string }) {
   const seeded = useRef(false);
   const page = useRef<HTMLElement>(null);
   const shown = useRef(details);
+  const torrent = useRef(false);
 
   useEffect(() => {
     let live = true;
@@ -71,7 +75,7 @@ export function ProgressWindow({ id }: { id: string }) {
       const main = page.current;
       const last = main?.lastElementChild;
       if (details || !main || !last) {
-        api.setSize(width, TALL);
+        api.setSize(width, Math.min(torrent.current ? TORRENT_TALL : TALL, window.screen.availHeight));
         return;
       }
       const need = last.getBoundingClientRect().bottom + Number.parseFloat(getComputedStyle(main).paddingBottom);
@@ -80,6 +84,7 @@ export function ProgressWindow({ id }: { id: string }) {
   }, [details]);
 
   const it = d?.item;
+  torrent.current = !!d?.torrent;
   const recording = !!it && it.live && it.status === "downloading";
   const seeding = !!it?.seeding;
   useEffect(() => {
@@ -261,38 +266,94 @@ export function ProgressWindow({ id }: { id: string }) {
         </Button>
       </div>
 
-      {details && (d.torrent ? <TorrentParts d={d} /> : <Connections d={d} />)}
+      {details && (d.torrent ? <TorrentParts id={id} d={d} /> : <Connections d={d} />)}
     </main>
   );
 }
 
 // TorrentParts is a torrent's pieces map and its files, each with how much
-// of it is in.
-function TorrentParts({ d }: { d: Detail }) {
+// of it is in. Until it is complete each file can be left out, or given
+// another priority; one file at least stays.
+function TorrentParts({ id, d }: { id: string; d: Detail }) {
   const tor = d.torrent!;
+  // Choices sent and not yet in what ODM reports, by file index.
+  const [sent, setSent] = useState<Record<number, number>>({});
+  const [error, setError] = useState("");
+  useEffect(() => {
+    setSent((s) => {
+      const left = Object.fromEntries(Object.entries(s).filter(([i, p]) => tor.files.find((f) => f.index === Number(i))?.priority !== p));
+      return Object.keys(left).length === Object.keys(s).length ? s : left;
+    });
+  }, [tor.files]);
+  const editable = d.item.status !== "complete" && !tor.seeding;
+  const prio = (f: { index: number; priority: number }) => sent[f.index] ?? f.priority;
+  const wanted = tor.files.filter((f) => prio(f) > 0);
+  const all = wanted.length === tor.files.length;
+  const choose = (change: Record<number, number>) => {
+    setError("");
+    setSent((s) => ({ ...s, ...change }));
+    api.setTorrentFiles(id, change).catch((e) => {
+      setSent((s) => Object.fromEntries(Object.entries(s).filter(([i]) => !(Number(i) in change))));
+      setError(String((e as Error)?.message ?? e));
+    });
+  };
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-1.5">
       <p className="text-center text-xs text-muted-foreground">{tor.pieceCount > 0 ? tf("Pieces: %d", tor.pieceCount) : t("Pieces")}</p>
       {tor.pieceCount > 0 ? <PieceMap pieces={tor.pieces} count={tor.pieceCount} /> : <div className="h-4 rounded-md bg-muted ring-1 ring-inset ring-border" />}
+      {error && (
+        <p className="truncate text-xs text-red-600 dark:text-red-400" title={error}>
+          {error}
+        </p>
+      )}
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
         <table className="w-full table-fixed text-sm">
           <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
             <tr>
-              <th className="px-3 py-1.5 text-left font-medium">{t("File")}</th>
-              <th className="w-24 px-3 py-1.5 text-right font-medium">{t("Size")}</th>
-              <th className="w-24 px-3 py-1.5 text-right font-medium">{t("Downloaded")}</th>
+              <th className="w-9 py-1.5 pl-3 text-left font-medium">
+                <Checkbox
+                  checked={all ? true : "indeterminate"}
+                  disabled={!editable || all}
+                  aria-label={t("All files")}
+                  onCheckedChange={() => choose(Object.fromEntries(tor.files.filter((f) => prio(f) === 0).map((f) => [f.index, PRIORITY_NORMAL])))}
+                />
+              </th>
+              <th className="px-2 py-1.5 text-left font-medium">{t("File")}</th>
+              <th className="w-24 px-2 py-1.5 text-right font-medium">{t("Size")}</th>
+              <th className="w-20 px-2 py-1.5 text-right font-medium">{t("Downloaded")}</th>
+              <th className="w-28 py-1.5 pl-2 pr-3 text-left font-medium">{t("Priority")}</th>
             </tr>
           </thead>
           <tbody>
-            {tor.files.map((f) => (
-              <tr key={f.name} className={cn("border-t border-border", f.skip && "text-muted-foreground")}>
-                <td className="truncate px-3 py-1" title={f.name}>
-                  {f.name}
-                </td>
-                <td className="px-3 py-1 text-right tabular-nums">{humanBytes(f.size) || "0 B"}</td>
-                <td className="px-3 py-1 text-right tabular-nums">{f.skip ? t("Skipped") : `${f.size > 0 ? Math.floor((f.done / f.size) * 100) : 100}%`}</td>
-              </tr>
-            ))}
+            {tor.files.map((f) => {
+              const p = prio(f);
+              const last = p > 0 && wanted.length === 1;
+              return (
+                <tr key={f.index} className={cn("border-t border-border", p === 0 && "text-muted-foreground")}>
+                  <td className="py-1 pl-3">
+                    <Checkbox
+                      checked={p > 0}
+                      disabled={!editable || last}
+                      title={editable && last ? t("The last file cannot be left out") : undefined}
+                      aria-label={f.name}
+                      onCheckedChange={(v) => choose({ [f.index]: v === true ? PRIORITY_NORMAL : 0 })}
+                    />
+                  </td>
+                  <td className="truncate px-2 py-1" title={f.name}>
+                    {f.name}
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1 text-right tabular-nums">{humanBytes(f.size) || "0 B"}</td>
+                  <td className="px-2 py-1 text-right tabular-nums">{p === 0 && f.done === 0 ? "-" : `${f.size > 0 ? Math.floor((f.done / f.size) * 100) : 100}%`}</td>
+                  <td className="py-1 pl-2 pr-3">
+                    {p === 0 ? (
+                      <span className="text-xs">{t("Skipped")}</span>
+                    ) : (
+                      <PrioritySelect value={p} disabled={!editable} onChange={(v) => choose({ [f.index]: v })} />
+                    )}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

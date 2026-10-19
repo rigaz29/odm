@@ -14,6 +14,10 @@ import (
 // new one (internal/gui), with -tags gui.
 const Available = true
 
+// Torrents reports whether this UI has the windows for torrents, so that
+// ODM may offer itself for magnet links and .torrent files.
+const Torrents = true
+
 // Options mirrors the Fyne build's Run options.
 type Options struct {
 	Show     <-chan struct{}

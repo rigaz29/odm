@@ -110,9 +110,8 @@ type OptionsForm struct {
 	PortForwarding bool   `json:"portForwarding"`
 	UploadLimitKB  int    `json:"uploadLimitKB"` // 0 for none
 	TorrentLinks   bool   `json:"torrentLinks"`  // .torrent addresses as torrents
-	// Associate offers this ODM in Windows for magnet links and .torrent
-	// files (internal/assoc); it reads as off while another copy of ODM
-	// is the one offered.
+	// Associate offers ODM in Windows for magnet links and .torrent files
+	// (internal/assoc); on by default.
 	Associate bool `json:"associate"`
 
 	// What this system offers, not saved: a sound to play, and ODM's own
@@ -147,7 +146,7 @@ func (s *Service) Options() OptionsForm {
 		Seed: st.Torrent.Seed, SeedRatio: st.Torrent.SeedRatio, SeedMinutes: st.Torrent.SeedMinutes,
 		TorrentPort: st.Torrent.Port, Incoming: !st.Torrent.NoIncoming, PortForwarding: !st.Torrent.NoPortForwarding,
 		UploadLimitKB: int(st.Torrent.UploadLimit / 1024), TorrentLinks: !st.Torrent.NoTorrentLinks,
-		Associate: associated(),
+		Associate: !st.Torrent.NoAssociate,
 		CanSound:  runtime.GOOS == "windows", CanTools: s.tools() != nil, CanAssociate: assoc.Supported(),
 	}
 	if o.Theme == "" || o.Language == "" {
@@ -258,7 +257,8 @@ func (s *Service) SaveOptions(o OptionsForm) SaveResult {
 	next.Limits = engine.DownloadLimits{Enabled: o.CapOn, MB: o.CapMB, Hours: o.CapHours, NoWarning: !o.CapWarning}
 	next.Torrent = engine.TorrentSettings{Seed: o.Seed, SeedRatio: o.SeedRatio, SeedMinutes: o.SeedMinutes,
 		Port: o.TorrentPort, NoIncoming: !o.Incoming, NoPortForwarding: !o.PortForwarding,
-		UploadLimit: int64(max(0, o.UploadLimitKB)) * 1024, NoTorrentLinks: !o.TorrentLinks}
+		UploadLimit: int64(max(0, o.UploadLimitKB)) * 1024, NoTorrentLinks: !o.TorrentLinks,
+		NoAssociate: !o.Associate}
 	if next.Torrent.Port == 0 {
 		next.Torrent.Port = was.Torrent.Port // picked while the window was open
 	}
@@ -294,25 +294,44 @@ func (s *Service) SaveOptions(o OptionsForm) SaveResult {
 			res.StartupError = err.Error()
 		}
 	}
-	if assoc.Supported() && o.Associate != associated() {
-		exe, err := selfExe()
-		if err == nil {
-			err = assoc.Set(o.Associate, exe)
-		}
-		if err != nil {
-			res.AssociateError = err.Error()
-		}
+	if err := associate(was.Torrent.NoAssociate, next.Torrent.NoAssociate); err != nil {
+		res.AssociateError = err.Error()
 	}
 	s.poke()
 	return res
 }
 
+// The association calls, which tests replace: they must not change what
+// Windows offers for the person running them.
+var (
+	assocSet = assoc.Set
+	assocExe = assoc.Exe
+)
+
+// associate applies the box for magnet links and .torrent files when it
+// changed. Turned on, this ODM is offered, even over another copy: the
+// person asked for it. Turned off, this ODM stops being offered; another
+// copy's registration is left to it. (At start-up, main offers ODM when
+// none is.)
+func associate(wasOff, off bool) error {
+	if !assoc.Supported() || wasOff == off {
+		return nil
+	}
+	if off && !associated() {
+		return nil
+	}
+	exe, err := selfExe()
+	if err != nil {
+		return err
+	}
+	return assocSet(!off, exe)
+}
+
 // associated reports whether this ODM is the one Windows offers for magnet
-// links and .torrent files. Another copy's registration is left to it: a
-// test build or a second ODM does not take it over unless asked.
+// links and .torrent files.
 func associated() bool {
 	exe, err := selfExe()
-	reg := assoc.Exe()
+	reg := assocExe()
 	return err == nil && reg != "" && strings.EqualFold(filepath.Clean(reg), filepath.Clean(exe))
 }
 
@@ -323,7 +342,7 @@ func (s *Service) OpenAssociationSettings() error {
 	if !associated() {
 		exe, err := selfExe()
 		if err == nil {
-			err = assoc.Set(true, exe)
+			err = assocSet(true, exe)
 		}
 		if err != nil {
 			return err

@@ -34,6 +34,10 @@ import (
 // Available reports whether this build includes the desktop UI.
 const Available = true
 
+// Torrents reports whether this UI has the windows for torrents; the Fyne
+// UI has none.
+const Torrents = false
+
 // Options tunes how the desktop UI starts.
 type Options struct {
 	// Show receives a value whenever another ODM launch asks this one to

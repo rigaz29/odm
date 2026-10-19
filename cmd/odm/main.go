@@ -24,6 +24,7 @@ import (
 	"syscall"
 	"time"
 
+	"odm/internal/assoc"
 	"odm/internal/browserreg"
 	"odm/internal/clipmon"
 	"odm/internal/engine"
@@ -130,6 +131,9 @@ func main() {
 	// integration is set up only by the instance that holds it.
 	if sock != nil && !settings.NoBrowserRegister {
 		registerBrowsersIfNeeded(baseDir)
+	}
+	if sock != nil && ui.Torrents && !settings.Torrent.NoAssociate {
+		associateIfNeeded()
 	}
 	if *dir != "" {
 		settings.Dir = *dir
@@ -406,16 +410,39 @@ func registerBrowsersIfNeeded(baseDir string) {
 		log.Println("browser registration:", err)
 		return
 	}
-	exists := func(p string) bool {
-		fi, err := os.Stat(p)
-		return err == nil && fi.Mode().IsRegular()
-	}
-	if !browserreg.NeedsRegister(browserreg.Check(), exe, exists) {
+	if !browserreg.NeedsRegister(browserreg.Check(), exe, isFile) {
 		return
 	}
 	for _, r := range browserreg.Register(exe, baseDir) {
 		log.Println("browser registration:", r)
 	}
+}
+
+// associateIfNeeded offers this ODM in Windows for magnet links and
+// .torrent files at start-up, as Options -> Torrents does, when no ODM is
+// offered yet or the one offered was moved or deleted. Another copy of ODM
+// that still exists keeps it: a test build does not take it over.
+func associateIfNeeded() {
+	if !assoc.Supported() {
+		return
+	}
+	exe, err := selfExe()
+	if err != nil {
+		log.Println("file associations:", err)
+		return
+	}
+	if reg := assoc.Exe(); reg != "" && isFile(reg) {
+		return
+	}
+	if err := assoc.Set(true, exe); err != nil {
+		log.Println("file associations:", err)
+	}
+}
+
+// isFile reports whether p is a file that exists.
+func isFile(p string) bool {
+	fi, err := os.Stat(p)
+	return err == nil && fi.Mode().IsRegular()
 }
 
 // runBrowserRegistration handles -register-browser / -unregister-browser and

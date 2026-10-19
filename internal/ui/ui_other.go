@@ -13,6 +13,9 @@ import (
 // Available reports whether this build includes the desktop UI.
 const Available = false
 
+// Torrents reports whether this UI has the windows for torrents.
+const Torrents = false
+
 // Options mirrors the desktop build's Run options.
 type Options struct {
 	Show     <-chan struct{}

@@ -1,11 +1,13 @@
 package gui
 
 import (
+	"fmt"
 	"path/filepath"
 	"reflect"
 	"sync"
 	"testing"
 
+	"odm/internal/assoc"
 	"odm/internal/engine"
 )
 
@@ -117,6 +119,54 @@ func TestSaveOptions(t *testing.T) {
 		t.Fatalf("the built-in set was saved as %+v", st.CategoryDefs)
 	}
 	engine.Categories() // the defaults are back in use
+}
+
+func TestSaveOptionsAssociate(t *testing.T) {
+	if !assoc.Supported() {
+		t.Skip("no associations on this system")
+	}
+	svc, mgr := newTestService(t)
+	self, err := selfExe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := `C:\Other\ODM.exe` // another copy of ODM is offered
+	var calls []string
+	assocExe = func() string { return reg }
+	assocSet = func(on bool, exe string) error {
+		calls = append(calls, fmt.Sprint(on, " ", exe))
+		if on {
+			reg = exe
+		} else {
+			reg = ""
+		}
+		return nil
+	}
+	t.Cleanup(func() { assocExe, assocSet = assoc.Exe, assoc.Set })
+
+	o := svc.Options()
+	if !o.Associate || !o.CanAssociate {
+		t.Fatalf("not on by default: %+v", o)
+	}
+	svc.SaveOptions(o) // unchanged: nothing to do
+	if len(calls) != 0 {
+		t.Fatalf("unchanged box applied: %v", calls)
+	}
+	o.Associate = false
+	svc.SaveOptions(o) // off, but another copy is offered: left to it
+	if len(calls) != 0 || !mgr.Settings().Torrent.NoAssociate {
+		t.Fatalf("off: %v, settings %+v", calls, mgr.Settings().Torrent)
+	}
+	o.Associate = true
+	svc.SaveOptions(o) // on again: this ODM, over the other copy
+	if len(calls) != 1 || calls[0] != "true "+self || mgr.Settings().Torrent.NoAssociate {
+		t.Fatalf("on: %v", calls)
+	}
+	o.Associate = false
+	svc.SaveOptions(o) // off while this ODM is offered
+	if len(calls) != 2 || calls[1] != "false "+self {
+		t.Fatalf("off: %v", calls)
+	}
 }
 
 func TestSaveOptionsRefuses(t *testing.T) {

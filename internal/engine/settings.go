@@ -98,6 +98,9 @@ type TorrentSettings struct {
 	// NoTorrentLinks downloads the address of a .torrent file as the file,
 	// not as the torrent it describes (which is the default).
 	NoTorrentLinks bool `json:"no_torrent_links,omitempty"`
+	// NoAssociate keeps ODM from offering itself in Windows for magnet
+	// links and .torrent files (internal/assoc), which it does by default.
+	NoAssociate bool `json:"no_associate,omitempty"`
 }
 
 // Kinds of TorrentSettings.Seed.

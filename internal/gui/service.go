@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"slices"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"odm/internal/browsers"
@@ -150,14 +151,22 @@ type Service struct {
 	// replaced in tests.
 	installed func() []browsers.Browser
 	launch    func(b browsers.Browser, args ...string) error
+	// missing lists the companion programs ODM could download but has
+	// not (setup.go); replaced in tests. firstRun is ODM's first start,
+	// and setupOffered says the Setup window was offered in this run.
+	missing      func() []string
+	firstRun     bool
+	setupOffered atomic.Bool
 }
 
 // NewService makes the page's Service for mgr.
 func NewService(mgr *engine.Manager) *Service {
-	return &Service{mgr: mgr, wake: make(chan struct{}, 1), sent: map[string]Item{},
+	s := &Service{mgr: mgr, wake: make(chan struct{}, 1), sent: map[string]Item{},
 		speeds: map[string][]int64{}, since: map[string]time.Time{}, now: time.Now,
 		prefills: map[string]engine.AddOptions{}, probes: map[string]*probed{},
 		installed: browsers.Installed, launch: func(b browsers.Browser, args ...string) error { return b.Open(args...) }}
+	s.missing = s.missingTools
+	return s
 }
 
 // Snapshot returns what the main window shows now.

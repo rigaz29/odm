@@ -420,6 +420,14 @@ export function SetOpenWhenDone(id: string, on: boolean): $CancellablePromise<vo
 }
 
 /**
+ * SetSetupAtStart says whether the Setup window opens when ODM opens and a
+ * program is missing.
+ */
+export function SetSetupAtStart(on: boolean): $CancellablePromise<void> {
+    return $Call.ByID(2642318648, on);
+}
+
+/**
  * SetSpeedLimiter turns the speed limit for all downloads on or off. A
  * bytesPerSecond above 0 also sets the limit; 0 keeps the one saved.
  */

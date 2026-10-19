@@ -162,7 +162,9 @@ export function mockApi(): Api {
     tools: [
       { name: "yt-dlp", state: "found", path: String.raw`C:\Users\me\AppData\Roaming\Python\Python310\Scripts\yt-dlp.exe`, version: "2026.08.19", canInstall: true },
       { name: "ffmpeg", state: "missing", path: "", version: "", canInstall: true },
+      { name: "odm-libtorrent", state: "missing", path: "", version: "", canInstall: true },
     ],
+    atStart: true,
     browsers: [
       { key: "chrome", name: "Google Chrome", family: "chromium", connected: true },
       { key: "edge", name: "Microsoft Edge", family: "chromium", connected: false },
@@ -488,7 +490,11 @@ export function mockApi(): Api {
     runFinish: async () => {},
     setToolUpdates: async (on) => void (setup.toolMode = on ? "auto" : "off"),
     setupStatus: async () =>
-      new SetupStatus({ toolMode: setup.toolMode, tools: setup.tools.map((x) => new SetupTool(x)), browsers: setup.browsers.map((b) => new SetupBrowser(b)) }),
+      new SetupStatus({
+        toolMode: setup.toolMode, atStart: setup.atStart,
+        tools: setup.tools.map((x) => new SetupTool(x)), browsers: setup.browsers.map((b) => new SetupBrowser(b)),
+      }),
+    setSetupAtStart: async (on) => void (setup.atStart = on),
     setupBrowsers: async () => setup.browsers.map((b) => new SetupBrowser(b)),
     installTool: async (name) => {
       const total = 9_400_000;

@@ -146,6 +146,8 @@ func (d *desk) showMain() {
 	d.win.Show()
 	d.win.Restore()
 	d.win.Focus()
+	// After a start in the tray, the Setup window waits for this.
+	go d.svc.offerSetup()
 }
 
 // watch keeps the tray up to date: the limiter item, and a tooltip with

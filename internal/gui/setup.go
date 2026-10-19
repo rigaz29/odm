@@ -20,9 +20,9 @@ import (
 	"odm/internal/version"
 )
 
-// The Setup window (?view=setup): yt-dlp and ffmpeg, and ODM's extension
-// in each browser. It opens by itself once (setupAtStart) and from the
-// menu (OpenSetup).
+// The Setup window (?view=setup): yt-dlp, ffmpeg and odm-libtorrent, and
+// ODM's extension in each browser. It opens by itself when ODM opens and a
+// program is missing (offerSetup), and from the menu (OpenSetup).
 
 // SetupStatus is what the Setup window shows.
 type SetupStatus struct {
@@ -33,10 +33,12 @@ type SetupStatus struct {
 	// ReleasesPage is where to download the extension where ODM cannot
 	// find the browsers (outside Windows); empty where it can.
 	ReleasesPage string `json:"releasesPage"`
+	// AtStart: the window opens when ODM opens and a program is missing.
+	AtStart bool `json:"atStart"`
 }
 
-// SetupTool is yt-dlp or ffmpeg as the Setup window lists it: State and
-// the rest as ToolStatus gives them.
+// SetupTool is yt-dlp, ffmpeg or odm-libtorrent as the Setup window lists
+// it: State and the rest as ToolStatus gives them.
 type SetupTool struct {
 	Name    string `json:"name"`
 	State   string `json:"state"`
@@ -44,9 +46,6 @@ type SetupTool struct {
 	Version string `json:"version"`
 	// CanInstall: ODM can download it on this system.
 	CanInstall bool `json:"canInstall"`
-	// Optional: installed on its own, not with the others (odm-libtorrent,
-	// which ODM fetches the first time a torrent is added anyway).
-	Optional bool `json:"optional"`
 }
 
 // SetupBrowser is an installed browser as the Setup window lists it.
@@ -89,7 +88,7 @@ const firefoxAddon = "odm-extension-firefox.xpi"
 // SetupStatus reports the tools and the browsers' extensions.
 func (s *Service) SetupStatus() SetupStatus {
 	st := s.mgr.Settings()
-	out := SetupStatus{ToolMode: st.ToolUpdates, Browsers: s.SetupBrowsers()}
+	out := SetupStatus{ToolMode: st.ToolUpdates, Browsers: s.SetupBrowsers(), AtStart: !st.NoSetupAtStart}
 	if !browsers.Listed {
 		out.ReleasesPage = releaseBase + version.Repo + "/releases/latest"
 	}
@@ -110,7 +109,29 @@ func (s *Service) setupTool(name string) SetupTool {
 	for _, t := range tools.All() {
 		if t.Name == name {
 			out.CanInstall = t.Supported() && s.tools() != nil
-			out.Optional = t.OnDemand
+		}
+	}
+	return out
+}
+
+// SetSetupAtStart says whether the Setup window opens when ODM opens and a
+// program is missing.
+func (s *Service) SetSetupAtStart(on bool) {
+	next := s.mgr.Settings()
+	if next.NoSetupAtStart == !on {
+		return
+	}
+	next.NoSetupAtStart = !on
+	s.mgr.UpdateSettings(next)
+}
+
+// missingTools lists the companion programs ODM could download here but
+// has not: missing, or a path of the person's that does not work.
+func (s *Service) missingTools() []string {
+	var out []string
+	for _, t := range tools.All() {
+		if st := s.setupTool(t.Name); st.CanInstall && st.State != "found" {
+			out = append(out, t.Name)
 		}
 	}
 	return out
@@ -288,31 +309,35 @@ func (s *Service) fetchTo(ctx context.Context, url, file string) error {
 	return os.Rename(tmp, file)
 }
 
-// setupAtStart offers the Setup window once: at ODM's first start, or to
-// someone who used ODM before when yt-dlp or ffmpeg is missing. visible is
-// false for a start in the tray, which leaves the offer for a later start.
-// It also brings the extension ODM wrote for "Load unpacked" up to this
-// release, so the browsers that loaded it get the new one when they
-// restart.
+// setupAtStart offers the Setup window as ODM opens (offerSetup). visible
+// is false for a start in the tray: the offer then waits for the main
+// window to be shown. It also brings the extension ODM wrote for "Load
+// unpacked" up to this release, so the browsers that loaded it get the new
+// one when they restart.
 func (s *Service) setupAtStart(firstRun, visible bool) {
 	if _, err := os.Stat(filepath.Join(extensionDir(), "manifest.json")); err == nil {
 		_, _ = writeExtension()
 	}
-	if !visible || s.mgr.Settings().SetupDone {
+	s.mu.Lock()
+	s.firstRun = firstRun
+	s.mu.Unlock()
+	if visible {
+		s.offerSetup()
+	}
+}
+
+// offerSetup opens the Setup window, once a run, the first time ODM's
+// window is seen: at ODM's first start (for the extension too), and
+// whenever a companion program ODM could download is missing, unless the
+// person turned that off. With every program in, it stays closed.
+func (s *Service) offerSetup() {
+	if !s.setupOffered.CompareAndSwap(false, true) {
 		return
 	}
-	show := firstRun
-	if !show {
-		for _, t := range tools.All() {
-			if t.Supported() && !t.OnDemand && s.setupTool(t.Name).State == "missing" {
-				show = true
-			}
-		}
-	}
-	next := s.mgr.Settings()
-	next.SetupDone = true
-	s.mgr.UpdateSettings(next)
-	if show {
+	s.mu.Lock()
+	first := s.firstRun
+	s.mu.Unlock()
+	if first || !s.mgr.Settings().NoSetupAtStart && len(s.missing()) > 0 {
 		s.OpenSetup()
 	}
 }

@@ -6,6 +6,14 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Changed
+
+- The Setup window opens whenever ODM opens while yt-dlp, ffmpeg or
+  odm-libtorrent is missing and ODM could download it, not only once; with
+  all of them in, it stays closed. After a start in the tray it waits for
+  the main window to be shown. A box in the window turns this off.
+  Install all takes odm-libtorrent too.
+
 ## [0.6.0] - 2026-10-19
 
 ### Added

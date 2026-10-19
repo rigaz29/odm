@@ -141,23 +141,54 @@ func TestInstallExtensionFirefox(t *testing.T) {
 	}
 }
 
-// The Setup window opens by itself once, never for a start in the tray,
-// and the extension written for "Load unpacked" follows ODM's release.
+// The Setup window opens as ODM opens at its first start, and whenever a
+// companion program is missing, once a run; a start in the tray waits for
+// the window to be shown. The extension written for "Load unpacked"
+// follows ODM's release.
 func TestSetupAtStart(t *testing.T) {
 	svc, _ := setupService(t)
 	w := &stubWindows{}
 	svc.windows = w
-	svc.setupAtStart(true, false)
-	if w.got() != "" || svc.mgr.Settings().SetupDone {
-		t.Fatalf("offered for a start in the tray: %q", w.got())
+	var missing []string
+	svc.missing = func() []string { return missing }
+	run := func(firstRun, visible bool) string {
+		w.asks = nil
+		svc.setupOffered.Store(false) // a new run
+		svc.setupAtStart(firstRun, visible)
+		return w.got()
 	}
-	svc.setupAtStart(true, true)
-	if w.got() != "setup" || !svc.mgr.Settings().SetupDone {
-		t.Fatalf("first start: %q", w.got())
+
+	if got := run(true, false); got != "" {
+		t.Fatalf("offered for a start in the tray: %q", got)
 	}
-	svc.setupAtStart(true, true)
-	if w.got() != "setup" {
-		t.Fatalf("offered again: %q", w.got())
+	svc.offerSetup() // the window shown from the tray
+	if got := w.got(); got != "setup" {
+		t.Fatalf("first start, shown from the tray: %q", got)
+	}
+	svc.offerSetup()
+	if got := w.got(); got != "setup" {
+		t.Fatalf("offered twice in a run: %q", got)
+	}
+	if got := run(false, true); got != "" {
+		t.Fatalf("every program in: %q", got)
+	}
+	missing = []string{"odm-libtorrent"}
+	if got := run(false, true); got != "setup" {
+		t.Fatalf("odm-libtorrent missing: %q", got)
+	}
+	if got := run(false, true); got != "setup" {
+		t.Fatalf("still missing at the next start: %q", got)
+	}
+	svc.SetSetupAtStart(false)
+	if got := run(false, true); got != "" || svc.SetupStatus().AtStart {
+		t.Fatalf("turned off: %q", got)
+	}
+	if got := run(true, true); got != "setup" {
+		t.Fatalf("first start, turned off: %q", got)
+	}
+	svc.SetSetupAtStart(true)
+	if !svc.SetupStatus().AtStart {
+		t.Fatal("not on again")
 	}
 
 	dir, err := writeExtension()

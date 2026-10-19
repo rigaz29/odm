@@ -1089,9 +1089,8 @@ export class OptionsForm {
     "torrentLinks": boolean;
 
     /**
-     * Associate offers this ODM in Windows for magnet links and .torrent
-     * files (internal/assoc); it reads as off while another copy of ODM
-     * is the one offered.
+     * Associate offers ODM in Windows for magnet links and .torrent files
+     * (internal/assoc); on by default.
      */
     "associate": boolean;
 
@@ -1771,6 +1770,11 @@ export class SetupStatus {
      */
     "releasesPage": string;
 
+    /**
+     * AtStart: the window opens when ODM opens and a program is missing.
+     */
+    "atStart": boolean;
+
     /** Creates a new SetupStatus instance. */
     constructor($$source: Partial<SetupStatus> = {}) {
         if (!("tools" in $$source)) {
@@ -1784,6 +1788,9 @@ export class SetupStatus {
         }
         if (!("releasesPage" in $$source)) {
             this["releasesPage"] = "";
+        }
+        if (!("atStart" in $$source)) {
+            this["atStart"] = false;
         }
 
         Object.assign(this, $$source);
@@ -1807,8 +1814,8 @@ export class SetupStatus {
 }
 
 /**
- * SetupTool is yt-dlp or ffmpeg as the Setup window lists it: State and
- * the rest as ToolStatus gives them.
+ * SetupTool is yt-dlp, ffmpeg or odm-libtorrent as the Setup window lists
+ * it: State and the rest as ToolStatus gives them.
  */
 export class SetupTool {
     "name": string;
@@ -1820,12 +1827,6 @@ export class SetupTool {
      * CanInstall: ODM can download it on this system.
      */
     "canInstall": boolean;
-
-    /**
-     * Optional: installed on its own, not with the others (odm-libtorrent,
-     * which ODM fetches the first time a torrent is added anyway).
-     */
-    "optional": boolean;
 
     /** Creates a new SetupTool instance. */
     constructor($$source: Partial<SetupTool> = {}) {
@@ -1843,9 +1844,6 @@ export class SetupTool {
         }
         if (!("canInstall" in $$source)) {
             this["canInstall"] = false;
-        }
-        if (!("optional" in $$source)) {
-            this["optional"] = false;
         }
 
         Object.assign(this, $$source);

@@ -122,6 +122,7 @@ export interface Api {
 
   // The Setup window (setup.go): yt-dlp, ffmpeg and the extension.
   setupStatus(): Promise<SetupStatus>;
+  setSetupAtStart(on: boolean): Promise<void>;
   setupBrowsers(): Promise<SetupBrowser[]>;
   installTool(name: string): Promise<SetupTool>;
   // onSetupProgress calls cb as a tool downloads.
@@ -239,6 +240,7 @@ const wailsApi: Api = {
   runFinish: (action) => Service.RunFinish(action),
   setToolUpdates: (on) => Service.SetToolUpdates(on),
   setupStatus: () => Service.SetupStatus(),
+  setSetupAtStart: (on) => Service.SetSetupAtStart(on),
   setupBrowsers: () => Service.SetupBrowsers(),
   installTool: (name) => Service.InstallTool(name),
   onSetupProgress: (cb) => Events.On(SETUP_PROGRESS_EVENT, (e) => cb(e.data as SetupProgress)),

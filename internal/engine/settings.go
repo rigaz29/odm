@@ -201,9 +201,10 @@ type Settings struct {
 	// ToolUpdates says whether ODM may download yt-dlp and ffmpeg itself
 	// and keep them updated: "" (not asked yet), "auto" or "off".
 	ToolUpdates string `json:"tool_updates,omitempty"`
-	// SetupDone records that the Setup window (yt-dlp, ffmpeg and the
-	// browser extension) was offered at start: it opens by itself once.
-	SetupDone bool `json:"setup_done,omitempty"`
+	// NoSetupAtStart keeps the Setup window from opening when ODM opens
+	// while a companion program it can download is missing, as it does by
+	// default (internal/gui, offerSetup).
+	NoSetupAtStart bool `json:"no_setup_at_start,omitempty"`
 	// ExtensionBrowsers lists the browsers whose ODM extension has talked
 	// to this ODM ("chrome", "edge", "firefox", ...; "chromium" when an
 	// extension did not say which Chromium browser), for the Setup window.

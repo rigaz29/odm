@@ -519,6 +519,7 @@ export function mockApi(): Api {
     showExtensionFolder: async () => {},
     openSetup: async () => void window.open("?view=setup", "_blank", "width=640,height=740"),
     setTitle: (title) => void (document.title = title),
+    windowSize: async () => ({ width: window.innerWidth, height: window.innerHeight }),
     setSize: () => {},
     closeWindow: () => window.close(),
   };

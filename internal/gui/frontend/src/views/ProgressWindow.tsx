@@ -20,9 +20,7 @@ import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
 
 const POLL = 500; // ms
-const WIDTH = 580;
 const TALL = 620; // with the details
-const SHORT = 390;
 
 type Tab = "status" | "limit" | "done";
 
@@ -35,6 +33,8 @@ export function ProgressWindow({ id }: { id: string }) {
   const [limitKB, setLimitKB] = useState("500");
   const [useLimit, setUseLimit] = useState(false);
   const seeded = useRef(false);
+  const page = useRef<HTMLElement>(null);
+  const shown = useRef(details);
 
   useEffect(() => {
     let live = true;
@@ -60,6 +60,24 @@ export function ProgressWindow({ id }: { id: string }) {
       clearInterval(timer);
     };
   }, [id]);
+
+  // Without the details the window takes the height the rest needs, which
+  // a torrent's extra rows make taller. The window's size counts Windows'
+  // frame, so the frame is what the window has past the page.
+  useEffect(() => {
+    if (shown.current === details) return;
+    shown.current = details;
+    void api.windowSize().then(({ width, height }) => {
+      const main = page.current;
+      const last = main?.lastElementChild;
+      if (details || !main || !last) {
+        api.setSize(width, TALL);
+        return;
+      }
+      const need = last.getBoundingClientRect().bottom + Number.parseFloat(getComputedStyle(main).paddingBottom);
+      api.setSize(width, Math.ceil(need + height - window.innerHeight));
+    });
+  }, [details]);
 
   const it = d?.item;
   const recording = !!it && it.live && it.status === "downloading";
@@ -107,9 +125,12 @@ export function ProgressWindow({ id }: { id: string }) {
     ["limit", t("Speed limiter")],
     ["done", t("Options on completion")],
   ];
+  // The tabs share one cell, so the box keeps the tallest one's height
+  // whichever is open, and the window fitted to it stays right.
+  const panel = (k: Tab, className: string) => cn("[grid-area:1/1]", className, tab !== k && "invisible");
 
   return (
-    <main className="flex h-full flex-col gap-3 bg-background p-4 text-foreground">
+    <main ref={page} className="flex h-full flex-col gap-3 bg-background p-4 text-foreground">
       <div className="flex items-center gap-2.5">
         <FileTile category={it.category} size="size-9" icon="size-4" />
         <div className="min-w-0 flex-1">
@@ -136,72 +157,66 @@ export function ProgressWindow({ id }: { id: string }) {
         ))}
       </div>
 
-      <div className="min-h-[8.5rem] rounded-lg border border-border bg-card p-3">
-        {tab === "status" && (
-          <div className="flex gap-4">
-            <dl className="grid min-w-0 flex-1 grid-cols-[7.5rem_1fr] gap-x-3 gap-y-1 text-sm">
-              {rows.map(([k, v]) => (
-                <div key={k} className="contents">
-                  <dt className="text-muted-foreground">{k}</dt>
-                  <dd className="truncate tabular-nums" title={v}>
-                    {v}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            <Sparkline values={it.speeds.length ? it.speeds : [0]} className="h-24 w-40 shrink-0 self-end" />
+      <div className="grid min-h-[8.5rem] shrink-0 grid-cols-1 rounded-lg border border-border bg-card p-3">
+        <div className={panel("status", "flex gap-4")}>
+          <dl className="grid min-w-0 flex-1 grid-cols-[7.5rem_1fr] gap-x-3 gap-y-1 text-sm">
+            {rows.map(([k, v]) => (
+              <div key={k} className="contents">
+                <dt className="text-muted-foreground">{k}</dt>
+                <dd className="truncate tabular-nums" title={v}>
+                  {v}
+                </dd>
+              </div>
+            ))}
+          </dl>
+          <Sparkline values={it.speeds.length ? it.speeds : [0]} className="h-24 w-40 shrink-0 self-end" />
+        </div>
+        <div className={panel("limit", "space-y-3 text-sm")}>
+          <p>
+            <span className="text-muted-foreground">{t("Transfer rate")}</span> <span className="ml-2 tabular-nums">{rate}</span>
+          </p>
+          <label className="flex items-center gap-2">
+            <Checkbox
+              checked={useLimit}
+              onCheckedChange={(v) => {
+                setUseLimit(v === true);
+                applyLimit(v === true, limitKB);
+              }}
+            />
+            {t("Use speed limiter")}
+          </label>
+          <div className="flex items-center gap-2">
+            <span className="w-32 text-muted-foreground">{t("Maximum speed")}</span>
+            <Input
+              className="w-24"
+              inputMode="numeric"
+              disabled={!useLimit}
+              value={limitKB}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, "");
+                setLimitKB(v);
+                applyLimit(useLimit, v);
+              }}
+            />
+            <span className="text-muted-foreground">KB/s</span>
           </div>
-        )}
-        {tab === "limit" && (
-          <div className="space-y-3 text-sm">
-            <p>
-              <span className="text-muted-foreground">{t("Transfer rate")}</span> <span className="ml-2 tabular-nums">{rate}</span>
-            </p>
-            <label className="flex items-center gap-2">
-              <Checkbox
-                checked={useLimit}
-                onCheckedChange={(v) => {
-                  setUseLimit(v === true);
-                  applyLimit(v === true, limitKB);
-                }}
-              />
-              {t("Use speed limiter")}
-            </label>
-            <div className="flex items-center gap-2">
-              <span className="w-32 text-muted-foreground">{t("Maximum speed")}</span>
-              <Input
-                className="w-24"
-                inputMode="numeric"
-                disabled={!useLimit}
-                value={limitKB}
-                onChange={(e) => {
-                  const v = e.target.value.replace(/\D/g, "");
-                  setLimitKB(v);
-                  applyLimit(useLimit, v);
-                }}
-              />
-              <span className="text-muted-foreground">KB/s</span>
-            </div>
-          </div>
-        )}
-        {tab === "done" && (
-          <div className="space-y-3 text-sm">
-            <p className="flex gap-2">
-              <span className="shrink-0 text-muted-foreground">{t("Save to")}</span>
-              <span className="truncate" title={d.path}>
-                {d.path || "-"}
-              </span>
-            </p>
-            <label className="flex items-center gap-2">
-              <Checkbox checked={d.completeDialog} onCheckedChange={(v) => void api.setCompleteDialog(v === true)} />
-              {t("Show download complete dialog")}
-            </label>
-            <label className="flex items-center gap-2">
-              <Checkbox checked={d.openWhenDone} onCheckedChange={(v) => void api.setOpenWhenDone(id, v === true)} />
-              {t("Open the file when done")}
-            </label>
-          </div>
-        )}
+        </div>
+        <div className={panel("done", "space-y-3 text-sm")}>
+          <p className="flex gap-2">
+            <span className="shrink-0 text-muted-foreground">{t("Save to")}</span>
+            <span className="truncate" title={d.path}>
+              {d.path || "-"}
+            </span>
+          </p>
+          <label className="flex items-center gap-2">
+            <Checkbox checked={d.completeDialog} onCheckedChange={(v) => void api.setCompleteDialog(v === true)} />
+            {t("Show download complete dialog")}
+          </label>
+          <label className="flex items-center gap-2">
+            <Checkbox checked={d.openWhenDone} onCheckedChange={(v) => void api.setOpenWhenDone(id, v === true)} />
+            {t("Open the file when done")}
+          </label>
+        </div>
       </div>
 
       <div className="space-y-1">
@@ -218,10 +233,7 @@ export function ProgressWindow({ id }: { id: string }) {
       <div className="flex items-center gap-2">
         <Button
           variant="ghost"
-          onClick={() => {
-            setDetails(!details);
-            api.setSize(WIDTH, details ? SHORT : TALL);
-          }}
+          onClick={() => setDetails(!details)}
         >
           {details ? <ChevronUp /> : <ChevronDown />} {details ? t("Hide details") : t("Show details")}
         </Button>

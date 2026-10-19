@@ -19,6 +19,13 @@ All notable changes to ODM are documented here. The format is based on
   they are in, instead of closing at once), and in the main window's
   status bar, also for the downloads and updates ODM does by itself.
 
+### Fixed
+
+- Hide details in a download's progress window left the window too short:
+  a torrent's peers and upload rows lay under the progress bar, and a
+  file's last row was cut off. The window now takes the height its
+  contents need, and keeps it when another tab is opened.
+
 ## [0.6.0] - 2026-10-19
 
 ### Added

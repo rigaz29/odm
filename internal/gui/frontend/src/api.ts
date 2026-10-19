@@ -131,8 +131,10 @@ export interface Api {
   showExtensionFolder(): Promise<void>;
   openSetup(): Promise<void>;
 
-  // This window: its title and size, and closing it.
+  // This window: its title and size, and closing it. The size is the
+  // window's, Windows' frame included.
   setTitle(title: string): void;
+  windowSize(): Promise<{ width: number; height: number }>;
   setSize(width: number, height: number): void;
   closeWindow(): void;
 }
@@ -251,6 +253,7 @@ const wailsApi: Api = {
     document.title = title;
     void Window.SetTitle(title);
   },
+  windowSize: () => Window.Size(),
   setSize: (w, h) => void Window.SetSize(w, h),
   closeWindow: () => void Window.Close(),
 };

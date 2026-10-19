@@ -6,6 +6,56 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.6.0] - 2026-10-19
+
+### Added
+
+- Torrents and magnet links, in the desktop UI on Windows, Linux and
+  macOS. A magnet link or a `.torrent` file (an address, ⋯ → Open
+  .torrent file…, or a file dropped on the window) opens the New Download
+  window. A magnet link first gets its list of files from its peers, with
+  the number connected shown; the files can then be ticked one by one,
+  next to the folder, category and queue. The Fyne build has no torrent
+  windows.
+- Torrents run in `odm-libtorrent`, a companion program on libtorrent
+  2.1, published in this repository's releases. ODM downloads it the
+  first time a torrent needs it (about 4 MB, checked against its
+  SHA-256): from the New Download window's Install button, from Setup, or
+  from a question of its own when a torrent was added another way, with
+  the download's progress shown. Torrents that waited for it start once
+  it is in. It is kept up to date with yt-dlp and ffmpeg.
+- A finished torrent seeds, outside its queue's slots, until it uploaded
+  as much as its size or for 30 minutes. Stop seeding is in the list's
+  menu and the progress window, and the list shows a seeding torrent's
+  upload speed. The progress window shows a torrent's peers and seeds,
+  what it uploaded and its ratio, its pieces and its files.
+- Options → Torrents: how long to seed, the port, incoming connections,
+  UPnP and NAT-PMP, an upload limit, and whether a `.torrent` address is
+  downloaded as the torrent or as the file. A SOCKS5 proxy carries every
+  torrent connection; an HTTP proxy or the system's only reaches
+  trackers.
+- On Windows ODM offers itself for magnet links and `.torrent` files, for
+  the current user: listed in Default apps, and the program for magnet
+  links when there was none. Windows keeps the choice of the program.
+  Options → Torrents turns it off and removes what ODM registered; a copy
+  of ODM that is already registered and still exists keeps it, so a
+  second copy does not take it over.
+- The extension's Download with ODM takes `magnet:` links, and a `.torrent`
+  file the browser starts to download goes to ODM as a torrent. The
+  clipboard monitor recognises magnet links. `ODM.exe magnet:…` and
+  `ODM.exe file.torrent` open the New Download window, in the running ODM
+  when there is one.
+- The API adds a magnet link as a torrent, takes `"torrent": true` for a
+  `.torrent` address, and has the action `stop-seeding`.
+
+### Changed
+
+- ODM itself still opens no TCP port, but while a torrent runs,
+  `odm-libtorrent` listens for peers on the torrent port and may open it
+  on the router; Windows' firewall asks about it the first time.
+  Trackers and web seeds on this computer or the local network are
+  dropped from a torrent that came from the internet.
+
 ## [0.5.1] - 2026-10-18
 
 ### Added
@@ -688,7 +738,8 @@ All notable changes to ODM are documented here. The format is based on
   instance); no TCP port is opened unless `-serve` is given, and that
   listener requires a per-run token and rejects foreign origins.
 
-[Unreleased]: https://github.com/rigaz29/odm/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/rigaz29/odm/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/rigaz29/odm/releases/tag/v0.6.0
 [0.5.1]: https://github.com/rigaz29/odm/releases/tag/v0.5.1
 [0.5.0]: https://github.com/rigaz29/odm/releases/tag/v0.5.0
 [0.3.1]: https://github.com/troke12/odm/compare/v0.3.0...v0.3.1

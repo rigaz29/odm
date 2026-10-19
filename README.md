@@ -3,7 +3,8 @@
 A segmented, resumable download manager for Windows, Linux and macOS, written
 in Go. ODM opens several connections per file, resumes at the exact byte where
 a transfer stopped, and organizes downloads into categories and scheduled
-queues. It runs as a desktop app, or headless with a JSON API.
+queues. It also downloads torrents and magnet links. It runs as a desktop
+app, or headless with a JSON API.
 
 ![ODM on Windows: the main window with downloads running, and one download's progress window](docs/screenshot.png)
 
@@ -65,6 +66,48 @@ queues. It runs as a desktop app, or headless with a JSON API.
 - A new download never replaces an existing file: if the name is taken, it is
   saved as `name (2).ext`. Adding a link that is already in the list asks
   first, or follows a setting for the browser, clipboard and grabber.
+
+**Torrents**
+- Magnet links and `.torrent` files, by address or from the disk (⋯ →
+  *Open .torrent file…*, or dropped on the window), open the *New
+  Download* window. A magnet link first gets its list of files from its
+  peers, the number connected shown meanwhile. Then the files can be
+  ticked one by one, next to the folder, category and queue.
+- Torrents run in `odm-libtorrent`, a small companion program on
+  [libtorrent](https://www.libtorrent.org/) (`helper/libtorrent`). ODM
+  downloads it the first time a torrent needs it (about 4 MB, from ODM's
+  own releases, checked against its SHA-256), asking first unless
+  automatic downloads are on. It keeps it with yt-dlp and ffmpeg. Being
+  a program of its own keeps `ODM.exe` in Go alone, and a crash there
+  stops the torrents, not ODM.
+- Files are written under `name.odmpart` until the torrent is complete; a
+  torrent of several files becomes a folder.
+- A finished torrent seeds, outside its queue's slots, until it uploaded
+  as much as its size or for 30 minutes, whichever comes first. *Options →
+  Torrents* changes the ratio and the time, or seeds never or until
+  stopped. *Stop seeding* is in the list's menu and the progress window.
+- The progress window shows the peers and seeds, what was uploaded and the
+  ratio, the pieces, and each file. The list marks a seeding torrent and
+  its upload speed.
+- *Options → Torrents* also has the port (picked at random once), incoming
+  connections, opening the port on the router (UPnP, NAT-PMP), an upload
+  limit, and whether an address that turns out to be a `.torrent` file is
+  downloaded as the torrent (the default) or as the file.
+- On Windows ODM offers itself for magnet links and `.torrent` files, for
+  the current user: it is listed in *Settings → Default apps*, and when no
+  program opens magnet links yet, it becomes the one that does. Windows
+  keeps the choice of the program. *Options → Torrents* turns this off,
+  and removes what ODM registered. Not yet on Linux and macOS.
+- The first time a torrent runs, Windows' firewall asks whether
+  `odm-libtorrent` may use the network. Allow it on private networks, so
+  that peers can reach ODM; without it torrents still download, from
+  fewer peers.
+- Peers and trackers see your IP address. A SOCKS5 proxy (*Options → Proxy
+  / Socks*) carries every torrent connection; an HTTP proxy or the
+  system's only reaches trackers. Some ISPs slow down or block torrent
+  traffic. Downloading or sharing copyrighted material through torrents
+  can be against the law; that is up to you.
+- The Fyne build (`-fyne` archives) has no torrent windows.
 
 **Desktop**
 - A main window with categories and queues at the side, a card for each
@@ -144,8 +187,11 @@ queues. It runs as a desktop app, or headless with a JSON API.
   or on PATH.
 - The extension's toolbar icon counts the media a page has loaded, and its
   popup lists them (from every frame) for players the button cannot find.
-- A clipboard monitor queues downloadable URLs you copy. You can turn it on
-  or off at any time.
+- The extension's **Download with ODM** on a `magnet:` link hands ODM the
+  torrent, and a `.torrent` file the browser starts to download goes to
+  ODM as a torrent.
+- A clipboard monitor queues downloadable URLs you copy, and magnet links.
+  You can turn it on or off at any time.
 
 ## Install
 
@@ -222,6 +268,7 @@ Windows build (manifest, icon, name) when one of them changes.
 ODM.exe                                  # open the app
 ODM.exe -hidden                          # start in the system tray
 ODM.exe -add https://host/big.iso -no-ui # fetch one URL in the terminal, then exit
+ODM.exe "magnet:?xt=urn:btih:…"          # open a magnet link (or a .torrent file) in New Download
 ```
 
 | Flag | Meaning |
@@ -233,6 +280,7 @@ ODM.exe -add https://host/big.iso -no-ui # fetch one URL in the terminal, then e
 | `-serve`, `-addr` | Also serve the web UI and API on `-addr` (default `127.0.0.1:8721`) |
 | `-register-browser`, `-unregister-browser` | Register or remove the browser native host |
 | `-version` | Print the version |
+| a magnet link or `.torrent` file | Open it in the *New Download* window, in the running ODM if there is one |
 
 **Keyboard shortcuts** (main list): <kbd>Ctrl</kbd>/<kbd>Shift</kbd>+click to
 select several downloads, <kbd>Ctrl</kbd>+<kbd>A</kbd> to select all,
@@ -288,7 +336,13 @@ the registration is written on each OS.
 ## Security model
 
 ODM opens **no TCP port by default**. A running instance listens on a Unix
-domain socket in the user's config directory (`odm.sock`). The browser relay
+domain socket in the user's config directory (`odm.sock`). Torrents are the
+exception, while one runs: `odm-libtorrent` then listens on the torrent
+port (TCP and UDP, on every interface) for peers, and asks the router to
+open it (UPnP, NAT-PMP). *Options → Torrents* turns either off, and it stops
+a minute after the last torrent. Trackers and web seeds on this computer
+or the local network are dropped from a torrent that came from the
+internet, so a torrent cannot make ODM reach local services. The browser relay
 uses this socket, and it also stops a second copy of ODM from starting. Web
 pages can send requests to `127.0.0.1` but cannot reach a socket file, so
 websites you visit cannot reach the API. The socket needs Windows 10 version
@@ -309,9 +363,9 @@ only.
 | Method | Path | Purpose |
 | ------ | ---- | ------- |
 | GET / PUT | `/api/settings` | Read or update settings (applied immediately) |
-| GET / POST | `/api/downloads` | List downloads, or add `{"url","dir","connections","headers","speed_limit"}` |
+| GET / POST | `/api/downloads` | List downloads, or add `{"url","dir","connections","headers","speed_limit"}`; a magnet link is a torrent, and `"torrent": true` makes a `.torrent` address one |
 | GET / DELETE | `/api/downloads/{id}` | One download; `DELETE ?file=true` also deletes the file |
-| POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` | Control a download |
+| POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` \| `/stop-seeding` | Control a download |
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |
 | POST | `/api/probe/stream` | Qualities of an HLS/DASH playlist `{"url","headers"}`; an add with `"stream"` takes one as `"quality"` |
@@ -369,6 +423,10 @@ internal/native     native-messaging framing and browser-launch detection
 internal/browserreg native-host registration for Chrome, Edge, Chromium, Firefox
 internal/sysproxy   OS proxy lookup (environment, Windows Internet Options)
 internal/autostart  launch at login (Run key, XDG autostart, LaunchAgent)
+internal/assoc      Windows registration for magnet links and .torrent files
+internal/torrent    runs odm-libtorrent and gives the engine its torrents
+internal/tools      ODM's own copies of yt-dlp, ffmpeg and odm-libtorrent
+helper/libtorrent   odm-libtorrent, the C++ companion program on libtorrent
 internal/update     GitHub Releases version check
 internal/clipmon    clipboard watcher (native on Windows, polled by the desktop UI elsewhere) and URL detection
 internal/osutil     open, reveal and shutdown helpers
@@ -387,6 +445,10 @@ extension/          MV3 browser extension source and native-host manifests
 ## License
 
 [MIT](LICENSE) © 2026 Ochi Download Manager contributors.
+
+`odm-libtorrent`, downloaded by ODM for torrents, is built with
+libtorrent (BSD-3-Clause), Boost (BSL-1.0), OpenSSL (Apache-2.0) and
+nlohmann/json (MIT); its archive carries their licences.
 
 ODM is an independent implementation. It ships no code, binaries, assets or
 data from any other product, and it does not bypass copy protection or

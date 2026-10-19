@@ -869,16 +869,25 @@ Tahap 5: ekstensi dan asosiasi
 
 Tahap 6: uji jalan dan rilis
 
-- [ ] Uji di exe dengan torrent dan magnet resmi Ubuntu atau Debian. **S**
+- [x] Uji di exe dengan torrent dan magnet resmi Ubuntu atau Debian. **S**
       Yang dicek: unduhan pertama `odm-libtorrent`, unduh, jeda, tutup
       ODM, lanjut, seeding sampai target, dialog firewall, proxy SOCKS5,
       dan pemakaian memori. Linux diuji lewat harness WSL.
-- [ ] Rilis. **K** `odm-libtorrent` dirilis lebih dulu (push tagnya
+
+      Pemilik menguji di Windows pada 2026-10-19: dialog firewall, klik
+      tautan magnet di browser, dan halaman Aplikasi default. Dari uji
+      ini lahir pertanyaan sendiri untuk `odm-libtorrent`, dan asosiasi
+      Windows yang aktif secara bawaan. Sisanya dipindah ke "Nanti".
+- [x] Rilis. **K** `odm-libtorrent` dirilis lebih dulu (push tagnya
       ditanyakan ke pemilik), baru ODM yang memakainya. README (fitur,
       firewall, IP dan proxy, lisensi) dan CHANGELOG ikut diperbarui.
 
+      ODM v0.6.0 (2026-10-19) memakai `odm-libtorrent-p1-2.1.2-3`.
+
 Nanti
 
+- [ ] Sisa uji jalan torrent: proxy SOCKS5, pemakaian memori, seeding
+      sampai target di exe, dan Linux lewat harness WSL. **S**
 - [ ] Prioritas per file, dan unduh berurutan untuk menonton sambil
       mengunduh (keduanya sudah ada di libtorrent). **S**
 - [ ] Asosiasi `magnet:` dan `.torrent` di Linux dan macOS (butuh file

@@ -20,14 +20,21 @@ const (
 // may download the tools; the question is on its way to them.
 var ErrNeedsConsent = errors.New("ODM can download it for you: answer the question in ODM's window, or turn on automatic downloads in Options → Downloads")
 
+// ErrNeedsInstall is returned for a tool fetched on demand (odm-libtorrent)
+// that is not installed yet; the question is on its way to the person.
+var ErrNeedsInstall = errors.New("not installed yet: ODM asks whether to download it, or install it from Help → Set up ODM")
+
 // Keeper decides when the tools are installed: when one is needed and the
 // person allowed it, and in the background to keep them current.
 type Keeper struct {
 	Installer *Installer
 	Mode      func() string // Settings.ToolUpdates
-	// Ask asks the person once whether ODM may download the tools; nil
-	// where nobody can be asked (no desktop window).
-	Ask func()
+	// Ask asks the person whether ODM may download tool; nil where nobody
+	// can be asked (no desktop window). yt-dlp and ffmpeg share one
+	// question, asked once, with tool "". A tool fetched on demand
+	// (odm-libtorrent) is asked about by name whenever it is needed: what
+	// the person answered about yt-dlp and ffmpeg does not cover it.
+	Ask func(tool string)
 	// OnInstalled is told about each install or update that happened.
 	OnInstalled func(t Tool, version string, first bool)
 	Log         func(format string, args ...any)
@@ -64,17 +71,19 @@ func (k *Keeper) Ensure(ctx context.Context, name string) (string, error) {
 	if !ok || !t.Supported() {
 		return "", fmt.Errorf("ODM cannot download %s on this system", name)
 	}
-	switch k.Mode() {
-	case ModeAuto:
+	mode := k.Mode()
+	switch {
+	case mode == ModeAuto:
 		if _, err := k.install(ctx, t, nil); err != nil {
 			return "", err
 		}
 		return filepath.Join(k.Installer.Dir, t.Files[0]), nil
-	case ModeAsk:
-		if k.Ask != nil {
-			k.asked.Do(func() { go k.Ask() })
-			return "", ErrNeedsConsent
-		}
+	case t.OnDemand && k.Ask != nil:
+		go k.Ask(t.Name)
+		return "", ErrNeedsInstall
+	case mode == ModeAsk && k.Ask != nil:
+		k.asked.Do(func() { go k.Ask("") })
+		return "", ErrNeedsConsent
 	}
 	return "", fmt.Errorf("downloading %s is turned off in Options → Downloads", name)
 }

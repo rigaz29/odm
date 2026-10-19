@@ -527,6 +527,7 @@
   "Downloads torrents and magnet links. ODM fetches it the first time you add one.": "Mengunduh torrent dan tautan magnet. ODM mengambilnya saat Anda pertama kali menambahkan torrent.",
   "Installed": "Terpasang",
   "Seeding": "Seeding",
+  "ODM downloads torrents with odm-libtorrent, a small companion program (about 4 MB) from ODM's releases, checked against its checksum. Download it now? The torrents waiting for it start once it is in.": "ODM mengunduh torrent dengan odm-libtorrent, program pendamping kecil (sekitar 4 MB) dari rilis ODM, yang diperiksa checksum-nya. Unduh sekarang? Torrent yang menunggunya langsung berjalan setelah terpasang.",
   "Magnet links and .torrent files": "Tautan magnet dan file .torrent",
   "Offer ODM to open them": "Tawarkan ODM untuk membukanya",
   "Windows keeps the choice of the program that opens them: it asks the next time, or choose ODM in its Default apps.": "Windows tetap yang menentukan program pembukanya: Windows akan bertanya lain kali, atau pilih ODM di Aplikasi default.",

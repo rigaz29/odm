@@ -25,7 +25,12 @@ func (a *application) hookTools(k *tools.Keeper) {
 		return
 	}
 	a.keeper = k
-	k.Ask = func() { fyne.Do(a.askTools) }
+	k.Ask = func(tool string) {
+		// The Fyne UI has no torrents, to ask about odm-libtorrent for.
+		if tool == "" {
+			fyne.Do(a.askTools)
+		}
+	}
 	k.OnInstalled = func(t tools.Tool, version string, first bool) {
 		if first && a.notify != nil {
 			a.notify(fyne.NewNotification("ODM", Tf("%s %s is ready", t.Name, version)))

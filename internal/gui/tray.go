@@ -224,20 +224,30 @@ func (n *notifier) ServiceShutdown() error {
 func (d *desk) beep(failed bool) { playSound(failed) }
 
 // hookTools asks once whether ODM may download yt-dlp and ffmpeg itself,
-// the first time one is needed, and tells when one is ready.
+// the first time one is needed, and whether it may download odm-libtorrent
+// whenever a torrent needs it; and tells when one is ready. Torrents that
+// stopped for want of odm-libtorrent start again once it is in.
 func (d *desk) hookTools(k *tools.Keeper) {
 	if k == nil {
 		return
 	}
-	k.Ask = func() {
-		if w := d.svc.opener(); w != nil {
+	k.Ask = func(tool string) {
+		w := d.svc.opener()
+		switch {
+		case w == nil:
+		case tool == "":
 			w.openNotice(url.Values{"kind": {"tools"}})
+		default:
+			w.openNotice(url.Values{"kind": {"program"}, "name": {tool}})
 		}
 	}
 	k.OnInstalled = func(t tools.Tool, version string, first bool) {
 		if first {
 			tr := d.svc.translator()
 			d.notify("ODM", fmt.Sprintf(tr("%s %s is ready"), t.Name, version))
+		}
+		if t.Name == tools.Libtorrent().Name {
+			d.svc.resumeWaitingTorrents()
 		}
 	}
 }

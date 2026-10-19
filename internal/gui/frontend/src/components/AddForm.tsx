@@ -66,6 +66,7 @@ export function AddForm(props: {
   // A torrent's files left out, by index, and odm-libtorrent installing.
   const [skip, setSkip] = useState<Set<number>>(new Set());
   const [installing, setInstalling] = useState(false);
+  const [installed, setInstalled] = useState(-1); // percent of its download, -1 unknown
   const urlRef = useRef<HTMLInputElement>(null);
   // The category before a stream or video page set Video, to put back
   // when the address changes.
@@ -173,6 +174,14 @@ export function AddForm(props: {
     }, TORRENT_POLL);
     return () => clearInterval(timer);
   }, [probe?.url, torrent?.waiting]);
+
+  useEffect(() => {
+    if (!installing) return;
+    setInstalled(-1);
+    return api.onSetupProgress((p) => {
+      if (p.tool === "odm-libtorrent" && p.total > 0) setInstalled(Math.floor((p.done / p.total) * 100));
+    });
+  }, [installing]);
 
   const installTorrents = async () => {
     setInstalling(true);
@@ -354,7 +363,7 @@ export function AddForm(props: {
           action={
             torrent?.needsProgram ? (
               <Button type="button" size="sm" disabled={installing} onClick={() => void installTorrents()}>
-                {installing ? <LoaderCircle className="animate-spin" /> : <Download />} {t("Install")}
+                {installing ? <LoaderCircle className="animate-spin" /> : <Download />} {installing && installed >= 0 ? `${installed}%` : t("Install")}
               </Button>
             ) : (
               probe?.zip && (

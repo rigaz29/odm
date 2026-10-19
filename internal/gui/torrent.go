@@ -79,6 +79,23 @@ func (p *torrentProbe) snapshot() TorrentProbe {
 // probeLife bounds how long a magnet link's look waits for its metadata.
 var probeLife = 15 * time.Minute
 
+// resumeWaitingTorrents starts again the torrents that stopped because
+// odm-libtorrent could not run, now that it is installed.
+func (s *Service) resumeWaitingTorrents() {
+	for _, d := range s.mgr.List() {
+		if waitsForProgram(d) {
+			s.mgr.Resume(d.ID)
+		}
+	}
+}
+
+// waitsForProgram reports whether d is a torrent that stopped because
+// odm-libtorrent was missing or would not run (internal/torrent's errors
+// name it).
+func waitsForProgram(d engine.Info) bool {
+	return d.Torrent && d.Status == engine.StatusError && strings.Contains(d.Error, "odm-libtorrent")
+}
+
 // libtorrentInstalled reports whether odm-libtorrent is there to run.
 func libtorrentInstalled() bool {
 	return os.Getenv("ODM_LIBTORRENT") != "" || tools.Find(tools.Libtorrent().Files[0]) != ""

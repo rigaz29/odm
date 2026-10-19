@@ -332,13 +332,15 @@ func TestKeeperModes(t *testing.T) {
 	in := installer(t, g)
 	mode := ModeAsk
 	k := NewKeeper(in, func() string { return mode })
-	asked := make(chan struct{}, 2)
-	k.Ask = func() { asked <- struct{}{} }
+	asked := make(chan string, 4)
+	k.Ask = func(tool string) { asked <- tool }
 
 	if _, err := k.Ensure(context.Background(), "yt-dlp"); !errors.Is(err, ErrNeedsConsent) {
 		t.Fatalf("not asked yet: %v", err)
 	}
-	<-asked
+	if tool := <-asked; tool != "" {
+		t.Fatalf("asked about %q", tool)
+	}
 	k.Ensure(context.Background(), "yt-dlp") // asked once only
 	select {
 	case <-asked:
@@ -349,6 +351,22 @@ func TestKeeperModes(t *testing.T) {
 	mode = ModeOff
 	if _, err := k.Ensure(context.Background(), "yt-dlp"); err == nil || g.downloads.Load() != 0 {
 		t.Fatalf("turned off: %v", err)
+	}
+
+	// odm-libtorrent has its own question, asked whenever it is needed,
+	// whatever was answered about yt-dlp and ffmpeg.
+	if lt := Libtorrent(); lt.Supported() {
+		for range 2 {
+			if _, err := k.Ensure(context.Background(), lt.Name); !errors.Is(err, ErrNeedsInstall) {
+				t.Fatalf("odm-libtorrent: %v", err)
+			}
+			if tool := <-asked; tool != lt.Name {
+				t.Fatalf("asked about %q", tool)
+			}
+		}
+		if g.downloads.Load() != 0 {
+			t.Fatal("downloaded without asking")
+		}
 	}
 
 	mode = ModeAuto

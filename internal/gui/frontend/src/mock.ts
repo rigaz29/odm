@@ -496,7 +496,7 @@ export function mockApi(): Api {
         await new Promise((r) => setTimeout(r, 120));
         setupSubs.forEach((cb) => cb({ tool: name, done, total }));
       }
-      const tool = setup.tools.find((x) => x.name === name)!;
+      const tool = setup.tools.find((x) => x.name === name) ?? { name };
       Object.assign(tool, { state: "found", path: "C:\\Users\\me\\AppData\\Local\\odm\\tools\\" + name + ".exe", version: name === "ffmpeg" ? "ffmpeg version n8.1" : "2026.10.10" });
       return new SetupTool(tool);
     },

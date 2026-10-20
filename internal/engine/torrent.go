@@ -364,6 +364,46 @@ func (tj *TorrentJob) MagnetLink(name string) string {
 	return "magnet:?" + strings.NewReplacer("%3A", ":").Replace(q.Encode())
 }
 
+// torrentKey is the info hashes the download's torrent is known by: its
+// metadata's, else its magnet link's, else its kept .torrent file's, with
+// where it is. ok is false for a download that is no torrent, or whose
+// hashes are not known yet.
+func (d *Download) torrentKey() (k torrentKey, ok bool) {
+	d.mu.Lock()
+	if d.Torrent == nil {
+		d.mu.Unlock()
+		return k, false
+	}
+	k = torrentKey{v1: d.Torrent.InfoHash, v2: d.Torrent.InfoHashV2, inSession: d.inSession,
+		mayRun: d.Status != StatusComplete || d.Torrent.Seeding}
+	id, magnet := d.ID, d.Torrent.Magnet
+	d.mu.Unlock()
+	switch {
+	case k.v1 != "" || k.v2 != "":
+	case magnet != "":
+		k.v1, k.v2 = MagnetHashes(magnet)
+	case TorrentDir != "":
+		k.v1, k.v2 = torrentFileHashes(torrentPath(id, ".torrent"))
+	}
+	return k, k.v1 != "" || k.v2 != ""
+}
+
+// torrentKey is a torrent download as Download.torrentKey reads it.
+// inSession: odm-libtorrent holds it. mayRun: it may run its torrent, now or
+// later (not complete, or seeding), so another of the same torrent is not
+// added beside it.
+type torrentKey struct {
+	v1, v2            string
+	inSession, mayRun bool
+}
+
+// setInSession records whether odm-libtorrent holds the download's torrent.
+func (d *Download) setInSession(on bool) {
+	d.mu.Lock()
+	d.inSession = on
+	d.mu.Unlock()
+}
+
 // adopted reports whether the torrent's metadata is in (adoptTorrent):
 // Files may be there before, chosen with the torrent.
 func (tj *TorrentJob) adopted() bool { return tj.InfoHash != "" || tj.InfoHashV2 != "" }
@@ -414,6 +454,9 @@ func (d *Download) runTorrent(ctx context.Context) {
 		pctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		_ = b.Pause(pctx, d.ID)
 		cancel()
+		if errors.Is(err, errHelperStopped) {
+			d.setInSession(false) // a new odm-libtorrent holds nothing
+		}
 		d.fail(err)
 	}
 }
@@ -437,6 +480,13 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 	meta, err := b.Inspect(ctx, file, magnet)
 	if err != nil {
 		return fmt.Errorf("reading the torrent: %w", err)
+	}
+	// odm-libtorrent runs a torrent once: a second download of it waits
+	// for the first to be complete and done seeding, or removed.
+	if d.twin != nil {
+		if name := d.twin(id, meta.InfoHash, meta.InfoHashV2); name != "" {
+			return fmt.Errorf("%w: %s", errTwinTorrent, name)
+		}
 	}
 	if !known && file != "" {
 		if err := d.adoptTorrent(meta); err != nil {
@@ -467,6 +517,7 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 	if err != nil {
 		return err
 	}
+	d.setInSession(true)
 	d.notify(true)
 
 	// downloading: a status showed bytes still missing. A torrent that
@@ -479,7 +530,7 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 			return ctx.Err()
 		case ev, ok := <-events:
 			if !ok {
-				return errors.New("odm-libtorrent stopped")
+				return errHelperStopped
 			}
 			switch ev.Kind {
 			case TorrentEventMetadata:
@@ -855,6 +906,7 @@ func (d *Download) leaveSession(b TorrentBackend) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	_ = b.Remove(ctx, id, false)
 	cancel()
+	d.setInSession(false)
 	if folder {
 		removePartFiles(filepath.Join(dir, name), hashes)
 	}
@@ -979,7 +1031,11 @@ func (d *Download) readdSeed(ctx context.Context, b TorrentBackend) error {
 	if meta, err := b.Inspect(ctx, file, magnet); err == nil {
 		add.DropTrackers, add.DropWebSeeds = torrentDrops(source, meta)
 	}
-	return b.Add(ctx, add)
+	if err := b.Add(ctx, add); err != nil {
+		return err
+	}
+	d.setInSession(true)
+	return nil
 }
 
 // beginSeeding records a seeding run of the download, unless one runs.
@@ -1064,6 +1120,7 @@ func (d *Download) removeTorrent(deleteFiles bool) {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 		_ = b.Remove(ctx, id, !complete || deleteFiles)
 		cancel()
+		d.setInSession(false)
 	}
 	switch {
 	case !known || name == "":
@@ -1101,6 +1158,13 @@ func removeEmptyDirs(root string, files []TorrentFile) {
 	}
 	_ = os.Remove(root)
 }
+
+// errHelperStopped: odm-libtorrent ended while the torrent ran.
+var errHelperStopped = errors.New("odm-libtorrent stopped")
+
+// errTwinTorrent is a torrent download's error while odm-libtorrent holds
+// another download of the same torrent.
+var errTwinTorrent = errors.New("the same torrent is already in the list")
 
 // Why SetTorrentFiles refuses a change.
 var (

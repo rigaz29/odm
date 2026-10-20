@@ -44,7 +44,8 @@ type AddPrefill struct {
 // Title and Detail are English texts the page translates; Name is a file
 // name or a video's title, shown as it is; Error is the engine's reason.
 type Card struct {
-	// State is "idle", "file", "stream", "site", "warn" or "problem".
+	// State is "idle", "file", "stream", "site", "torrent", "twin" (a
+	// torrent in the list already, Name), "warn" or "problem".
 	State  string `json:"state"`
 	Title  string `json:"title"`
 	Detail string `json:"detail"`
@@ -114,10 +115,14 @@ type CreateRequest struct {
 }
 
 // CreateResult is the new download, or the one already in the list with
-// the same address (Duplicate; ID is then "").
+// the same address (Duplicate; ID is then ""). SameTorrent: Duplicate is the
+// same torrent, found by its info hash; NoAgain: it may still run, and
+// odm-libtorrent runs a torrent once, so downloading it again would fail.
 type CreateResult struct {
-	ID        string `json:"id"`
-	Duplicate *Item  `json:"duplicate"`
+	ID          string `json:"id"`
+	Duplicate   *Item  `json:"duplicate"`
+	SameTorrent bool   `json:"sameTorrent"`
+	NoAgain     bool   `json:"noAgain"`
 }
 
 // probed is what checking one address found, for Create.

@@ -80,6 +80,9 @@ const seeds: Seed[] = [
   ],
 ];
 
+// btih is a magnet link's v1 info hash in lowercase, "" for none.
+const btih = (url: string) => /[?&]xt=urn:btih:([0-9a-f]{40})/i.exec(url)?.[1].toLowerCase() ?? "";
+
 // The files of a torrent the progress window lists: a season of episodes for
 // the documentary, else one file.
 function torrentFilesOf(d: Item): TorrentFileDetail[] {
@@ -330,6 +333,10 @@ export function mockApi(): Api {
       const name = decodeURIComponent(url.split("?")[0].split("/").pop() || "");
       if (!url) return new ProbeResult({ url, card: new Card({ state: "idle", title: "No address yet", detail: "Paste or type one: ODM checks the file's size and type before adding it." }) });
       if (/^magnet:\?/i.test(url) || /\.torrent$/i.test(url)) {
+        const twin = btih(url) && items.find((d) => d.torrent && btih(d.url) === btih(url));
+        if (twin && (twin.status !== "complete" || twin.seeding)) {
+          return new ProbeResult({ url, kind: "torrent", card: new Card({ state: "twin", name: twin.fileName }) });
+        }
         if (/needs-libtorrent/.test(url)) {
           return new ProbeResult({ url, kind: "torrent", card: new Card({ state: "warn", title: "Torrents need odm-libtorrent", detail: "ODM downloads it once from its releases." }), torrent: new TorrentProbe({ needsProgram: true }) });
         }
@@ -365,6 +372,11 @@ export function mockApi(): Api {
       });
     },
     create: async (req) => {
+      const twin = btih(req.url) && items.find((d) => d.torrent && btih(d.url) === btih(req.url));
+      if (twin) {
+        const noAgain = twin.status !== "complete" || twin.seeding;
+        if (noAgain || !req.again) return new CreateResult({ id: "", duplicate: new Item(twin), sameTorrent: true, noAgain });
+      }
       const dup = items.find((d) => d.url === req.url.trim());
       if (dup && !req.again) return new CreateResult({ id: "", duplicate: new Item(dup) });
       const d = makeItems(1)[0];

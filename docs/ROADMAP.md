@@ -902,6 +902,14 @@ Nanti
       *.torrent…* di Unduhan Baru, atau file diseret ke halaman; API
       `POST /api/torrents` (multipart, field `torrent`). Kategori magnet
       dan `.torrent` dari web UI kini mengikuti file terbesarnya.
+- [x] Torrent ganda dikenali dari info hash-nya (magnet bentuk apa pun,
+      file `.torrent`, alamat lain), tanpa odm-libtorrent. **S** Unduhan
+      Baru langsung memberi tahu dan menawarkan menampilkan yang ada;
+      "Unduh lagi" hanya setelah yang pertama selesai dan berhenti
+      seeding. Extension, clipboard, API dan unggah web mendapat yang
+      sudah ada. Unduhan kedua yang lolos (`.torrent` dari alamat yang
+      belum dibaca) berhenti dengan pesan jelas selama yang pertama
+      dipegang odm-libtorrent.
 
 Batasan:
 - Mengunduh dan mengunggah konten berhak cipta lewat torrent bisa

@@ -806,6 +806,7 @@ func (m *Manager) Restore(states []State) {
 		d.SetLimiter(m.limiter)
 		d.SetAuthLookup(m.credentials)
 		d.SetOnUpdate(m.updated)
+		d.twin = m.torrentTwin
 		m.claimOrderLocked(d)
 		m.downloads[d.ID] = d
 		m.order = append(m.order, d.ID)
@@ -993,6 +994,7 @@ func (m *Manager) Create(o AddOptions) Info {
 		d.mu.Unlock()
 	}
 	d.SetOnUpdate(m.updated)
+	d.twin = m.torrentTwin
 
 	m.mu.Lock()
 	// Under mu, so a proxy change cannot slip in between: d is not in the
@@ -1139,14 +1141,100 @@ func sameURLKey(raw string) string {
 // AddAuto adds a download requested without a person confirming it (browser
 // hand-off, clipboard, grabber, API). With the DuplicateSkip policy a URL
 // already in the list is not added again; the existing entry is returned
-// with added=false.
+// with added=false. A torrent in the list that may still run is kept
+// whatever the policy: one runs at a time.
 func (m *Manager) AddAuto(o AddOptions) (info Info, added bool) {
-	if m.Settings().DuplicateAuto != DuplicateAgain {
+	again := m.Settings().DuplicateAuto == DuplicateAgain
+	if existing, free, ok := m.FindTorrent(o); ok && (!again || !free) {
+		return existing, false
+	}
+	if !again {
 		if existing, ok := m.FindByURL(o.URL); ok {
 			return existing, false
 		}
 	}
 	return m.Create(o), true
+}
+
+// FindTorrent finds a download of the torrent o would add, by its info
+// hashes: a magnet link's, or those of its .torrent file when that is on
+// this computer (o.TorrentFile, or a path in o.URL). free reports whether o
+// may still be added beside every such download, which is complete and no
+// longer seeding, so out of the torrent session. ok is false when there is
+// none, or o's hashes are not known (a .torrent at an address is read when
+// the download runs, which then refuses a twin).
+func (m *Manager) FindTorrent(o AddOptions) (existing Info, free, ok bool) {
+	var v1, v2 string
+	switch {
+	case IsMagnet(o.URL):
+		v1, v2 = MagnetHashes(o.URL)
+	case o.Torrent == nil:
+		return Info{}, false, false
+	case o.TorrentFile != "":
+		v1, v2 = torrentFileHashes(o.TorrentFile)
+	case IsTorrentFile(o.URL) && !strings.HasPrefix(o.URL, "http"):
+		v1, v2 = torrentFileHashes(o.URL)
+	}
+	if v1 == "" && v2 == "" {
+		return Info{}, false, false
+	}
+	var found *Download
+	for _, t := range m.twins("", v1, v2) {
+		if t.key.mayRun {
+			return t.d.Info(), false, true
+		}
+		if found == nil {
+			found = t.d
+		}
+	}
+	if found != nil {
+		return found.Info(), true, true
+	}
+	return Info{}, false, false
+}
+
+// torrentTwin is the name of another download than id of the torrent with
+// info hashes v1 and v2 that odm-libtorrent holds, running, paused or
+// seeding: it would refuse the torrent a second time. "" for none.
+func (m *Manager) torrentTwin(id, v1, v2 string) string {
+	for _, t := range m.twins(id, v1, v2) {
+		if !t.key.inSession {
+			continue
+		}
+		t.d.mu.Lock()
+		defer t.d.mu.Unlock()
+		if t.d.FileName != "" {
+			return t.d.FileName
+		}
+		return t.d.URL
+	}
+	return ""
+}
+
+// twin is a download of a torrent, with its key.
+type twin struct {
+	d   *Download
+	key torrentKey
+}
+
+// twins lists the downloads other than id of the torrent with info hashes
+// v1 and v2, in the list's order.
+func (m *Manager) twins(id, v1, v2 string) []twin {
+	m.mu.Lock()
+	list := make([]*Download, 0, len(m.order))
+	for _, did := range m.order {
+		if d := m.downloads[did]; d != nil && did != id {
+			list = append(list, d)
+		}
+	}
+	m.mu.Unlock()
+	var out []twin
+	for _, d := range list {
+		if k, ok := d.torrentKey(); ok && sameTorrent(v1, v2, k.v1, k.v2) {
+			out = append(out, twin{d, k})
+		}
+	}
+	return out
 }
 
 // Readdress points an unfinished download at a new address, for links that

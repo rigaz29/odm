@@ -132,6 +132,8 @@ export function ProbeCard({
       const parts = [humanBytes(card.size) || "", files === 1 ? t("1 file") : tf("%d files", files), torrent?.private ? t("Private torrent") : ""].filter(Boolean);
       return <Shell icon={<FileTile category={category} size="size-8" icon="size-4" />} title={name || card.name || t("Torrent")} detail={parts.join(" · ")} />;
     }
+    case "twin":
+      return <Shell tone="warn" icon={roundIcon(AlertTriangle, "text-amber-600 dark:text-amber-400")} title={t("This torrent is already in the list")} detail={card.name} />;
     case "warn":
       return <Shell tone="warn" icon={roundIcon(AlertTriangle, "text-amber-600 dark:text-amber-400")} title={t(card.title)} detail={withError(card.detail, card.error)} action={action} />;
     default:

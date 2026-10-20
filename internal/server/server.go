@@ -347,7 +347,7 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 	if !engine.IsTorrentFile(name) {
 		name += ".torrent"
 	}
-	info := s.mgr.Create(engine.AddOptions{
+	opts := engine.AddOptions{
 		URL:         name,
 		Dir:         strings.TrimSpace(r.FormValue("dir")),
 		Category:    strings.TrimSpace(r.FormValue("category")),
@@ -356,7 +356,15 @@ func (s *Server) handleUpload(w http.ResponseWriter, r *http.Request) {
 		Start:       r.FormValue("start") != "false",
 		Torrent:     &engine.TorrentJob{Name: engine.SanitizeName(r.FormValue("file_name"))},
 		TorrentFile: tmp.Name(),
-	})
+	}
+	// The same torrent in the list, by its info hash, is answered as a
+	// duplicate address is (200). Two files of one name are not the same.
+	again := s.mgr.Settings().DuplicateAuto == engine.DuplicateAgain
+	if existing, free, dup := s.mgr.FindTorrent(opts); dup && (!again || !free) {
+		writeJSON(w, http.StatusOK, existing)
+		return
+	}
+	info := s.mgr.Create(opts)
 	s.Broadcast()
 	writeJSON(w, http.StatusCreated, info)
 }

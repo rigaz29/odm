@@ -61,7 +61,7 @@ export function AddForm(props: {
   const [audio, setAudio] = useState(0);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
-  const [duplicate, setDuplicate] = useState<{ item: Item; start: boolean } | null>(null);
+  const [duplicate, setDuplicate] = useState<{ item: Item; start: boolean; sameTorrent: boolean; noAgain: boolean } | null>(null);
   const [zipOpen, setZipOpen] = useState(false);
   // A torrent's files left out, by index, and odm-libtorrent installing.
   const [skip, setSkip] = useState<Set<number>>(new Set());
@@ -231,7 +231,7 @@ export function AddForm(props: {
         priorities: torrent ? prio : {},
       });
       if (res.duplicate) {
-        setDuplicate({ item: res.duplicate, start });
+        setDuplicate({ item: res.duplicate, start, sameTorrent: res.sameTorrent, noAgain: res.noAgain });
         return;
       }
       props.onDone();
@@ -409,8 +409,12 @@ export function AddForm(props: {
             <div className="space-y-1.5 pr-6">
               <DialogTitle>{t("Duplicate download")}</DialogTitle>
               <DialogDescription>
-                {tf("This address is already in the list as “%s” (%s).", displayName(duplicate.item), statusLabel(statusKind(duplicate.item)))}{" "}
-                {t("Downloading it again saves it under a numbered name.")}
+                {duplicate.sameTorrent
+                  ? tf("This torrent is already in the list as “%s” (%s).", displayName(duplicate.item), statusLabel(statusKind(duplicate.item)))
+                  : tf("This address is already in the list as “%s” (%s).", displayName(duplicate.item), statusLabel(statusKind(duplicate.item)))}{" "}
+                {duplicate.noAgain
+                  ? t("ODM runs a torrent once: it can be downloaded again when that one is complete and no longer seeding, or removed.")
+                  : t("Downloading it again saves it under a numbered name.")}
               </DialogDescription>
             </div>
             <div className="flex justify-end gap-2">
@@ -419,6 +423,8 @@ export function AddForm(props: {
               </Button>
               <Button
                 type="button"
+                variant={duplicate.noAgain ? "brand" : "outline"}
+                autoFocus={duplicate.noAgain}
                 onClick={() => {
                   void api.openProgress(duplicate.item.id);
                   setDuplicate(null);
@@ -427,18 +433,20 @@ export function AddForm(props: {
               >
                 {t("Show existing")}
               </Button>
-              <Button
-                type="button"
-                variant="brand"
-                autoFocus
-                onClick={() => {
-                  const start = duplicate.start;
-                  setDuplicate(null);
-                  void create(start, true);
-                }}
-              >
-                {t("Download again")}
-              </Button>
+              {!duplicate.noAgain && (
+                <Button
+                  type="button"
+                  variant="brand"
+                  autoFocus
+                  onClick={() => {
+                    const start = duplicate.start;
+                    setDuplicate(null);
+                    void create(start, true);
+                  }}
+                >
+                  {t("Download again")}
+                </Button>
+              )}
             </div>
           </DialogContent>
         )}

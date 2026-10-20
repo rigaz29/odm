@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -100,5 +101,36 @@ func TestTorrentFilesAPI(t *testing.T) {
 	}
 	if w := do(http.MethodGet, "/api/downloads/nope/files", ""); w.Code != http.StatusNotFound {
 		t.Fatalf("unknown id: %d", w.Code)
+	}
+}
+
+// The same torrent sent again is the one in the list (200), found by its
+// info hash; another file of the same name is not.
+func TestUploadTorrentTwice(t *testing.T) {
+	prev := engine.TorrentDir
+	engine.TorrentDir = t.TempDir()
+	t.Cleanup(func() { engine.TorrentDir = prev })
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	h := New(mgr).Handler()
+	torrent := func(name string) []byte {
+		return []byte("d4:infod6:lengthi5e4:name" + strconv.Itoa(len(name)) + ":" + name + "12:piece lengthi16384e6:pieces20:" + strings.Repeat("p", 20) + "ee")
+	}
+	var first engine.Info
+	w := upload(t, h, "a.torrent", torrent("a.bin"), nil)
+	json.Unmarshal(w.Body.Bytes(), &first)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("first: %d %s", w.Code, w.Body)
+	}
+	var again engine.Info
+	w = upload(t, h, "renamed.torrent", torrent("a.bin"), nil)
+	json.Unmarshal(w.Body.Bytes(), &again)
+	if w.Code != http.StatusOK || again.ID != first.ID {
+		t.Fatalf("again: %d %s", w.Code, w.Body)
+	}
+	if w := upload(t, h, "a.torrent", torrent("b.bin"), nil); w.Code != http.StatusCreated {
+		t.Fatalf("another torrent of the same file name: %d %s", w.Code, w.Body)
+	}
+	if n := len(mgr.List()); n != 2 {
+		t.Fatalf("%d downloads", n)
 	}
 }

@@ -92,6 +92,10 @@ app, or headless with a JSON API.
   can be left out or taken in again there, or given another priority; a
   file left out keeps what it had downloaded. The list marks a seeding
   torrent and its upload speed.
+- The same torrent is not added twice: ODM knows it by its info hash, from
+  a magnet link in any form or a `.torrent` file, wherever it came from.
+  New Download says it is in the list already and shows it; it can be
+  downloaded again once the first is complete and no longer seeding.
 - *Options → Torrents* also has the port (picked at random once), incoming
   connections, opening the port on the router (UPnP, NAT-PMP), an upload
   limit, and whether an address that turns out to be a `.torrent` file is

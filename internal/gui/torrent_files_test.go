@@ -48,3 +48,25 @@ func TestTorrentFilesFromTheWindows(t *testing.T) {
 		t.Fatal("every file left out")
 	}
 }
+
+// The New Download window finds the same torrent by its info hash, from
+// another form of its magnet link, and does not offer to download it again
+// while it may run.
+func TestTorrentTwinInTheWindow(t *testing.T) {
+	svc, mgr := newTestService(t)
+	const hash = "322cba6e0dacc7a6c25d2d1f0e773fa2ba18017b"
+	first := mgr.Create(engine.AddOptions{URL: "magnet:?xt=urn:btih:" + hash + "&dn=Sample"})
+	addr := "magnet:?xt=urn:btih:GIWLU3QNVTD2NQS5FUPQ45Z7UK5BQAL3"
+	if card, ok := svc.twinOf(engine.AddOptions{URL: addr}); !ok || card.State != "twin" || card.Name != "Sample" {
+		t.Fatalf("card %+v %v", card, ok)
+	}
+	for _, again := range []bool{false, true} {
+		res, err := svc.createTorrent(CreateRequest{URL: addr, Again: again}, addr)
+		if err != nil || res.Duplicate == nil || res.Duplicate.ID != first.ID || !res.SameTorrent || !res.NoAgain || res.ID != "" {
+			t.Fatalf("again %v: %+v %v", again, res, err)
+		}
+	}
+	if n := len(mgr.List()); n != 1 {
+		t.Fatalf("%d downloads", n)
+	}
+}

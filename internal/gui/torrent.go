@@ -125,6 +125,12 @@ func (s *Service) probeTorrent(addr string, headers map[string]string) ProbeResu
 		return res
 	}
 	st := TorrentProbe{FirstTorrent: runtime.GOOS == "windows" && s.mgr.Settings().Torrent.Port == 0}
+	// A torrent in the list that may still run: odm-libtorrent would not
+	// take it again, not even to read a magnet link's files.
+	if twin, ok := s.twinOf(engine.AddOptions{URL: addr, Torrent: &engine.TorrentJob{}}); ok {
+		res.Card = twin
+		return res
+	}
 	if !libtorrentInstalled() {
 		st.NeedsProgram = true
 		res.Torrent = &st
@@ -136,12 +142,43 @@ func (s *Service) probeTorrent(addr string, headers map[string]string) ProbeResu
 		res.Card = Card{State: "problem", Title: "The torrent could not be read", Error: err.Error()}
 		return res
 	}
+	if p.file != "" {
+		// A .torrent at an address: its hashes are known once it is read.
+		if twin, ok := s.twinOf(engine.AddOptions{URL: addr, Torrent: &engine.TorrentJob{}, TorrentFile: p.file}); ok {
+			res.Card = twin
+			return res
+		}
+	}
 	st = p.snapshot()
 	res.Torrent = &st
 	res.FileName = st.Name
 	res.Category = torrentCategory(st.Files)
 	res.Card = Card{State: "torrent", Name: st.Name, Size: st.Size}
 	return res
+}
+
+// twinOf is the card for a download of the same torrent as o that may
+// still run; false when there is none.
+func (s *Service) twinOf(o engine.AddOptions) (Card, bool) {
+	existing, free, ok := s.mgr.FindTorrent(o)
+	if !ok || free {
+		return Card{}, false
+	}
+	name := existing.FileName
+	if name == "" {
+		name = existing.URL
+	}
+	return Card{State: "twin", Name: name}, true
+}
+
+// probeFile is the .torrent the window read for addr; "" for none.
+func (s *Service) probeFile(addr string) string {
+	s.tmu.Lock()
+	defer s.tmu.Unlock()
+	if p := s.torrents[addr]; p != nil {
+		return p.file
+	}
+	return ""
 }
 
 // torrentCategory is the category of a torrent's largest file.
@@ -551,6 +588,13 @@ func (s *Service) hasTorrentProbe(addr string) bool {
 
 // createTorrent adds the torrent the form describes.
 func (s *Service) createTorrent(r CreateRequest, addr string) (CreateResult, error) {
+	// The same torrent first, by its info hash: from another address too,
+	// and it says whether it can be downloaded again.
+	same := engine.AddOptions{URL: addr, Torrent: &engine.TorrentJob{}, TorrentFile: s.probeFile(addr)}
+	if existing, free, dup := s.mgr.FindTorrent(same); dup && (!r.Again || !free) {
+		it := itemOf(existing)
+		return CreateResult{Duplicate: &it, SameTorrent: true, NoAgain: !free}, nil
+	}
 	if existing, dup := s.mgr.FindByURL(addr); dup && !r.Again {
 		it := itemOf(existing)
 		return CreateResult{Duplicate: &it}, nil

@@ -113,6 +113,12 @@ type Download struct {
 	authz       *authorizer
 	catDirs     map[string]string
 	onUpdate    func(*Download, bool)
+	// twin names another download of the torrent with info hashes v1 and
+	// v2 that odm-libtorrent holds (Manager.torrentTwin); nil in tests
+	// without a manager. inSession: this one's torrent is there, running,
+	// paused or seeding, since this ODM added it.
+	twin      func(id, v1, v2 string) string
+	inSession bool
 
 	// unsynced is set when bytes go to file after its last flush to the
 	// disk, which was at syncedAt (persist). syncedAt is zeroed when

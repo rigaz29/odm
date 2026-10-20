@@ -224,7 +224,8 @@ export class BrowserStatus {
  */
 export class Card {
     /**
-     * State is "idle", "file", "stream", "site", "warn" or "problem".
+     * State is "idle", "file", "stream", "site", "torrent", "twin" (a
+     * torrent in the list already, Name), "warn" or "problem".
      */
     "state": string;
     "title": string;
@@ -470,11 +471,15 @@ export class CreateRequest {
 
 /**
  * CreateResult is the new download, or the one already in the list with
- * the same address (Duplicate; ID is then "").
+ * the same address (Duplicate; ID is then ""). SameTorrent: Duplicate is the
+ * same torrent, found by its info hash; NoAgain: it may still run, and
+ * odm-libtorrent runs a torrent once, so downloading it again would fail.
  */
 export class CreateResult {
     "id": string;
     "duplicate": Item | null;
+    "sameTorrent": boolean;
+    "noAgain": boolean;
 
     /** Creates a new CreateResult instance. */
     constructor($$source: Partial<CreateResult> = {}) {
@@ -483,6 +488,12 @@ export class CreateResult {
         }
         if (!("duplicate" in $$source)) {
             this["duplicate"] = null;
+        }
+        if (!("sameTorrent" in $$source)) {
+            this["sameTorrent"] = false;
+        }
+        if (!("noAgain" in $$source)) {
+            this["noAgain"] = false;
         }
 
         Object.assign(this, $$source);

@@ -18,6 +18,15 @@ All notable changes to ODM are documented here. The format is based on
   on: *.torrent…* next to the address in New Download, or the file dropped
   on the page. The API takes one at `POST /api/torrents`, and lists and
   changes a torrent's files at `/api/downloads/{id}/files`.
+- A torrent already in the list is found by its info hash, from a magnet
+  link in another form, its `.torrent` file or another address. New
+  Download warns as soon as the address is checked and offers to show it;
+  downloading it again is offered only once the first is complete and no
+  longer seeding, as odm-libtorrent runs a torrent once. The browser, the
+  clipboard, the API and the web UI's upload get the one in the list. A
+  second download of it that slipped in stops with "the same torrent is
+  already in the list" while the first runs, instead of odm-libtorrent's
+  own error.
 
 ### Changed
 

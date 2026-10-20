@@ -252,24 +252,17 @@ func TestSubrangeOKFallsBackToOneConnection(t *testing.T) {
 	if !bytes.Equal(got, data) {
 		t.Fatal("file does not match")
 	}
-	whole := fmt.Sprintf("bytes=0-%d", len(data)-1)
-	var sawSubrange, sawWhole bool
+	// The chunk from byte 0 got the whole file: its body is kept and runs
+	// to the end on that connection, not dropped and asked for again.
 	mu.Lock()
 	defer mu.Unlock()
+	var transfers []string
 	for _, spec := range ranges {
-		if spec == whole {
-			sawWhole = true
-			continue
-		}
-		parts := strings.SplitN(strings.TrimPrefix(spec, "bytes="), "-", 2)
-		if len(parts) == 2 && parts[1] != "" {
-			sawSubrange = true
+		if spec != "bytes=0-0" {
+			transfers = append(transfers, spec)
 		}
 	}
-	if !sawSubrange {
-		t.Fatal("no smaller range was requested")
-	}
-	if !sawWhole {
-		t.Fatalf("the remainder was not requested as %s; ranges %v", whole, ranges)
+	if len(transfers) != 1 || !strings.HasPrefix(transfers[0], "bytes=0-") || transfers[0] == fmt.Sprintf("bytes=0-%d", len(data)-1) {
+		t.Fatalf("transfers %v, want the one smaller range from byte 0", transfers)
 	}
 }

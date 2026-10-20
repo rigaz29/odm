@@ -68,7 +68,23 @@ All notable changes to ODM are documented here. The format is based on
 - A server with a weak ETag (`W/"…"`) answered every range with the whole
   file, because the ETag was sent as If-Range, so the download ran on one
   connection. A weak ETag is no longer sent; Last-Modified stands in.
-  These four came out of the upstream review of ODM's engine changes.
+- A connection that went quiet kept its last good pace, so its work was
+  not handed to a free connection first; a pace now falls while nothing
+  arrives, and a response with no first byte after a second counts as
+  stalled. Each new response is measured afresh.
+- An `Accept-Encoding` set on a download was kept on range requests, where
+  it asks for compressed bytes that cannot be written at a chunk's
+  offset; range requests now always ask for the raw bytes.
+- When the first chunk was answered with the whole file, that answer was
+  dropped and the file asked for again on one connection; it is now kept
+  and runs to the end.
+- A server whose copies never agree made every resume discard the partial
+  file and download it again from the first byte. That happens once per
+  download now, also across pauses and restarts; after it, a disagreement
+  fails the download.
+- The overlap check reads the stored bytes without holding the lock the
+  windows wait on, and a download's own sockets close after each run.
+  These came out of the upstream review of ODM's engine changes.
 - A torrent paused while ODM ran, then resumed, kept downloading the files
   chosen before the pause.
 - A magnet link added through the web UI went to the Other category

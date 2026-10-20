@@ -179,7 +179,9 @@ type Download struct {
 	// resume, stay on one connection.
 	single bool
 	// restarted is set when that single connection disagreed too and the
-	// partial file was discarded. One Start does this only once.
+	// partial file was discarded. A download does this only once, kept
+	// across pauses and restarts: a server that always disagrees then fails
+	// instead of being downloaded again and again from the first byte.
 	restarted bool
 
 	conflicted bool
@@ -325,6 +327,19 @@ func (d *Download) setClient(c *http.Client) {
 	d.mu.Unlock()
 }
 
+// closeIdle closes the idle sockets of the download's own transports after
+// a pass: nothing would reuse them before they time out.
+func (d *Download) closeIdle() {
+	d.mu.Lock()
+	long, h1 := d.long, d.h1
+	d.mu.Unlock()
+	for _, c := range []*http.Client{long, h1} {
+		if c != nil {
+			c.CloseIdleConnections()
+		}
+	}
+}
+
 // fileHeaderTimeout bounds the wait for response headers on a file's own
 // requests: its probe and its transfers. It is much longer than the shared
 // client's headerTimeout (playlists, keys, pages): a server that builds the
@@ -414,9 +429,8 @@ func (d *Download) Start(parent context.Context) {
 	d.Err = ""
 	d.lastDone = 0
 	d.lastAt = time.Now()
-	// Each Start may discard the partial file once. single stays set so a
-	// resume does not go back to parallel connections.
-	d.restarted = false
+	// single and restarted stay set: a resume does not go back to parallel
+	// connections, nor discard the partial file a second time.
 	d.conflicted = false
 	d.witnesses = nil
 	d.mu.Unlock()
@@ -480,6 +494,7 @@ func (d *Download) Start(parent context.Context) {
 		go func() { defer wg.Done(); d.worker(transferCtx) }()
 		wg.Wait()
 		transferCancel()
+		d.closeIdle()
 		d.mu.Lock()
 		d.connWg = nil
 		d.transferCancel = nil
@@ -931,6 +946,10 @@ func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk) error {
 
 func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 	d.mu.Lock()
+	if ch.retired {
+		d.mu.Unlock()
+		return errIgnoredRange
+	}
 	if ch.Complete() {
 		d.mu.Unlock()
 		return nil
@@ -942,6 +961,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		ch.Done = 0
 	}
 	start, end := ch.Next(), ch.End
+	ch.startPace(time.Now())
 	rangeOK := d.RangeOK
 	conns := d.Connections
 	finalURL := d.FinalURL
@@ -968,12 +988,12 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 	}
 	applyHeaders(req, headers)
 	if rangeOK {
-		// The transport would otherwise ask for gzip. A compressed body is
-		// not the file's own bytes and must not be written at this offset.
-		// A value the download already set is kept.
-		if req.Header.Get("Accept-Encoding") == "" {
-			req.Header.Set("Accept-Encoding", "identity")
-		}
+		// The body is written at this offset, so it must be the file's own
+		// bytes. Go's transport already leaves out gzip when a Range is set;
+		// this is for servers that compress unasked, and it replaces an
+		// Accept-Encoding set on the download, which would ask for the very
+		// compressed bytes that cannot be written here.
+		req.Header.Set("Accept-Encoding", "identity")
 		if validator != "" {
 			req.Header.Set("If-Range", validator)
 		}
@@ -1026,13 +1046,27 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 				return errRepresentationChanged
 			}
 			if !wholeFileRange(start, end, total) {
-				if !alone {
+				switch {
+				case !alone && start == 0:
+					// This chunk asked from byte 0, so the body is already at
+					// its offset: keep it and run on to the end of the file
+					// on this connection, instead of dropping it and asking
+					// again. If another connection went alone first, this
+					// one stops like any other.
+					p, ok := d.takeWholeFile(ch)
+					if !ok {
+						return errIgnoredRange
+					}
+					pass = p
+				case !alone:
 					return errIgnoredRange
-				}
-				// This connection is already the only one. Skip the prefix
-				// that is already stored and write the rest at its offset.
-				if err := discardPrefix(ctx, resp.Body, start, d.readStall()); err != nil {
-					return err
+				default:
+					// This connection is already the only one. Skip the
+					// prefix that is already stored and write the rest at
+					// its offset.
+					if err := discardPrefix(ctx, resp.Body, start, d.readStall()); err != nil {
+						return err
+					}
 				}
 			}
 		default:
@@ -1443,6 +1477,31 @@ func discardPrefix(ctx context.Context, body io.ReadCloser, n int64, idle time.D
 	return nil
 }
 
+// takeWholeFile makes ch, which starts at byte 0 and got the whole file as
+// a 200, the only chunk: it now runs to the end of the file. The other
+// chunks are retired and their connections stop at their next write (the
+// pass changes) or their next request; bytes they stored are written again
+// by this one, which is the same file (its validator matched). It reports
+// false when another connection already put the download on one
+// connection, and returns the new pass for the caller's own writes.
+func (d *Download) takeWholeFile(ch *Chunk) (int, bool) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.alone || ch.retired || d.Total <= 0 {
+		return d.pass, false
+	}
+	d.alone = true
+	d.pass++
+	for _, c := range d.Chunks {
+		if c != ch {
+			c.retired = true
+		}
+	}
+	ch.End = d.Total - 1
+	d.Chunks = []*Chunk{ch}
+	return d.pass, true
+}
+
 // noteIgnoredRange records that a range was answered with the whole file
 // and stops the other connections of this pass. The plan is rebuilt after
 // they have stopped.
@@ -1485,12 +1544,15 @@ func (d *Download) overlapLocked(ch *Chunk, start, end int64, rangeOK bool) (req
 // not stored yet is remembered and compared when the owning chunk writes it.
 func (d *Download) checkOverlap(off int64, sample []byte) error {
 	d.mu.Lock()
-	defer d.mu.Unlock()
 	end := off + int64(len(sample))
-	if have := d.writtenPrefixLocked(off, end); have > off {
+	have, f := d.writtenPrefixLocked(off, end), d.file
+	d.mu.Unlock()
+	if have > off && f != nil {
+		// Read outside the lock, which the windows take too: stored bytes
+		// do not change.
 		n := int(have - off)
 		got := make([]byte, n)
-		rn, err := d.file.ReadAt(got, off)
+		rn, err := f.ReadAt(got, off)
 		if rn != n || (err != nil && !errors.Is(err, io.EOF)) {
 			if err != nil {
 				return err
@@ -1507,7 +1569,9 @@ func (d *Download) checkOverlap(off int64, sample []byte) error {
 		off = have
 	}
 	if len(sample) > 0 {
+		d.mu.Lock()
 		d.addWitnessLocked(off, sample)
+		d.mu.Unlock()
 	}
 	return nil
 }
@@ -2031,21 +2095,24 @@ type State struct {
 	ETag         string            `json:"etag,omitempty"`
 	LastModified string            `json:"last_modified,omitempty"`
 	Single       bool              `json:"single,omitempty"`
-	Alone        bool              `json:"alone,omitempty"`
-	Replace      bool              `json:"replace,omitempty"`
-	CategoryName string            `json:"category_name,omitempty"`
-	Queue        string            `json:"queue,omitempty"`
-	Description  string            `json:"description,omitempty"`
-	Order        int               `json:"order,omitempty"`
-	Checksum     string            `json:"checksum,omitempty"`
-	Status       Status            `json:"status"`
-	Err          string            `json:"error,omitempty"`
-	Chunks       []*Chunk          `json:"chunks"`
-	Stream       *StreamJob        `json:"stream,omitempty"`
-	Site         *SiteJob          `json:"site,omitempty"`
-	Torrent      *TorrentJob       `json:"torrent,omitempty"`
-	CreatedAt    time.Time         `json:"created_at"`
-	UpdatedAt    time.Time         `json:"updated_at"`
+	// Restarted: the single connection disagreed too, and the partial file
+	// was discarded once already.
+	Restarted    bool        `json:"restarted,omitempty"`
+	Alone        bool        `json:"alone,omitempty"`
+	Replace      bool        `json:"replace,omitempty"`
+	CategoryName string      `json:"category_name,omitempty"`
+	Queue        string      `json:"queue,omitempty"`
+	Description  string      `json:"description,omitempty"`
+	Order        int         `json:"order,omitempty"`
+	Checksum     string      `json:"checksum,omitempty"`
+	Status       Status      `json:"status"`
+	Err          string      `json:"error,omitempty"`
+	Chunks       []*Chunk    `json:"chunks"`
+	Stream       *StreamJob  `json:"stream,omitempty"`
+	Site         *SiteJob    `json:"site,omitempty"`
+	Torrent      *TorrentJob `json:"torrent,omitempty"`
+	CreatedAt    time.Time   `json:"created_at"`
+	UpdatedAt    time.Time   `json:"updated_at"`
 }
 
 // State snapshots the download for persistence.
@@ -2088,7 +2155,7 @@ func (d *Download) State() State {
 		OpenWhenDone: d.OpenWhenDone, CategoryName: d.CategoryName,
 		Queue: d.Queue, Description: d.Description, Order: d.Order, Checksum: d.Checksum,
 		Total: d.Total, RangeOK: d.RangeOK, ETag: d.ETag, LastModified: d.LastModified,
-		Single: d.single, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
+		Single: d.single, Restarted: d.restarted, Alone: d.alone, Replace: d.replace, Status: status, Err: d.Err,
 		Chunks: chunks, Stream: stream, Site: site, Torrent: tor, CreatedAt: d.CreatedAt, UpdatedAt: time.Now(),
 	}
 }
@@ -2112,6 +2179,7 @@ func Restore(s State, client *http.Client) *Download {
 	d.LastModified = s.LastModified
 	d.single = s.Single
 	d.alone = s.Alone
+	d.restarted = s.Restarted
 	d.replace = s.Replace
 	d.OpenWhenDone = s.OpenWhenDone
 	d.CategoryName = s.CategoryName

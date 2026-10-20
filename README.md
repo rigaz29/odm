@@ -20,12 +20,15 @@ app, or headless with a JSON API.
 - An idle connection takes half of the chunk that will take the longest to
   finish, when that chunk will take at least twice as long as the fastest
   one. Until a pace is known, it takes half of the largest remaining chunk.
+  A connection's pace falls while it receives nothing, and one with no
+  first byte after a second counts as stalled, so a hung connection's work
+  is the first handed out.
 - Resume after a pause, crash or restart from the exact byte offset. If a
   link expires, give the download a new address and it continues where it
   stopped, as long as the new address serves the same file.
-- Range requests ask for the raw bytes (`Accept-Encoding: identity`), so a
-  compressed response is not written in place of the file. A header set on
-  the download itself is left as it is.
+- Range requests ask for the raw bytes (`Accept-Encoding: identity`), even
+  over an `Accept-Encoding` set on the download, so a compressed response
+  is not written in place of the file.
 - A connection that closes before its chunk is finished retries from the
   last byte written. A server that caps each response (1 MiB at a time,
   say) still finishes the file: only attempts that store nothing count
@@ -42,9 +45,12 @@ app, or headless with a JSON API.
 - A later chunk re-reads a short stretch of the chunk before it. If the two
   copies differ, the rest of the file is fetched on one connection. If that
   copy still differs, the partial file is discarded and the download starts
-  again from the first byte.
+  again from the first byte, once: a later disagreement, after a pause or a
+  restart too, fails the download instead of starting over again.
 - A server that answers a smaller range with the whole file keeps bytes
-  already stored. The remainder is fetched on one connection.
+  already stored. The remainder is fetched on one connection; when the
+  first chunk got the whole file, that answer is kept and runs to the end
+  instead of being asked for again.
 - Servers that do not support ranges are fetched on a single stream.
 - Global and per-download speed limits, plus an optional data cap per time
   window. The global limit is switched off and on from the status bar (the

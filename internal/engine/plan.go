@@ -1,6 +1,9 @@
 package engine
 
-import "time"
+import (
+	"math"
+	"time"
+)
 
 // NewPlan splits [0,total) into at most conns chunks. total<=0 (unknown size)
 // yields a single open-ended chunk that is filled sequentially.
@@ -48,6 +51,13 @@ const (
 // helperPace, or returns nil. The slow connection stops at the bytes it
 // already counted; its chunk is then complete.
 func takeOver(chunks []*Chunk, helperPace int64) *Chunk {
+	return takeOverAt(chunks, helperPace, time.Now())
+}
+
+// takeOverAt is takeOver with the time paces are judged at. A connection
+// gone quiet is the slowest of all. One that has not stored a byte yet is
+// halved instead (splitFor): it has nothing to stop at.
+func takeOverAt(chunks []*Chunk, helperPace int64, now time.Time) *Chunk {
 	if helperPace <= 0 {
 		return nil
 	}
@@ -58,14 +68,21 @@ func takeOver(chunks []*Chunk, helperPace int64) *Chunk {
 	var victim *Chunk
 	var worst float64
 	for _, c := range chunks {
-		if c.Complete() || c.End < 0 || c.pace <= 0 || c.Done == 0 {
+		if c.Complete() || c.End < 0 || c.Done == 0 {
+			continue
+		}
+		pace, known := c.currentPace(now)
+		if !known {
 			continue
 		}
 		r := c.Remaining()
-		if r < takeoverMin || c.pace*takeoverRatio > helperPace {
+		if r < takeoverMin || pace*takeoverRatio > helperPace {
 			continue
 		}
-		eta := float64(r) / float64(c.pace)
+		eta := math.Inf(1) // a connection gone quiet never finishes on its own
+		if pace > 0 {
+			eta = float64(r) / float64(pace)
+		}
 		if eta < takeoverAfter.Seconds() {
 			continue
 		}
@@ -87,14 +104,15 @@ func takeOver(chunks []*Chunk, helperPace int64) *Chunk {
 // tail half of the chunk Split picks. A connection far slower than that
 // chunk's own gets nothing: half its work would finish later here.
 func splitFor(chunks []*Chunk, minChunk, helperPace int64) (*Chunk, bool) {
-	if nc := takeOver(chunks, helperPace); nc != nil {
+	now := time.Now()
+	if nc := takeOverAt(chunks, helperPace, now); nc != nil {
 		return nc, true
 	}
-	victim := splitVictim(chunks, minChunk)
+	victim := splitVictimAt(chunks, minChunk, now)
 	if victim == nil {
 		return nil, false
 	}
-	if helperPace > 0 && victim.pace > 0 && helperPace*takeoverRatio <= victim.pace {
+	if pace, _ := victim.currentPace(now); helperPace > 0 && pace > 0 && helperPace*takeoverRatio <= pace {
 		return nil, false
 	}
 	return cutHalf(chunks, victim)
@@ -106,15 +124,16 @@ func splitFor(chunks []*Chunk, minChunk, helperPace int64) (*Chunk, bool) {
 // least twice as long. Otherwise the largest remainder is chosen.
 // It reports false when no chunk is big enough to split safely.
 func Split(chunks []*Chunk, minChunk int64) (*Chunk, bool) {
-	victim := splitVictim(chunks, minChunk)
+	victim := splitVictimAt(chunks, minChunk, time.Now())
 	if victim == nil {
 		return nil, false
 	}
 	return cutHalf(chunks, victim)
 }
 
-// splitVictim is the chunk Split halves, or nil.
-func splitVictim(chunks []*Chunk, minChunk int64) *Chunk {
+// splitVictimAt is the chunk Split halves, or nil, with paces judged at
+// now: a pace of 0 (a connection gone quiet) is the slowest.
+func splitVictimAt(chunks []*Chunk, minChunk int64, now time.Time) *Chunk {
 	var largest, slow *Chunk
 	var bestRemain int64
 	var slowETA, fastETA float64
@@ -130,10 +149,14 @@ func splitVictim(chunks []*Chunk, minChunk int64) *Chunk {
 		if r > bestRemain {
 			bestRemain, largest = r, c
 		}
-		if c.pace <= 0 {
+		pace, known := c.currentPace(now)
+		if !known {
 			continue
 		}
-		eta := float64(r) / float64(c.pace)
+		eta := math.Inf(1)
+		if pace > 0 {
+			eta = float64(r) / float64(pace)
+		}
 		paced++
 		if slow == nil || eta > slowETA {
 			slow, slowETA = c, eta

@@ -35,7 +35,9 @@ func TestRangeRequestSendsIdentity(t *testing.T) {
 	}
 }
 
-func TestRangeKeepsExplicitEncoding(t *testing.T) {
+// An Accept-Encoding set on the download asks for the very compressed bytes
+// that cannot be written at a chunk's offset: ranged requests replace it.
+func TestRangeOverridesExplicitEncoding(t *testing.T) {
 	data := []byte("explicit-encoding-bytes")
 	var mu sync.Mutex
 	var encodings []string
@@ -52,10 +54,13 @@ func TestRangeKeepsExplicitEncoding(t *testing.T) {
 	if len(encodings) == 0 {
 		t.Fatal("no requests")
 	}
-	for _, got := range encodings {
-		if got != "gzip" {
-			t.Fatalf("Accept-Encoding = %q, want gzip", got)
-		}
+	if len(encodings) < 2 {
+		t.Fatalf("requests = %d, want the probe and the transfer", len(encodings))
+	}
+	// The probe (first request) only reads the headers; the transfer
+	// writes the body.
+	if got := encodings[len(encodings)-1]; got != "identity" {
+		t.Fatalf("transfer Accept-Encoding = %q, want identity", got)
 	}
 }
 

@@ -114,3 +114,49 @@ func TestSlowConnectionIsTakenOver(t *testing.T) {
 	}
 	t.Logf("6 MB with one connection at 16 KB/s: %v", took)
 }
+
+// A connection gone quiet is the slowest of all: its pace falls with the
+// time since its last bytes, and one that never sent its first byte counts
+// as stalled after paceStall. A new response forgets the old pace.
+func TestQuietConnectionPaceFalls(t *testing.T) {
+	now := time.Now()
+	quiet := &Chunk{ID: 0, Start: 0, End: 4<<20 - 1, Done: 1 << 20, pace: 2 << 20, paceAt: now.Add(-5 * time.Second)}
+	if p, ok := quiet.currentPace(now); !ok || p != 0 {
+		t.Fatalf("quiet for 5 s: pace %d known %v", p, ok)
+	}
+	nc := takeOverAt([]*Chunk{quiet}, 1<<20, now)
+	if nc == nil || nc.Start != 1<<20 || quiet.End != 1<<20-1 {
+		t.Fatalf("not taken over: %+v, victim end %d", nc, quiet.End)
+	}
+
+	silent := &Chunk{ID: 0, Start: 0, End: 4<<20 - 1}
+	silent.startPace(now.Add(-paceStall / 2))
+	if _, ok := silent.currentPace(now); ok {
+		t.Fatal("a fresh response's pace is known")
+	}
+	silent.startPace(now.Add(-2 * paceStall))
+	if p, ok := silent.currentPace(now); !ok || p != 0 {
+		t.Fatalf("no first byte for %v: pace %d known %v", 2*paceStall, p, ok)
+	}
+	// Not one byte yet: it is halved, not taken over (it has nothing to
+	// stop at).
+	if nc := takeOverAt([]*Chunk{silent}, 1<<20, now); nc != nil {
+		t.Fatalf("took over a chunk with no byte: %+v", nc)
+	}
+	going := &Chunk{ID: 1, Start: 4 << 20, End: 12<<20 - 1, pace: 4 << 20, paceAt: now}
+	if v := splitVictimAt([]*Chunk{going, silent}, MinChunkSize, now); v != silent {
+		t.Fatalf("victim %+v, want the silent chunk", v)
+	}
+
+	// Halving picks the quiet chunk over a larger one going well.
+	busy := &Chunk{ID: 1, Start: 4 << 20, End: 12<<20 - 1, pace: 4 << 20, paceAt: now}
+	quiet = &Chunk{ID: 0, Start: 0, End: 4<<20 - 1, Done: 1 << 20, pace: 2 << 20, paceAt: now.Add(-5 * time.Second)}
+	if v := splitVictimAt([]*Chunk{quiet, busy}, MinChunkSize, now); v != quiet {
+		t.Fatalf("victim %+v, want the quiet chunk", v)
+	}
+
+	quiet.startPace(now)
+	if quiet.pace != 0 || !quiet.paceAt.IsZero() || quiet.paceBytes != 0 {
+		t.Fatalf("a new response kept the old pace: %+v", quiet)
+	}
+}

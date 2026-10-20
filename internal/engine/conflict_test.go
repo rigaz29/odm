@@ -45,10 +45,10 @@ func TestWitnessMismatchReportsOffset(t *testing.T) {
 
 func TestSingleFlagRestores(t *testing.T) {
 	d := New("id", "http://example/a.bin", t.TempDir(), 4, nil, 0, nil)
-	d.single = true
+	d.single, d.restarted = true, true
 	again := Restore(d.State(), nil)
-	if !again.single {
-		t.Fatal("single was not restored")
+	if !again.single || !again.restarted {
+		t.Fatalf("single %v, restarted %v after a restore", again.single, again.restarted)
 	}
 }
 
@@ -244,6 +244,16 @@ func TestConflictStillFailsAfterRestart(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "file.bin")); !os.IsNotExist(err) {
 		t.Fatalf("finished file exists, stat err=%v", err)
+	}
+	// Started again, it does not discard the file and start over a second
+	// time: it fails at the next disagreement.
+	zeros := stats.zeros()
+	d.Start(context.Background())
+	if info := d.Info(); info.Status != StatusError || !strings.Contains(info.Error, "restarted from the first byte") {
+		t.Fatalf("again: status=%s err=%q", info.Status, info.Error)
+	}
+	if stats.zeros() != zeros {
+		t.Fatalf("started over from byte 0 again: %d requests from byte 0, had %d", stats.zeros(), zeros)
 	}
 	d.mu.Lock()
 	if d.file != nil {

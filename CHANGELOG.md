@@ -52,6 +52,23 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A download from a server that caps each response (sending a part of the
+  range asked for, 1 MiB say) failed with "connection closed early" after
+  8 responses. Each part now counts as progress, and only attempts that
+  store nothing count toward the retry limit; a connection that keeps
+  making progress between stalls is no longer given up on either.
+- A file whose server builds it before answering (an archive or an export
+  made on demand) failed when that took over 30 seconds. A file's probe and
+  transfers now wait up to 5 minutes for the server to start answering;
+  playlists, keys and pages keep 30 seconds.
+- One connection that got no answer held back the rest: the next
+  connection opened only once every open one had stored bytes. Bytes from
+  any connection now open the next, and a failed connection no longer stops
+  more from opening.
+- A server with a weak ETag (`W/"…"`) answered every range with the whole
+  file, because the ETag was sent as If-Range, so the download ran on one
+  connection. A weak ETag is no longer sent; Last-Modified stands in.
+  These four came out of the upstream review of ODM's engine changes.
 - A torrent paused while ODM ran, then resumed, kept downloading the files
   chosen before the pause.
 - A magnet link added through the web UI went to the Other category

@@ -64,7 +64,7 @@ func retryWait(err error, backoff time.Duration) time.Duration {
 	return backoff
 }
 
-// inspect probes rawURL with the download's client. A busy answer (429,
+// inspect probes rawURL with the download's file client. A busy answer (429,
 // 503) is tried again, after what the server asked for or the usual
 // backoff, up to MaxRetries times; other failures return at once, as before.
 func (d *Download) inspect(ctx context.Context, rawURL string, headers map[string]string) (*Probe, error) {
@@ -72,7 +72,7 @@ func (d *Download) inspect(ctx context.Context, rawURL string, headers map[strin
 	var err error
 	for attempt := 0; attempt < MaxRetries; attempt++ {
 		var p *Probe
-		p, err = inspectWith(ctx, d.httpClient(), rawURL, headers, d.authorizer())
+		p, err = inspectWith(ctx, d.fileClient(), rawURL, headers, d.authorizer())
 		var busy *busyError
 		if err == nil || !errors.As(err, &busy) {
 			return p, err

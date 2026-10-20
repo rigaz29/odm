@@ -83,6 +83,9 @@ type Download struct {
 	UpdatedAt time.Time
 
 	client *http.Client
+	// long is client with the longer wait for response headers a file's own
+	// requests have (fileHeaderTimeout); nil until needed.
+	long *http.Client
 	// h1 serves several ranges at once over HTTP/1.1. The shared client may
 	// use HTTP/2, which would put every range on one socket.
 	h1      *http.Client
@@ -128,13 +131,13 @@ type Download struct {
 	syncedAt time.Time
 	saveMu   sync.Mutex
 
-	// connLimit is how many connections this run may open. connOpened is how
-	// many workers have been started. connReady is how many of those have
-	// stored file bytes. The next worker starts only once every worker
-	// already opened has stored bytes.
+	// connLimit is how many connections this run may open, and connOpened
+	// how many workers have been started. The next worker starts once any
+	// connection stores file bytes after the last one opened (noteBytes): a
+	// slow or stalled connection does not hold the others back, and a
+	// server that refuses or never answers is not asked on more.
 	connLimit  int
 	connOpened int
-	connReady  int
 	connWg     *sync.WaitGroup
 
 	// alone is set once a ranged request is answered with the whole file.
@@ -155,6 +158,9 @@ type Download struct {
 	// stallTimeout overrides DefaultStallTimeout when set. Tests use a
 	// short value; a zero value means the default.
 	stallTimeout time.Duration
+	// headerTimeout overrides fileHeaderTimeout for a transfer's response
+	// headers when set; tests use a short one.
+	headerTimeout time.Duration
 
 	// ETag and LastModified identify the representation on the server.
 	// A resume sends one of them as If-Range and starts over when it no
@@ -315,8 +321,52 @@ func (d *Download) httpClient() *http.Client {
 func (d *Download) setClient(c *http.Client) {
 	d.mu.Lock()
 	d.client = c
-	d.h1 = nil
+	d.long, d.h1 = nil, nil
 	d.mu.Unlock()
+}
+
+// fileHeaderTimeout bounds the wait for response headers on a file's own
+// requests: its probe and its transfers. It is much longer than the shared
+// client's headerTimeout (playlists, keys, pages): a server that builds the
+// file before answering (an archive or an export made on demand) sends
+// nothing until it is done. A variable so tests can shorten it.
+var fileHeaderTimeout = 5 * time.Minute
+
+// fileClient is the client for a file's own requests: the shared one, with
+// fileHeaderTimeout for the response headers.
+func (d *Download) fileClient() *http.Client {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	return d.fileClientLocked()
+}
+
+func (d *Download) fileClientLocked() *http.Client {
+	if d.client == nil {
+		return nil
+	}
+	if d.long != nil {
+		return d.long
+	}
+	tr, ok := d.client.Transport.(*http.Transport)
+	if !ok {
+		return d.client // a test's own transport
+	}
+	t := tr.Clone()
+	t.ResponseHeaderTimeout = fileHeaderTimeout
+	c := *d.client
+	c.Transport = t
+	d.long = &c
+	return d.long
+}
+
+// headerWait bounds the wait for a transfer's response headers.
+func (d *Download) headerWait() time.Duration {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.headerTimeout > 0 {
+		return d.headerTimeout
+	}
+	return fileHeaderTimeout
 }
 
 // Start runs the transfer to completion, pause or error. It blocks.
@@ -424,7 +474,6 @@ func (d *Download) Start(parent context.Context) {
 		var wg sync.WaitGroup
 		d.connLimit = limit
 		d.connOpened = 1
-		d.connReady = 0
 		d.connWg = &wg
 		d.mu.Unlock()
 		wg.Add(1)
@@ -729,7 +778,6 @@ func (d *Download) openTarget(fresh bool) error {
 const idleRecheck = 250 * time.Millisecond
 
 func (d *Download) worker(ctx context.Context) {
-	ready := false
 	// lastPace is this connection's speed on its last chunk: bytes over
 	// the time it took, measured here because a chunk done in less than
 	// paceWindow has no pace of its own.
@@ -759,7 +807,7 @@ func (d *Download) worker(ctx context.Context) {
 		before := ch.Done
 		d.mu.Unlock()
 		began := time.Now()
-		err := d.fetchWithRetry(ctx, ch, &ready)
+		err := d.fetchWithRetry(ctx, ch)
 		d.mu.Lock()
 		if n, secs := ch.Done-before, time.Since(began).Seconds(); n > 0 && secs > 0 {
 			lastPace = int64(float64(n) / secs)
@@ -842,31 +890,46 @@ func (d *Download) trySplit(helperPace int64) *Chunk {
 	return nc
 }
 
-func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk, ready *bool) error {
+func (d *Download) fetchWithRetry(ctx context.Context, ch *Chunk) error {
 	var err error
 	backoff := d.retryDelay()
 	for attempt := 0; attempt < MaxRetries; attempt++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		err = d.fetch(ctx, ch, ready)
+		d.mu.Lock()
+		before := ch.Done
+		d.mu.Unlock()
+		err = d.fetch(ctx, ch)
 		if err == nil || errors.Is(err, errIgnoredRange) || errors.Is(err, errRepresentationChanged) || errors.Is(err, errConflict) {
 			return err
 		}
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
+		// An attempt that stored bytes before it failed (a stall, or a cut
+		// after some data) was not a wasted one: the count and the pause
+		// start over, so a connection that keeps making progress between
+		// failures is not given up on after MaxRetries of them. Attempts
+		// with no progress still run out.
+		d.mu.Lock()
+		progressed := ch.Done > before
+		d.mu.Unlock()
+		if progressed {
+			attempt = -1 // the loop's attempt++ makes it 0
+			backoff = d.retryDelay()
+		}
 		if serr := sleepCtx(ctx, retryWait(err, backoff)); serr != nil {
 			return serr
 		}
-		if backoff < 8*time.Second {
+		if !progressed && backoff < 8*time.Second {
 			backoff *= 2
 		}
 	}
 	return err
 }
 
-func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
+func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 	d.mu.Lock()
 	if ch.Complete() {
 		d.mu.Unlock()
@@ -891,8 +954,11 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	pass := d.pass
 	d.mu.Unlock()
 	client := d.segmentClient(rangeOK, conns)
+	// If-Range takes a strong validator only (RFC 9110): a server like Go's
+	// own answers a weak ETag with the whole file, and every range would
+	// then come back as a 200. Last-Modified, or nothing, stands in.
 	validator := etag
-	if validator == "" {
+	if validator == "" || strings.HasPrefix(validator, "W/") {
 		validator = modified
 	}
 
@@ -1053,10 +1119,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 				pos += int64(counted)
 				d.notify(false)
 				if counted > 0 {
-					if ready != nil && !*ready {
-						*ready = true
-						d.noteReady(ctx)
-					}
+					d.noteBytes(ctx)
 					if werr := d.limiter.Wait(ctx, counted); werr != nil {
 						return werr
 					}
@@ -1086,7 +1149,12 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 	}
 	complete := ch.Complete()
 	d.mu.Unlock()
-	if !complete {
+	// A body that ended short after some bytes is not a failure: the
+	// worker takes the chunk up again from its last byte, so a server that
+	// caps each 206 (at 1 MiB, say) still finishes a large chunk. Only a
+	// response that wrote nothing counts against MaxRetries, with the usual
+	// backoff, rather than being asked again at once forever.
+	if !complete && pos == start {
 		return errShortBody
 	}
 	return nil
@@ -1097,17 +1165,18 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk, ready *bool) error {
 func (d *Download) segmentClient(rangeOK bool, conns int) *http.Client {
 	d.mu.Lock()
 	defer d.mu.Unlock()
-	if d.client == nil || !rangeOK || conns <= 1 {
-		return d.client
+	long := d.fileClientLocked()
+	if long == nil || !rangeOK || conns <= 1 {
+		return long
 	}
 	if d.h1 != nil {
 		return d.h1
 	}
 	var base *http.Transport
-	if d.client.Transport != nil {
-		tr, ok := d.client.Transport.(*http.Transport)
+	if long.Transport != nil {
+		tr, ok := long.Transport.(*http.Transport)
 		if !ok {
-			return d.client
+			return long
 		}
 		base = tr
 	}
@@ -1120,8 +1189,9 @@ func (d *Download) segmentClient(rangeOK bool, conns int) *http.Client {
 	return d.h1
 }
 
-// errShortBody means the response ended before every byte of the chunk was
-// written. The chunk is retried from the last byte written.
+// errShortBody means a response ended cleanly (io.EOF) without writing a
+// byte of the chunk. A connection cut mid-body with a Content-Length gives
+// io.ErrUnexpectedEOF instead, which is retried as any failure.
 var errShortBody = errors.New("connection closed early")
 
 func (d *Download) retryDelay() time.Duration {
@@ -1155,13 +1225,14 @@ func ownedSpan(pos int64, n int, limit int64) int {
 // returns the context error before counting a retry.
 var errStalled = errors.New("connection stalled")
 
-// exchange sends req and returns when the response headers arrive. The stall
-// limit bounds that wait, then it is stopped so a long body is not cut short.
+// exchange sends req and returns when the response headers arrive. The
+// header limit (headerWait) bounds that wait, then it is stopped so a long
+// body is not cut short.
 // Pausing cancels ctx and is reported as ctx.Err(). client is the connection
 // that should send req, so a segmented download keeps its HTTP/1.1 transport.
 func (d *Download) exchange(ctx context.Context, client *http.Client, req *http.Request) (*http.Response, error) {
 	headerCtx, cancel := context.WithCancel(ctx)
-	timer := time.AfterFunc(d.readStall(), cancel)
+	timer := time.AfterFunc(d.headerWait(), cancel)
 	resp, err := client.Do(req.WithContext(headerCtx))
 	if timer.Stop() {
 		if err != nil {
@@ -1252,13 +1323,13 @@ func readWithIdle(ctx context.Context, body io.ReadCloser, buf []byte, idle time
 	}
 }
 
-// noteReady records that one open connection has stored file bytes. When
-// every connection already opened has done that, one more connection starts,
-// up to the configured limit.
-func (d *Download) noteReady(ctx context.Context) {
+// noteBytes records that a connection stored file bytes: one more
+// connection starts, up to the limit. Bytes from any connection count, so
+// one that never answers does not hold the rest back. A worker that failed
+// does not stop it either: the others may still complete the run.
+func (d *Download) noteBytes(ctx context.Context) {
 	d.mu.Lock()
-	d.connReady++
-	if d.connWg == nil || d.Status == StatusError || d.connOpened >= d.connLimit || d.connReady < d.connOpened {
+	if d.connWg == nil || d.alone || d.connOpened >= d.connLimit {
 		d.mu.Unlock()
 		return
 	}

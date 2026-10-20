@@ -95,10 +95,70 @@ func TestShortBodyRetriesFromLastByte(t *testing.T) {
 	}
 }
 
+// cappedServer answers every transfer with at most limit bytes of the range
+// asked, saying so in Content-Range, as servers that cap each 206 do; 0
+// sends an empty body. The size probe is served whole.
+func cappedServer(t *testing.T, data []byte, limit int, xfers *int64) *httptest.Server {
+	t.Helper()
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, end, open := parseTestRange(r.Header.Get("Range"), len(data))
+		if end >= len(data) {
+			end = len(data) - 1
+		}
+		if !open && !oneByteProbe(r) {
+			atomic.AddInt64(xfers, 1)
+			end = min(end, start+limit-1)
+		}
+		w.Header().Set("Accept-Ranges", "bytes")
+		if end >= start {
+			w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(data)))
+		}
+		w.Header().Set("Content-Length", strconv.Itoa(max(end-start+1, 0)))
+		w.WriteHeader(http.StatusPartialContent)
+		if end >= start {
+			_, _ = w.Write(data[start : end+1])
+		}
+	}))
+}
+
+// A server that caps every 206 makes progress on each response, so the
+// chunk finishes however many responses it takes, beyond MaxRetries.
+func TestCappedResponsesFinish(t *testing.T) {
+	data := randomData(128 * 1024) // 128 responses of 1 KiB
+	var xfers int64
+	srv := cappedServer(t, data, 1024, &xfers)
+	defer srv.Close()
+
+	dir := t.TempDir()
+	d := New("capped", srv.URL+"/file.bin", dir, 1, nil, 0, srv.Client())
+	d.retryBase = time.Millisecond
+	t.Cleanup(func() { closePart(d) })
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	d.Start(ctx)
+
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q transfers=%d", info.Status, info.Error, atomic.LoadInt64(&xfers))
+	}
+	if n := atomic.LoadInt64(&xfers); n <= MaxRetries {
+		t.Fatalf("transfers=%d, want more than MaxRetries for this test to mean anything", n)
+	}
+	got, err := os.ReadFile(filepath.Join(dir, info.FileName))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(got, data) {
+		t.Fatal("downloaded bytes do not match the source")
+	}
+}
+
+// A 206 with an empty body makes no progress: it is retried with backoff
+// and fails after MaxRetries, instead of being asked again at once forever.
 func TestShortBodyStopsAfterMaxRetries(t *testing.T) {
 	data := bytes.Repeat([]byte("ochi"), 32*1024)
 	var xfers int64
-	srv := shortServer(t, data, 1000, &xfers)
+	srv := cappedServer(t, data, 0, &xfers)
 	defer srv.Close()
 
 	dir := t.TempDir()

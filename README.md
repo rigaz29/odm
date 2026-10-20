@@ -13,9 +13,10 @@ app, or headless with a JSON API.
 **Downloading**
 - Up to 32 connections per file using `Range` requests (8 by default), with
   per-server overrides. The first connection opens immediately. Another opens
-  after every connection already running has stored file bytes, up to the
-  configured limit. Several connections use HTTP/1.1, one socket each.
-  A single stream can still use HTTP/2.
+  once any connection stores file bytes after the last one opened, up to the
+  configured limit, so one slow connection does not hold the rest back and
+  a server that refuses is not asked on more. Several connections use
+  HTTP/1.1, one socket each. A single stream can still use HTTP/2.
 - An idle connection takes half of the chunk that will take the longest to
   finish, when that chunk will take at least twice as long as the fastest
   one. Until a pace is known, it takes half of the largest remaining chunk.
@@ -26,10 +27,17 @@ app, or headless with a JSON API.
   compressed response is not written in place of the file. A header set on
   the download itself is left as it is.
 - A connection that closes before its chunk is finished retries from the
-  last byte written, and stops after the retry limit.
-- A saved `ETag` or `Last-Modified` is sent as `If-Range` on resume. If the
-  file on the server has changed, the partial download is discarded and
-  started again from the first byte. A `200` for a range that already covers
+  last byte written. A server that caps each response (1 MiB at a time,
+  say) still finishes the file: only attempts that store nothing count
+  toward the retry limit.
+- A file's server may take up to 5 minutes to start answering, for files
+  it builds on demand (archives, exports); once bytes flow, 30 seconds
+  without any counts as a stall and the connection is tried again.
+  Playlists, keys and pages keep a 30 second limit.
+- A saved `ETag` or `Last-Modified` is sent as `If-Range` on resume (a weak
+  `ETag` never is: `Last-Modified` stands in, as servers answer a weak one
+  with the whole file). If the file on the server has changed, the partial
+  download is discarded and started again from the first byte. A `200` for a range that already covers
   the whole file is kept when that validator still matches.
 - A later chunk re-reads a short stretch of the chunk before it. If the two
   copies differ, the rest of the file is fetched on one connection. If that

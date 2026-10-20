@@ -283,6 +283,7 @@ func TestHeaderStallRetries(t *testing.T) {
 	dir := t.TempDir()
 	d := New("header-stall", srv.URL+"/h.bin", dir, 1, nil, 0, srv.Client())
 	d.stallTimeout = 200 * time.Millisecond
+	d.headerTimeout = 200 * time.Millisecond
 	t.Cleanup(func() { closeEngineFile(d) })
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()

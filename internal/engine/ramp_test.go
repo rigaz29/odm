@@ -196,3 +196,79 @@ func TestRefusedResponseDoesNotOpenMoreConnections(t *testing.T) {
 		t.Fatal("download did not stop")
 	}
 }
+
+// A connection whose server never sends its first byte does not hold the
+// others back: bytes from any connection open the next.
+func TestRampPassesAStalledConnection(t *testing.T) {
+	const conns = 4
+	data := randomData(conns * MinChunkSize * 2)
+	var explicit atomic.Int32
+	arrivals := make(chan struct{}, 16)
+	release := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start, end, ok := explicitRange(r)
+		if !ok || oneByteProbe(r) {
+			writeProbe(w, len(data))
+			return
+		}
+		n := explicit.Add(1)
+		arrivals <- struct{}{}
+		if n == 2 {
+			// The second connection's server says nothing until released.
+			select {
+			case <-release:
+			case <-r.Context().Done():
+				return
+			}
+		}
+		body := data[start : end+1]
+		w.Header().Set("Accept-Ranges", "bytes")
+		w.Header().Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, len(data)))
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		w.WriteHeader(http.StatusPartialContent)
+		// Slowly, so the other connections are wanted.
+		for p := 0; p < len(body); p += 16 * 1024 {
+			if _, err := w.Write(body[p:min(p+16*1024, len(body))]); err != nil {
+				return
+			}
+			if f, ok := w.(http.Flusher); ok {
+				f.Flush()
+			}
+			time.Sleep(20 * time.Millisecond)
+		}
+	}))
+	defer srv.Close()
+
+	dir := t.TempDir()
+	d := New("ramp-stall", srv.URL+"/ramp.bin", dir, conns, nil, 0, srv.Client())
+	t.Cleanup(func() { closePart(d) })
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	done := make(chan struct{})
+	go func() {
+		d.Start(ctx)
+		close(done)
+	}()
+	for i := 0; i < conns; i++ {
+		select {
+		case <-arrivals:
+		case <-time.After(5 * time.Second):
+			close(release)
+			t.Fatalf("opened %d connections while the second was silent, want %d", explicit.Load(), conns)
+		}
+	}
+	close(release)
+	select {
+	case <-done:
+	case <-time.After(20 * time.Second):
+		t.Fatal("download did not finish")
+	}
+	info := d.Info()
+	if info.Status != StatusComplete {
+		t.Fatalf("status=%s err=%q", info.Status, info.Error)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, info.FileName))
+	if !bytes.Equal(got, data) {
+		t.Fatal("downloaded bytes do not match")
+	}
+}

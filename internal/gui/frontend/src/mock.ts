@@ -163,6 +163,7 @@ export function mockApi(): Api {
   let total = wave(9, 19 * MB);
   const limits = new Map<string, number>();
   const torrentFiles = new Map<string, TorrentFileDetail[]>(); // as setTorrentFiles left them
+  const seedRules = new Map<string, { mode: string; ratio: number; minutes: number }>(); // as setTorrentSeed left them
   const newSchedule = () => ({
     sync: false, onStartup: false, startEnabled: false, startAt: "23:00", once: false, onceDate: "2026-10-17", days: [true, true, true, true, true, true, true],
     repeatEnabled: false, repeatMinutes: 60, stopEnabled: false, stopAt: "07:30", retriesEnabled: false, retries: 10,
@@ -412,6 +413,7 @@ export function mockApi(): Api {
       push();
     },
     torrentMagnet: async () => "magnet:?xt=urn:btih:0000",
+    setTorrentSeed: async (id, mode, ratio, minutes) => void seedRules.set(id, { mode, ratio, minutes }),
     setTorrentFiles: async (id, change) => {
       const d = items.find((x) => x.id === id);
       if (!d) throw new Error("download not found");
@@ -438,6 +440,9 @@ export function mockApi(): Api {
               seeding: d.seeding, peers: d.peers, seeds: d.seeds, uploadSpeed: d.uploadSpeed, uploaded: d.uploaded, ratio: d.uploaded / d.total,
               pieces: btoa(String.fromCharCode(...new Array(Math.ceil(377 / 8)).fill(255))), pieceCount: 377, magnet: d.url,
               files: torrentFiles.get(d.id) ?? torrentFilesOf(d),
+              seed: seedRules.get(d.id)?.mode ?? "options",
+              seedRatio: seedRules.get(d.id)?.ratio || 100,
+              seedMinutes: seedRules.get(d.id)?.minutes || 30,
             })
           : null,
       });

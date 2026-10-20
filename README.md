@@ -86,12 +86,17 @@ app, or headless with a JSON API.
 - A finished torrent seeds, outside its queue's slots, until it uploaded
   as much as its size or for 30 minutes, whichever comes first. *Options →
   Torrents* changes the ratio and the time, or seeds never or until
-  stopped. *Stop seeding* is in the list's menu and the progress window.
+  stopped, and a torrent can have its own target in its progress window
+  (*Options on completion*); one that stopped seeding seeds again when its
+  new target wants more. *Stop seeding* is in the list's menu and the
+  progress window.
 - The progress window shows the peers and seeds, what was uploaded and the
   ratio, the pieces, and each file. Until the torrent is complete, a file
   can be left out or taken in again there, or given another priority; a
-  file left out keeps what it had downloaded. The list marks a seeding
-  torrent and its upload speed.
+  file left out keeps what it had downloaded. Once it is complete, a file
+  it left out can still be ticked: the torrent downloads it into its
+  folder and is complete again. The list marks a seeding torrent and its
+  upload speed.
 - The same torrent is not added twice: ODM knows it by its info hash, from
   a magnet link in any form or a `.torrent` file, wherever it came from.
   New Download says it is in the list already and shows it; it can be
@@ -375,6 +380,7 @@ Scheduler and most Options are desktop only.
 | POST | `/api/torrents` | Add a `.torrent` file sent as `multipart/form-data` in the field `torrent`, with `dir`, `file_name`, `category`, `queue`, `description` and `start` (`false` adds it stopped) |
 | GET / DELETE | `/api/downloads/{id}` | One download; `DELETE ?file=true` also deletes the file |
 | GET / POST | `/api/downloads/{id}/files` | A torrent's files (`index`, `path`, `size`, `done`, `priority`), or change them: `{"priorities": {"<index>": 0}}` leaves one out, 1 is low, 4 normal, 7 high |
+| POST | `/api/downloads/{id}/seed` | A torrent's own seeding target: `{"mode": "", "ratio": 200, "minutes": 60}` (until a ratio or a time), `"never"`, `"forever"`, or `"options"` to follow the Options |
 | POST | `/api/downloads/{id}/pause` \| `/resume` \| `/retry` \| `/open` \| `/reveal` \| `/stop-seeding` | Control a download |
 | POST | `/api/downloads/{id}/limit` \| `/options` | Per-download speed limit / open-when-done |
 | GET | `/api/probe?url=` | Size, type and file name of a URL without adding it |

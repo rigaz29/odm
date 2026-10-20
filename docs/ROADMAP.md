@@ -910,6 +910,16 @@ Nanti
       sudah ada. Unduhan kedua yang lolos (`.torrent` dari alamat yang
       belum dibaca) berhenti dengan pesan jelas selama yang pertama
       dipegang odm-libtorrent.
+- [x] Target seeding per torrent. **S** Jendela progres, tab Opsi setelah
+      selesai: seperti di Opsi, sampai rasio atau waktu, jangan seeding,
+      atau sampai dihentikan; API `POST /api/downloads/{id}/seed`. Torrent
+      yang sudah berhenti seeding mulai seeding lagi bila target barunya
+      meminta lebih.
+- [x] Menambah file setelah torrent selesai. **S** Mencentang file yang
+      dilewati di jendela progres mengunduhnya ke folder torrent, tanpa
+      memindahkan apa pun (`TorrentJob.Final`). Diuji dengan
+      odm-libtorrent sungguhan: saat masih seeding (di sesi) dan setelah
+      keluar sesi (file diperiksa ulang).
 
 Batasan:
 - Mengunduh dan mengunggah konten berhak cipta lewat torrent bisa

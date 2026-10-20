@@ -309,6 +309,63 @@ func TestSessionTakesFilesChosenAfterTheAdd(t *testing.T) {
 	}
 }
 
+// A file left out of a finished torrent that seeds, in the session, is
+// added: the torrent downloads it in its folder and is complete again.
+// One that left the session takes another file the same way, its files
+// checked again.
+func TestSessionAddsFilesAfterItFinished(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "seed", "Set")
+	a := makeFile(t, filepath.Join(root, "a.bin"), 300000)
+	b := makeFile(t, filepath.Join(root, "b.bin"), 200001)
+	c := makeFile(t, filepath.Join(root, "c.bin"), 100003)
+	tf := filepath.Join(dir, "set.torrent")
+	createTorrent(t, root, tf)
+	sd := seed(t, tf, filepath.Join(dir, "seed"), 0)
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), filepath.Join(dir, "got"))
+	meta, err := h.s.Inspect(context.Background(), tf, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	job := &engine.TorrentJob{Files: meta.Files, Seed: &engine.TorrentSeed{Mode: engine.SeedForever}}
+	index := map[string]int{}
+	for i := range job.Files {
+		index[path.Base(job.Files[i].Path)] = i
+		job.Files[i].Skip = strings.HasSuffix(job.Files[i].Path, "/b.bin") || strings.HasSuffix(job.Files[i].Path, "/c.bin")
+	}
+	info := h.m.Create(engine.AddOptions{URL: tf, Torrent: job, Start: true})
+	h.wait(info.ID, sd, 60*time.Second, "the download", func(i engine.Info) bool { return i.Status == engine.StatusComplete && i.Seeding })
+	folder := filepath.Join(h.dir, "Set")
+	sameFile(t, filepath.Join(folder, "a.bin"), a)
+
+	if err := h.m.SetTorrentFiles(info.ID, map[int]int{index["b.bin"]: engine.PriorityNormal}); err != nil {
+		t.Fatal(err)
+	}
+	got := h.wait(info.ID, sd, 60*time.Second, "b.bin", func(i engine.Info) bool { return i.Status == engine.StatusComplete && i.Total == int64(len(a)+len(b)) })
+	if got.FilePath != folder {
+		t.Fatalf("complete again at %s", got.FilePath)
+	}
+	sameFile(t, filepath.Join(folder, "b.bin"), b)
+	h.wait(info.ID, nil, 10*time.Second, "seeding again", func(i engine.Info) bool { return i.Seeding })
+
+	// Out of the session: it is added again, and checks what it has.
+	h.m.StopSeeding(info.ID)
+	h.wait(info.ID, nil, 10*time.Second, "the end of seeding", func(i engine.Info) bool { return !i.Seeding })
+	if h.s.in(info.ID) != nil {
+		t.Fatal("still in the session")
+	}
+	if err := h.m.SetTorrentFiles(info.ID, map[int]int{index["c.bin"]: engine.PriorityNormal}); err != nil {
+		t.Fatal(err)
+	}
+	h.wait(info.ID, sd, 60*time.Second, "c.bin", func(i engine.Info) bool {
+		return i.Status == engine.StatusComplete && i.Total == int64(len(a)+len(b)+len(c))
+	})
+	sameFile(t, filepath.Join(folder, "a.bin"), a)
+	sameFile(t, filepath.Join(folder, "b.bin"), b)
+	sameFile(t, filepath.Join(folder, "c.bin"), c)
+}
+
 func TestSessionDownloadsAMagnetLink(t *testing.T) {
 	dir := t.TempDir()
 	src := filepath.Join(dir, "seed", "data.bin")

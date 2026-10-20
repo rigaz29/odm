@@ -469,6 +469,21 @@ func (s *Service) SetTorrentFiles(id string, priorities map[int]int) error {
 	return nil
 }
 
+// SetTorrentSeed gives the torrent id its own seeding target: mode is
+// "options" to follow the Options again, "" (until ratio percent or
+// minutes), "never" or "forever".
+func (s *Service) SetTorrentSeed(id, mode string, ratio, minutes int) error {
+	var own *engine.TorrentSeed
+	if mode != "options" {
+		own = &engine.TorrentSeed{Mode: mode, Ratio: ratio, Minutes: minutes}
+	}
+	if err := s.mgr.SetTorrentSeed(id, own); err != nil {
+		return err
+	}
+	s.poke()
+	return nil
+}
+
 // TorrentMagnet is a magnet link to the torrent id, for the clipboard; ""
 // when it has none yet.
 func (s *Service) TorrentMagnet(id string) string {
@@ -521,6 +536,12 @@ type TorrentDetail struct {
 	PieceCount int                 `json:"pieceCount"`
 	Files      []TorrentFileDetail `json:"files"`
 	Magnet     string              `json:"magnet"`
+	// Seed is the torrent's own seeding target: "options" (it follows the
+	// Options), "" (until SeedRatio percent or SeedMinutes), "never" or
+	// "forever". SeedRatio and SeedMinutes are its own, else the Options'.
+	Seed        string `json:"seed"`
+	SeedRatio   int    `json:"seedRatio"`
+	SeedMinutes int    `json:"seedMinutes"`
 }
 
 // TorrentFileDetail is a torrent's file with how much of it is there, and
@@ -541,8 +562,18 @@ func (s *Service) torrentDetail(d engine.Info) *TorrentDetail {
 	if !ok {
 		return nil
 	}
+	ts := s.mgr.Settings().Torrent
 	out := &TorrentDetail{Seeding: d.Seeding, Peers: d.Peers, Seeds: d.Seeds, UploadSpeed: d.UploadSpeed,
-		Uploaded: d.Uploaded, Magnet: tj.MagnetLink(d.FileName)}
+		Uploaded: d.Uploaded, Magnet: tj.MagnetLink(d.FileName), Seed: "options", SeedRatio: ts.SeedRatio, SeedMinutes: ts.SeedMinutes}
+	if own := tj.Seed; own != nil {
+		out.Seed = own.Mode
+		if own.Ratio > 0 {
+			out.SeedRatio = own.Ratio
+		}
+		if own.Minutes > 0 {
+			out.SeedMinutes = own.Minutes
+		}
+	}
 	if d.Total > 0 {
 		out.Ratio = float64(d.Uploaded) / float64(d.Total)
 	}

@@ -626,3 +626,46 @@ func TestTorrentTakesWhatTheWindowRead(t *testing.T) {
 		t.Fatalf("files: %+v", tj.Files)
 	}
 }
+
+// A torrent's own target goes over the Options': it seeds when they say
+// never, stops when its own says so, and seeds again when a new one wants
+// more.
+func TestTorrentOwnSeedingTarget(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "a.bin", InfoHash: "a9", Files: []TorrentFile{{Path: "a.bin", Size: 1000}}})
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
+	info := m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{}, Start: true})
+	f.waitAdd(t)
+	if err := m.SetTorrentSeed(info.ID, &TorrentSeed{Mode: SeedTarget, Ratio: 50}); err != nil {
+		t.Fatal(err)
+	}
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventFinished})
+	d := m.get(info.ID)
+	waitStatus(t, d, StatusComplete)
+	if !d.Info().Seeding {
+		t.Fatal("its own target did not seed")
+	}
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{State: "seeding", Size: 1000, Done: 1000, Uploaded: 500}})
+	waitUntil(t, "the end of seeding at 50 %", func() bool { return !d.Info().Seeding })
+
+	// Until stopped: it seeds again, back in the session.
+	if err := m.SetTorrentSeed(info.ID, &TorrentSeed{Mode: SeedForever}); err != nil {
+		t.Fatal(err)
+	}
+	if a := f.waitAdd(t); a.Names[0] != "a.bin" {
+		t.Fatalf("seeding again: %+v", a)
+	}
+	waitUntil(t, "seeding again", func() bool { return d.Info().Seeding })
+	// Back to the Options, which say never: it stops at the next news.
+	if err := m.SetTorrentSeed(info.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventStatus, Status: TorrentStatus{State: "seeding", Size: 1000, Done: 1000, Uploaded: 600}})
+	waitUntil(t, "the end of seeding", func() bool { return !d.Info().Seeding })
+
+	if err := m.SetTorrentSeed(info.ID, &TorrentSeed{Mode: "often"}); !errors.Is(err, errBadSeed) {
+		t.Fatalf("%v, want %v", err, errBadSeed)
+	}
+	if tj, _ := m.Torrent(info.ID); tj.Seed != nil {
+		t.Fatalf("a refused target was kept: %+v", tj.Seed)
+	}
+}

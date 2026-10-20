@@ -2137,10 +2137,7 @@ func (d *Download) infoLocked() Info {
 	}
 	path := ""
 	if d.FileName != "" {
-		path = filepath.Join(d.Dir, d.FileName)
-		if d.Status != StatusComplete {
-			path += ".odmpart"
-		}
+		path = d.pathLocked()
 	}
 	stream := ""
 	if d.Stream != nil {
@@ -2274,4 +2271,14 @@ func cookieHeader(cookies []*http.Cookie) string {
 		parts = append(parts, c.Name+"="+c.Value)
 	}
 	return strings.Join(parts, "; ")
+}
+
+// pathLocked is where the download's file is: its .odmpart until it is
+// complete, but for a torrent whose files have their place (TorrentJob.Final).
+func (d *Download) pathLocked() string {
+	p := filepath.Join(d.Dir, d.FileName)
+	if d.Status != StatusComplete && (d.Torrent == nil || !d.Torrent.Final) {
+		p += ".odmpart"
+	}
+	return p
 }

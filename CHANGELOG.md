@@ -27,6 +27,15 @@ All notable changes to ODM are documented here. The format is based on
   second download of it that slipped in stops with "the same torrent is
   already in the list" while the first runs, instead of odm-libtorrent's
   own error.
+- A torrent can have its own seeding target, over the Options': as in the
+  Options, until a ratio or a time, never, or until stopped, in its
+  progress window under *Options on completion* (and at
+  `POST /api/downloads/{id}/seed`). A seeding torrent goes by it at once;
+  one that stopped seeding seeds again when the new target wants more.
+- A complete torrent takes a file it left out: ticked in its progress
+  window, it downloads into the torrent's folder, which stays where it
+  is, and the torrent is complete again. The files it had stay; removing
+  it before the new one is in keeps them.
 
 ### Changed
 

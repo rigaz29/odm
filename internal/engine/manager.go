@@ -1073,9 +1073,15 @@ func (m *Manager) SetTorrentFiles(id string, prio map[int]int) error {
 	if d == nil {
 		return fmt.Errorf("download not found")
 	}
-	live, all, err := d.setFiles(prio)
+	live, reopen, all, err := d.setFiles(prio)
 	if err != nil {
 		return err
+	}
+	if reopen {
+		d.reopenTorrent()
+		m.changed(d)
+		m.pump()
+		return nil
 	}
 	if b := Torrents; b != nil && live {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
@@ -1084,6 +1090,25 @@ func (m *Manager) SetTorrentFiles(id string, prio map[int]int) error {
 	}
 	m.changed(d)
 	return err
+}
+
+// SetTorrentSeed gives the torrent id its own seeding target, over the
+// Options'; nil follows those again. A seeding torrent goes by it at once;
+// one that finished seeding seeds again when the new target wants more.
+func (m *Manager) SetTorrentSeed(id string, s *TorrentSeed) error {
+	d := m.get(id)
+	if d == nil {
+		return fmt.Errorf("download not found")
+	}
+	again, err := d.setSeed(s)
+	if err != nil {
+		return err
+	}
+	m.changed(d)
+	if again {
+		go m.seed(d, true)
+	}
+	return nil
 }
 
 // Probe inspects a URL without creating a download.
@@ -1502,11 +1527,7 @@ func (m *Manager) Path(id string) (string, bool) {
 	if d.FileName == "" {
 		return "", false
 	}
-	p := filepath.Join(d.Dir, d.FileName)
-	if d.Status != StatusComplete {
-		p += ".odmpart"
-	}
-	return p, true
+	return d.pathLocked(), true
 }
 
 func (m *Manager) get(id string) *Download {

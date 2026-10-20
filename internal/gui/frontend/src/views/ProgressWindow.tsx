@@ -14,7 +14,7 @@ import { FileTile, Sparkline } from "../components/bits";
 import { PieceMap, PRIORITY_NORMAL, PrioritySelect } from "../components/TorrentFiles";
 import { Button } from "../components/ui/button";
 import { Checkbox } from "../components/ui/checkbox";
-import { Input } from "../components/ui/input";
+import { Input, Select } from "../components/ui/input";
 import { decimalText, displayName, etaText, humanBytes, speedText } from "../format";
 import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
@@ -221,6 +221,7 @@ export function ProgressWindow({ id }: { id: string }) {
             <Checkbox checked={d.openWhenDone} onCheckedChange={(v) => void api.setOpenWhenDone(id, v === true)} />
             {t("Open the file when done")}
           </label>
+          {d.torrent && <SeedTarget id={id} d={d} />}
         </div>
       </div>
 
@@ -285,7 +286,9 @@ function TorrentParts({ id, d }: { id: string; d: Detail }) {
       return Object.keys(left).length === Object.keys(s).length ? s : left;
     });
   }, [tor.files]);
-  const editable = d.item.status !== "complete" && !tor.seeding;
+  // A complete torrent keeps its files, and downloads one left out that is
+  // ticked.
+  const complete = d.item.status === "complete";
   const prio = (f: { index: number; priority: number }) => sent[f.index] ?? f.priority;
   const wanted = tor.files.filter((f) => prio(f) > 0);
   const all = wanted.length === tor.files.length;
@@ -306,6 +309,7 @@ function TorrentParts({ id, d }: { id: string; d: Detail }) {
           {error}
         </p>
       )}
+      {complete && !all && <p className="text-xs text-muted-foreground">{t("Ticking a file left out downloads it into the torrent's folder.")}</p>}
       <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-border">
         <table className="w-full table-fixed text-sm">
           <thead className="sticky top-0 bg-muted text-xs text-muted-foreground">
@@ -313,7 +317,7 @@ function TorrentParts({ id, d }: { id: string; d: Detail }) {
               <th className="w-9 py-1.5 pl-3 text-left font-medium">
                 <Checkbox
                   checked={all ? true : "indeterminate"}
-                  disabled={!editable || all}
+                  disabled={all}
                   aria-label={t("All files")}
                   onCheckedChange={() => choose(Object.fromEntries(tor.files.filter((f) => prio(f) === 0).map((f) => [f.index, PRIORITY_NORMAL])))}
                 />
@@ -333,8 +337,8 @@ function TorrentParts({ id, d }: { id: string; d: Detail }) {
                   <td className="py-1 pl-3">
                     <Checkbox
                       checked={p > 0}
-                      disabled={!editable || last}
-                      title={editable && last ? t("The last file cannot be left out") : undefined}
+                      disabled={last || (complete && p > 0)}
+                      title={!complete && last ? t("The last file cannot be left out") : undefined}
                       aria-label={f.name}
                       onCheckedChange={(v) => choose({ [f.index]: v === true ? PRIORITY_NORMAL : 0 })}
                     />
@@ -347,8 +351,10 @@ function TorrentParts({ id, d }: { id: string; d: Detail }) {
                   <td className="py-1 pl-2 pr-3">
                     {p === 0 ? (
                       <span className="text-xs">{t("Skipped")}</span>
+                    ) : complete ? (
+                      <span className="text-xs text-muted-foreground">-</span>
                     ) : (
-                      <PrioritySelect value={p} disabled={!editable} onChange={(v) => choose({ [f.index]: v })} />
+                      <PrioritySelect value={p} onChange={(v) => choose({ [f.index]: v })} />
                     )}
                   </td>
                 </tr>
@@ -426,6 +432,64 @@ function Strip({ chunks, total }: { chunks: Chunk[]; total: number }) {
             </div>
           );
         })}
+    </div>
+  );
+}
+
+// SeedTarget is how long the torrent seeds once it is complete: as the
+// Options say, or its own target.
+function SeedTarget({ id, d }: { id: string; d: Detail }) {
+  const tor = d.torrent!;
+  const [mode, setMode] = useState(tor.seed);
+  const [ratio, setRatio] = useState(String(tor.seedRatio || ""));
+  const [minutes, setMinutes] = useState(String(tor.seedMinutes || ""));
+  const target = mode === "";
+  const apply = (m: string, r: string, n: string) => void api.setTorrentSeed(id, m, Number.parseInt(r, 10) || 0, Number.parseInt(n, 10) || 0);
+  const digits = (v: string) => v.replace(/\D/g, "");
+  return (
+    <div className="space-y-2">
+      <div className="flex items-center gap-2">
+        <span className="w-32 shrink-0 text-muted-foreground">{t("Seeding")}</span>
+        <Select
+          className="w-72"
+          value={mode}
+          onChange={(e) => {
+            setMode(e.target.value);
+            apply(e.target.value, ratio, minutes);
+          }}
+        >
+          <option value="options">{t("As in the Options")}</option>
+          <option value="">{t("Seed until a ratio or a time")}</option>
+          <option value="never">{t("Do not seed")}</option>
+          <option value="forever">{t("Seed until stopped")}</option>
+        </Select>
+      </div>
+      <div className={cn("flex items-center gap-2 pl-34", !target && "opacity-50")}>
+        <Input
+          className="w-16"
+          inputMode="numeric"
+          disabled={!target}
+          aria-label={t("Until the ratio")}
+          value={ratio}
+          onChange={(e) => {
+            setRatio(digits(e.target.value));
+            apply(mode, digits(e.target.value), minutes);
+          }}
+        />
+        % {t("or for")}
+        <Input
+          className="w-16"
+          inputMode="numeric"
+          disabled={!target}
+          aria-label={t("minutes")}
+          value={minutes}
+          onChange={(e) => {
+            setMinutes(digits(e.target.value));
+            apply(mode, ratio, digits(e.target.value));
+          }}
+        />
+        {t("minutes")}
+      </div>
     </div>
   );
 }

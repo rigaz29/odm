@@ -1,6 +1,7 @@
 package gui
 
 import (
+	"strings"
 	"testing"
 
 	"odm/internal/engine"
@@ -68,5 +69,29 @@ func TestTorrentTwinInTheWindow(t *testing.T) {
 	}
 	if n := len(mgr.List()); n != 1 {
 		t.Fatalf("%d downloads", n)
+	}
+}
+
+// The progress window shows the torrent's own seeding target, or the
+// Options' while it follows them, and sets it.
+func TestTorrentSeedInTheWindow(t *testing.T) {
+	svc, mgr := newTestService(t)
+	info := mgr.Create(engine.AddOptions{URL: "magnet:?xt=urn:btih:" + strings.Repeat("b", 40)})
+	d, _ := svc.Detail(info.ID)
+	if d.Torrent.Seed != "options" || d.Torrent.SeedRatio != engine.DefaultSeedRatio || d.Torrent.SeedMinutes != engine.DefaultSeedMinutes {
+		t.Fatalf("following the Options: %+v", d.Torrent)
+	}
+	if err := svc.SetTorrentSeed(info.ID, "", 300, 0); err != nil {
+		t.Fatal(err)
+	}
+	d, _ = svc.Detail(info.ID)
+	if d.Torrent.Seed != "" || d.Torrent.SeedRatio != 300 || d.Torrent.SeedMinutes != engine.DefaultSeedMinutes {
+		t.Fatalf("its own: %+v", d.Torrent)
+	}
+	if err := svc.SetTorrentSeed(info.ID, "options", 0, 0); err != nil {
+		t.Fatal(err)
+	}
+	if tj, _ := mgr.Torrent(info.ID); tj.Seed != nil {
+		t.Fatalf("seed %+v", tj.Seed)
 	}
 }

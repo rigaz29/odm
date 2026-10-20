@@ -80,6 +80,10 @@ export interface Api {
   // setTorrentFiles gives files of a torrent, by index, a priority: 0
   // leaves one out, then PRIORITY_LOW, PRIORITY_NORMAL or PRIORITY_HIGH.
   setTorrentFiles(id: string, priorities: Record<number, number>): Promise<void>;
+  // setTorrentSeed gives a torrent its own seeding target: mode "options"
+  // follows the Options, "" seeds until ratio percent or minutes, "never",
+  // "forever".
+  setTorrentSeed(id: string, mode: string, ratio: number, minutes: number): Promise<void>;
   openAssociationSettings(): Promise<void>;
 
   // The progress and download complete windows (detail.go).
@@ -210,6 +214,7 @@ const wailsApi: Api = {
   stopSeeding: (id) => Service.StopSeeding(id),
   torrentMagnet: (id) => Service.TorrentMagnet(id),
   setTorrentFiles: (id, priorities) => Service.SetTorrentFiles(id, priorities),
+  setTorrentSeed: (id, mode, ratio, minutes) => Service.SetTorrentSeed(id, mode, ratio, minutes),
   openAssociationSettings: () => Service.OpenAssociationSettings(),
   detail: (id) => Service.Detail(id),
   setDownloadLimit: (id, bps) => Service.SetDownloadLimit(id, bps),

@@ -134,3 +134,29 @@ func TestUploadTorrentTwice(t *testing.T) {
 		t.Fatalf("%d downloads", n)
 	}
 }
+
+func TestTorrentSeedAPI(t *testing.T) {
+	mgr := engine.NewManager(engine.Settings{Dir: t.TempDir()}, "")
+	info := mgr.Create(engine.AddOptions{URL: "magnet:?xt=urn:btih:" + strings.Repeat("a", 40)})
+	h := New(mgr).Handler()
+	post := func(body string) int {
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, httptest.NewRequest(http.MethodPost, "/api/downloads/"+info.ID+"/seed", strings.NewReader(body)))
+		return w.Code
+	}
+	if c := post(`{"mode":"","ratio":250,"minutes":90}`); c != http.StatusOK {
+		t.Fatalf("set: %d", c)
+	}
+	if tj, _ := mgr.Torrent(info.ID); tj.Seed == nil || tj.Seed.Ratio != 250 || tj.Seed.Minutes != 90 {
+		t.Fatalf("seed %+v", tj.Seed)
+	}
+	if c := post(`{"mode":"options"}`); c != http.StatusOK {
+		t.Fatalf("options: %d", c)
+	}
+	if tj, _ := mgr.Torrent(info.ID); tj.Seed != nil {
+		t.Fatalf("seed %+v", tj.Seed)
+	}
+	if c := post(`{"mode":"often"}`); c != http.StatusBadRequest {
+		t.Fatalf("bad mode: %d", c)
+	}
+}

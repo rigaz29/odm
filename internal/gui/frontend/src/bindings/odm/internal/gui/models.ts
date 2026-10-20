@@ -2053,6 +2053,15 @@ export class TorrentDetail {
     "files": TorrentFileDetail[];
     "magnet": string;
 
+    /**
+     * Seed is the torrent's own seeding target: "options" (it follows the
+     * Options), "" (until SeedRatio percent or SeedMinutes), "never" or
+     * "forever". SeedRatio and SeedMinutes are its own, else the Options'.
+     */
+    "seed": string;
+    "seedRatio": number;
+    "seedMinutes": number;
+
     /** Creates a new TorrentDetail instance. */
     constructor($$source: Partial<TorrentDetail> = {}) {
         if (!("seeding" in $$source)) {
@@ -2084,6 +2093,15 @@ export class TorrentDetail {
         }
         if (!("magnet" in $$source)) {
             this["magnet"] = "";
+        }
+        if (!("seed" in $$source)) {
+            this["seed"] = "";
+        }
+        if (!("seedRatio" in $$source)) {
+            this["seedRatio"] = 0;
+        }
+        if (!("seedMinutes" in $$source)) {
+            this["seedMinutes"] = 0;
         }
 
         Object.assign(this, $$source);

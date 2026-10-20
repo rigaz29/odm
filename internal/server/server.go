@@ -66,6 +66,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("POST /api/downloads/{id}/options", s.handleOptions)
 	mux.HandleFunc("GET /api/downloads/{id}/files", s.handleFiles)
 	mux.HandleFunc("POST /api/downloads/{id}/files", s.handleSetFiles)
+	mux.HandleFunc("POST /api/downloads/{id}/seed", s.handleSeed)
 	mux.HandleFunc("DELETE /api/downloads/{id}", s.handleDelete)
 	mux.HandleFunc("POST /api/actions/{action}", s.handleBatch)
 	mux.HandleFunc("POST /api/queues/{name}/{action}", s.handleQueue)
@@ -428,6 +429,36 @@ func (s *Server) handleSetFiles(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := s.mgr.SetTorrentFiles(id, body.Priorities); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	s.Broadcast()
+	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+// handleSeed gives a torrent its own seeding target: {"mode": "" (until
+// "ratio" percent or "minutes"), "never" or "forever"}; {"mode": "options"}
+// follows the Options again.
+func (s *Server) handleSeed(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Mode    string `json:"mode"`
+		Ratio   int    `json:"ratio"`
+		Minutes int    `json:"minutes"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+	id := r.PathValue("id")
+	if _, ok := s.mgr.Get(id); !ok {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "not found"})
+		return
+	}
+	var own *engine.TorrentSeed
+	if body.Mode != "options" {
+		own = &engine.TorrentSeed{Mode: body.Mode, Ratio: body.Ratio, Minutes: body.Minutes}
+	}
+	if err := s.mgr.SetTorrentSeed(id, own); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
 		return
 	}

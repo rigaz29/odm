@@ -105,7 +105,10 @@ func TestTorrentFilesOfAMagnetBeforeItsMetadata(t *testing.T) {
 	}
 }
 
-func TestTorrentFilesOfACompleteTorrentStay(t *testing.T) {
+// A complete torrent keeps its files, and takes one it left out: it
+// downloads it in its folder, which stays where it is, and is complete
+// again.
+func TestTorrentFilesAddedAfterItFinished(t *testing.T) {
 	f := newFakeTorrents(t, albumMeta())
 	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
 	info := m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{}, Start: true})
@@ -118,17 +121,62 @@ func TestTorrentFilesOfACompleteTorrentStay(t *testing.T) {
 	}
 	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventFinished})
 	waitStatus(t, d, StatusComplete)
-	if err := m.SetTorrentFiles(info.ID, map[int]int{3: 4}); !errors.Is(err, errTorrentDone) {
-		t.Fatalf("%v, want %v", err, errTorrentDone)
+	folder := filepath.Join(m.Settings().Dir, d.Info().FileName)
+	if err := m.SetTorrentFiles(info.ID, map[int]int{0: 0}); !errors.Is(err, errTorrentDone) {
+		t.Fatalf("leaving out a downloaded file: %v, want %v", err, errTorrentDone)
 	}
 
-	// Deleting it with its files takes that file too, and the folder.
-	folder := filepath.Join(m.Settings().Dir, d.Info().FileName)
+	if err := m.SetTorrentFiles(info.ID, map[int]int{3: PriorityHigh}); err != nil {
+		t.Fatal(err)
+	}
+	a := f.waitAdd(t)
+	if a.SavePath != folder || a.Names[3] != "cover.jpg" || !reflect.DeepEqual(a.Priorities, []int{4, 0, 4, 7}) {
+		t.Fatalf("added again: %+v", a)
+	}
+	waitStatus(t, d, StatusDownloading)
+	if i := d.Info(); i.FilePath != folder || i.Total != 550 {
+		t.Fatalf("running again: %+v", i)
+	}
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventFinished})
+	waitStatus(t, d, StatusComplete)
+	if i := d.Info(); i.FileName != filepath.Base(folder) || i.FilePath != folder {
+		t.Fatalf("complete again: %+v", i)
+	}
+
+	// Removed from the list, it keeps its files; deleted with them, the
+	// folder goes.
 	if _, err := os.Stat(filepath.Join(folder, "cover.jpg")); err != nil {
 		t.Fatal(err)
 	}
 	m.RemoveWithFile(info.ID, true)
 	if _, err := os.Stat(folder); !errors.Is(err, os.ErrNotExist) {
 		t.Fatalf("the folder is left: %v", err)
+	}
+}
+
+// A torrent given more files after it finished and removed before they
+// came keeps the files it had.
+func TestTorrentReopenedKeepsItsFilesWhenRemoved(t *testing.T) {
+	f := newFakeTorrents(t, albumMeta())
+	m := torrentManager(t, Settings{Torrent: TorrentSettings{Seed: SeedNever}})
+	info := m.Create(AddOptions{URL: dotTorrent(t), Torrent: &TorrentJob{Files: []TorrentFile{
+		{Path: "Album/01.flac", Size: 300}, {Path: ".pad/1", Size: 10, Pad: true}, {Path: "Album/02.flac", Size: 200}, {Path: "Album/cover.jpg", Size: 50, Skip: true},
+	}}, Start: true})
+	f.waitAdd(t)
+	d := m.get(info.ID)
+	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventFinished})
+	waitStatus(t, d, StatusComplete)
+	folder := filepath.Join(m.Settings().Dir, d.Info().FileName)
+	if err := m.SetTorrentFiles(info.ID, map[int]int{3: PriorityNormal}); err != nil {
+		t.Fatal(err)
+	}
+	f.waitAdd(t)
+	waitStatus(t, d, StatusDownloading)
+	m.RemoveWithFile(info.ID, false)
+	if del, _ := f.removed(info.ID); del {
+		t.Fatal("odm-libtorrent was told to delete the files")
+	}
+	if _, err := os.Stat(filepath.Join(folder, "01.flac")); err != nil {
+		t.Fatalf("a file it had: %v", err)
 	}
 }

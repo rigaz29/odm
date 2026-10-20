@@ -585,6 +585,8 @@
   "Low": "Rendah",
   "The last file cannot be left out": "File terakhir tidak bisa dilewati",
   "This torrent is already in the list": "Torrent ini sudah ada di daftar",
+  "As in the Options": "Seperti di Opsi",
+  "Ticking a file left out downloads it into the torrent's folder.": "Mencentang file yang dilewati mengunduhnya ke folder torrent.",
   "This torrent is already in the list as “%s” (%s).": "Torrent ini sudah ada di daftar sebagai “%s” (%s).",
   "ODM runs a torrent once: it can be downloaded again when that one is complete and no longer seeding, or removed.": "ODM menjalankan satu torrent sekali saja: torrent ini bisa diunduh lagi setelah yang itu selesai dan tidak seeding lagi, atau dihapus.",
   "Not installed": "Belum terpasang",

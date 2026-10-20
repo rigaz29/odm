@@ -453,6 +453,15 @@ export function SetTorrentFiles(id: string, priorities: { [_ in `${number}`]?: n
 }
 
 /**
+ * SetTorrentSeed gives the torrent id its own seeding target: mode is
+ * "options" to follow the Options again, "" (until ratio percent or
+ * minutes), "never" or "forever".
+ */
+export function SetTorrentSeed(id: string, mode: string, ratio: number, minutes: number): $CancellablePromise<void> {
+    return $Call.ByID(1549182795, id, mode, ratio, minutes);
+}
+
+/**
  * SetupBrowsers lists the installed browsers and whether each one's
  * extension has talked to ODM. The Setup window asks again every few
  * seconds, so a browser turns connected once the extension is in.

@@ -190,6 +190,39 @@ func (s *Service) DropPrefill(token string) {
 	s.amu.Unlock()
 }
 
+// handOffHeaders are the headers of the browser's hand-off pre to send for
+// addr, the address the window has. The browser's cookies and credentials
+// (Cookie, Authorization) are its site's: they go to the address it sent
+// and to others of that site, not to an address of another one typed or
+// pasted over it. The rest (Referer, User-Agent) goes either way.
+func handOffHeaders(pre engine.AddOptions, addr string) map[string]string {
+	if len(pre.Headers) == 0 || sameSite(pre.URL, addr) {
+		return pre.Headers
+	}
+	out := make(map[string]string, len(pre.Headers))
+	for k, v := range pre.Headers {
+		if !strings.EqualFold(k, "Cookie") && !strings.EqualFold(k, "Authorization") {
+			out[k] = v
+		}
+	}
+	return out
+}
+
+// sameSite reports whether target is addr, or an address of the same host
+// over the same scheme or HTTPS.
+func sameSite(addr, target string) bool {
+	addr, target = strings.TrimSpace(addr), strings.TrimSpace(target)
+	if addr == target {
+		return true
+	}
+	a, err := url.Parse(addr)
+	if err != nil || a.Host == "" || (a.Scheme != "http" && a.Scheme != "https") {
+		return false
+	}
+	b, err := url.Parse(target)
+	return err == nil && strings.EqualFold(a.Host, b.Host) && (b.Scheme == a.Scheme || b.Scheme == "https")
+}
+
 func (s *Service) remember(addr string, p *probed) {
 	s.amu.Lock()
 	defer s.amu.Unlock()
@@ -234,18 +267,20 @@ func unchecked(addr string, pre engine.AddOptions, fromBrowser bool) *probed {
 
 // Probe checks address: a file's size and name, a playlist's qualities, a
 // video page's qualities through yt-dlp. token is the browser's prefill,
-// whose headers the check sends and whose quality it selects.
+// whose headers the check sends (its cookies only to its own site:
+// handOffHeaders) and whose quality it selects.
 func (s *Service) Probe(address, token string) ProbeResult {
 	addr := strings.TrimSpace(address)
 	pre := s.prefill(token)
 	fromBrowser := pre.URL != "" && addr == strings.TrimSpace(pre.URL)
+	headers := handOffHeaders(pre, addr)
 	res := ProbeResult{URL: addr, Quality: 0}
 	switch {
 	case addr == "":
 		res.Card = Card{State: "idle", Title: "No address yet", Detail: "Paste or type one: ODM checks the file's size and type before adding it."}
 		return res
 	case s.isTorrentAddress(addr):
-		return s.probeTorrent(addr, pre.Headers)
+		return s.probeTorrent(addr, headers)
 	case !strings.HasPrefix(addr, "http"):
 		res.Card = Card{State: "warn", Title: "Not checked", Detail: "Only http and https addresses are checked before they are added."}
 		return res
@@ -266,7 +301,7 @@ func (s *Service) Probe(address, token string) ProbeResult {
 	var p *engine.Probe
 	var err error
 	if kind == "" {
-		p, err = s.mgr.Probe(ctx, addr, pre.Headers)
+		p, err = s.mgr.Probe(ctx, addr, headers)
 		if err == nil {
 			if k := media.Detect(p.ContentType, addr, nil); k == media.KindHLS || k == media.KindDASH {
 				kind = k
@@ -278,7 +313,7 @@ func (s *Service) Probe(address, token string) ProbeResult {
 		if kind == media.KindHTTPLive {
 			choices = engine.HTTPLiveChoices() // an endless response: nothing to read before
 		} else {
-			choices, err = s.mgr.ProbeStream(ctx, addr, pre.Headers)
+			choices, err = s.mgr.ProbeStream(ctx, addr, headers)
 			if choices != nil {
 				kind = choices.Kind // the playlist itself is the better judge
 			}
@@ -301,7 +336,7 @@ func (s *Service) Probe(address, token string) ProbeResult {
 		return res
 	}
 	if s.torrentType(p.ContentType) {
-		return s.probeTorrent(addr, pre.Headers)
+		return s.probeTorrent(addr, headers)
 	}
 	s.remember(addr, &probed{})
 	res.Kind = "file"
@@ -442,11 +477,12 @@ func (s *Service) Create(r CreateRequest) (CreateResult, error) {
 	}
 
 	// A broadcast found on a page is recorded from its playlist.
-	manifest, headers := addr, pre.Headers
+	own := handOffHeaders(pre, addr)
+	manifest, headers := addr, own
 	if pr.live != nil {
 		manifest = pr.live.Manifest
 		headers = map[string]string{}
-		for k, v := range pre.Headers {
+		for k, v := range own {
 			headers[k] = v
 		}
 		for k, v := range pr.live.Headers {
@@ -528,7 +564,8 @@ type ZipListing struct {
 func (s *Service) ZipPreview(address, token string) (ZipListing, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 45*time.Second)
 	defer cancel()
-	l, err := s.mgr.PreviewZip(ctx, strings.TrimSpace(address), s.prefill(token).Headers)
+	addr := strings.TrimSpace(address)
+	l, err := s.mgr.PreviewZip(ctx, addr, handOffHeaders(s.prefill(token), addr))
 	if err != nil {
 		return ZipListing{}, err
 	}

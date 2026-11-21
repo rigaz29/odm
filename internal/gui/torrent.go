@@ -632,7 +632,7 @@ func (s *Service) createTorrent(r CreateRequest, addr string) (CreateResult, err
 	}
 	folder := strings.TrimSpace(r.Folder)
 	o := engine.AddOptions{URL: addr, Dir: folder, Description: strings.TrimSpace(r.Description),
-		Category: r.Category, Queue: r.Queue, Start: r.Start, Headers: s.prefill(r.Token).Headers,
+		Category: r.Category, Queue: r.Queue, Start: r.Start, Headers: handOffHeaders(s.prefill(r.Token), addr),
 		Torrent: &engine.TorrentJob{Name: engine.SanitizeName(r.FileName)}}
 	done := s.takeProbe(addr, &o, r.Skip, r.Priorities)
 	info := s.mgr.Create(o)

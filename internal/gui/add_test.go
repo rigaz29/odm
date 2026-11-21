@@ -194,6 +194,118 @@ func TestPrefillCarriesTheBrowsersHeaders(t *testing.T) {
 	}
 }
 
+// The browser's cookies and credentials are its site's. An address of
+// another server typed over the hand-off's is checked, previewed, read as a
+// torrent and downloaded without them; its other headers still go. An
+// address of the same site keeps them.
+func TestHandOffCookiesStayWithTheirSite(t *testing.T) {
+	var mu sync.Mutex
+	seen := map[string]http.Header{} // the last request's headers, by path
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		seen[r.URL.Path] = r.Header.Clone()
+		mu.Unlock()
+		if r.URL.Path == "/b.bin" {
+			http.ServeContent(w, r, "b.bin", time.Time{}, strings.NewReader(strings.Repeat("b", 4096)))
+			return
+		}
+		http.NotFound(w, r)
+	}))
+	t.Cleanup(srv.Close)
+	header := func(path, name string) (string, bool) {
+		mu.Lock()
+		defer mu.Unlock()
+		h, ok := seen[path]
+		return h.Get(name), ok
+	}
+	// A .torrent address is fetched only where ODM runs torrents; the fetch
+	// fails here before odm-libtorrent would be asked anything.
+	prev := engine.Torrents
+	engine.Torrents = struct{ engine.TorrentBackend }{}
+	t.Cleanup(func() { engine.Torrents = prev })
+	t.Setenv("ODM_LIBTORRENT", "odm-libtorrent")
+
+	svc, mgr := newTestService(t)
+	sent := map[string]string{"Cookie": "sid=site-a", "Authorization": "Basic c2l0ZS1h", "Referer": "https://files.site-a.example/"}
+	handOff := func(addr string) string { return svc.keepPrefill(engine.AddOptions{URL: addr, Headers: sent}) }
+	token := handOff("https://files.site-a.example/report.zip")
+
+	svc.Probe(srv.URL+"/b.bin", token)
+	svc.ZipPreview(srv.URL+"/b.zip", token)
+	svc.Probe(srv.URL+"/b.torrent", token)
+	for _, p := range []string{"/b.bin", "/b.zip", "/b.torrent"} {
+		cookie, asked := header(p, "Cookie")
+		auth, _ := header(p, "Authorization")
+		referer, _ := header(p, "Referer")
+		switch {
+		case !asked:
+			t.Errorf("%s was not asked for", p)
+		case cookie != "" || auth != "":
+			t.Errorf("%s was sent the hand-off's Cookie %q and Authorization %q", p, cookie, auth)
+		case referer != sent["Referer"]:
+			t.Errorf("%s was sent Referer %q", p, referer)
+		}
+	}
+
+	saved := func(id string) map[string]string {
+		t.Helper()
+		data, err := mgr.Export()
+		if err != nil {
+			t.Fatal(err)
+		}
+		var states []struct {
+			ID      string            `json:"id"`
+			Headers map[string]string `json:"headers"`
+		}
+		if err := json.Unmarshal(data, &states); err != nil {
+			t.Fatal(err)
+		}
+		for _, st := range states {
+			if st.ID == id {
+				return st.Headers
+			}
+		}
+		t.Fatalf("no download %s", id)
+		return nil
+	}
+	for _, addr := range []string{srv.URL + "/b.bin", srv.URL + "/b.torrent"} {
+		res, err := svc.Create(CreateRequest{Token: handOff("https://files.site-a.example/report.zip"), URL: addr})
+		if err != nil || res.ID == "" {
+			t.Fatalf("create %s: %+v %v", addr, res, err)
+		}
+		if h := saved(res.ID); h["Cookie"] != "" || h["Authorization"] != "" || h["Referer"] != sent["Referer"] {
+			t.Errorf("%s was added with headers %v", addr, h)
+		}
+	}
+
+	// Another address of the hand-off's own site.
+	svc.Probe(srv.URL+"/b.bin", handOff(srv.URL+"/a.bin"))
+	if cookie, _ := header("/b.bin", "Cookie"); cookie != sent["Cookie"] {
+		t.Errorf("an address of the same site was sent Cookie %q", cookie)
+	}
+}
+
+func TestSameSite(t *testing.T) {
+	for _, c := range []struct {
+		addr, target string
+		want         bool
+	}{
+		{"https://a.example/x.zip", "https://a.example/x.zip", true},
+		{"https://a.example/x.zip", "https://A.example/y.zip?z=1", true},
+		{"http://a.example/x.zip", "https://a.example/x.zip", true}, // the safer scheme
+		{"https://a.example/x.zip", "http://a.example/x.zip", false},
+		{"https://a.example/x.zip", "https://a.example:8443/x.zip", false},
+		{"https://a.example/x.zip", "https://b.example/x.zip", false},
+		{"https://a.example/x.zip", "https://cdn.a.example/x.zip", false},
+		{"magnet:?xt=urn:btih:aa", "magnet:?xt=urn:btih:bb", false},
+		{"", "https://a.example/x.zip", false},
+	} {
+		if got := sameSite(c.addr, c.target); got != c.want {
+			t.Errorf("sameSite(%q, %q) = %v", c.addr, c.target, got)
+		}
+	}
+}
+
 // stubWindows records what the service asked to open.
 type stubWindows struct {
 	mu         sync.Mutex

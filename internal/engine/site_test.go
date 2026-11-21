@@ -18,7 +18,9 @@ import (
 // alone as .m4a for one format), or, for -J, describes a two-quality video; with
 // FAKE_YTDLP=live, a broadcast whose master playlist is
 // FAKE_LIVE_MANIFEST (its DASH manifest with FAKE_LIVE_KIND=dash, its
-// endless FLV with FAKE_LIVE_KIND=flv). With FAKE_FFMPEG set it stands in
+// endless FLV with FAKE_LIVE_KIND=flv); with FAKE_YTDLP=nocookies, it
+// fails every run given --cookies, as YouTube refusing a signed-in
+// session, and works without. With FAKE_FFMPEG set it stands in
 // for ffmpeg: "copy" copies the input to the output (the parts one after
 // the other, for the concat demuxer; "merged:<video>|<audio>" for two
 // inputs), "fail" fails. With both set, a run
@@ -61,6 +63,11 @@ func TestMain(m *testing.M) {
 			}
 		}
 		return ""
+	}
+	if os.Getenv("FAKE_YTDLP") == "nocookies" && slices.Contains(args, "--cookies") && !slices.Contains(args, "--version") {
+		// YouTube refusing yt-dlp a signed-in session.
+		fmt.Fprintln(os.Stderr, "ERROR: [youtube] abc: This content isn't available, try again later.")
+		os.Exit(1)
 	}
 	for _, a := range args {
 		switch a {

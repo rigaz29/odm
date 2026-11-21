@@ -8,6 +8,17 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- On YouTube, "Download this video" could list no qualities, only "best
+  quality" and an error, for someone signed in to YouTube in the browser:
+  yt-dlp ran with the browser's cookies, and YouTube can refuse yt-dlp a
+  signed-in session (cookies the browser has rotated, a session it limits
+  for a while) while it shows the same video to anyone. When yt-dlp fails
+  with the cookies, or finds nothing to download, ODM now reads the page
+  once more without them, and the site's next runs, its download
+  included, go without them for half an hour; a download refused with the
+  cookies before its first byte is tried again without them. yt-dlp's
+  failures are written to `odm.log`.
+
 - A download the browser handed over that ODM could not fetch itself was
   lost: the browser's copy was cancelled as ODM took it, and ODM then
   failed, for instance with "410 Gone" on a 1fichier free link, which

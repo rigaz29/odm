@@ -3,6 +3,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -147,9 +148,7 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 		return nil, err
 	}
 	page = strings.TrimSpace(page)
-	cookies, done := siteCookieArgs(page)
-	defer done()
-	v, err := ytdlp.Probe(ctx, bin, page, cookies)
+	v, err := probeSite(ctx, bin, page)
 	if err != nil {
 		return nil, err
 	}
@@ -170,6 +169,50 @@ func (m *Manager) ProbeSite(ctx context.Context, page string) (*SiteChoices, err
 	return c, nil
 }
 
+// probeSite has yt-dlp read page, signed in to its site as the Options
+// say, and once more without the cookies when that fails or finds nothing
+// to download: YouTube can refuse yt-dlp a signed-in session (cookies the
+// browser has rotated, a session it limits) and show the same video to
+// anyone. The site is then asked without cookies for a while
+// (cookiesRefused), so that its download works as well. Failures are
+// logged: the extension's menu shows only their gist.
+func probeSite(ctx context.Context, bin, page string) (*ytdlp.Video, error) {
+	cookies, done := siteCookieArgs(page)
+	v, err := ytdlp.Probe(ctx, bin, page, cookies)
+	done()
+	if ctx.Err() != nil || err == nil && siteUsable(v) {
+		return v, err
+	}
+	if cookies == (ytdlp.Cookies{}) {
+		log.Printf("yt-dlp: %s: %s", page, siteFailure(v, err))
+		return v, err
+	}
+	bare, berr := ytdlp.Probe(ctx, bin, page, ytdlp.Cookies{})
+	if ctx.Err() != nil {
+		return v, err
+	}
+	if berr == nil && siteUsable(bare) {
+		log.Printf("yt-dlp: %s: with the browser's cookies: %s; read without them, as the site is asked for %v", page, siteFailure(v, err), cookieRest)
+		cookiesRefused(page)
+		return bare, nil
+	}
+	log.Printf("yt-dlp: %s: with the browser's cookies: %s; without them: %s", page, siteFailure(v, err), siteFailure(bare, berr))
+	return v, err
+}
+
+// siteUsable reports whether yt-dlp's reading of a page says what to do
+// with it: a broadcast, live or to come, or qualities to download.
+func siteUsable(v *ytdlp.Video) bool {
+	return v != nil && (v.IsLive() || v.LiveStatus == "is_upcoming" || len(v.Qualities()) > 0)
+}
+
+func siteFailure(v *ytdlp.Video, err error) string {
+	if err != nil {
+		return err.Error()
+	}
+	return "nothing to download"
+}
+
 // resolveSiteLive asks yt-dlp again for the address of the broadcast on
 // page, of the kind the recording reads: it is signed and expires,
 // YouTube's after some hours, TikTok's sooner.
@@ -178,9 +221,7 @@ func resolveSiteLive(ctx context.Context, page string, kind media.Kind) (string,
 	if err != nil {
 		return "", nil, err
 	}
-	cookies, done := siteCookieArgs(page)
-	defer done()
-	v, err := ytdlp.Probe(ctx, bin, page, cookies)
+	v, err := probeSite(ctx, bin, page)
 	if err != nil {
 		return "", nil, err
 	}
@@ -376,9 +417,7 @@ func (d *Download) nameFromSite(ctx context.Context) {
 	if err != nil {
 		return
 	}
-	cookies, done := siteCookieArgs(page)
-	defer done()
-	v, err := ytdlp.Probe(ctx, bin, page, cookies)
+	v, err := probeSite(ctx, bin, page)
 	if err != nil {
 		return
 	}
@@ -435,7 +474,7 @@ func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
 	// yt-dlp fetches the formats of a selector one after the other, each
 	// with its own count.
 	done, totals := map[string]int64{}, map[string]int64{}
-	return ytdlp.Download(ctx, bin, o, func(p ytdlp.Progress) {
+	progress := func(p ytdlp.Progress) {
 		if p.Format == "" {
 			return
 		}
@@ -463,7 +502,33 @@ func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
 		}
 		d.mu.Unlock()
 		d.notify(false)
-	})
+	}
+	file, err := ytdlp.Download(ctx, bin, o, progress)
+	if err == nil || ctx.Err() != nil {
+		return file, err
+	}
+	d.mu.Lock()
+	started := len(done) > 0
+	d.mu.Unlock()
+	if o.Cookies != (ytdlp.Cookies{}) && !started {
+		// Refused with the person's cookies before a byte came (see
+		// probeSite): once more without them. The error that counts is
+		// the first, when that fails too.
+		o.Cookies = ytdlp.Cookies{}
+		bare, berr := ytdlp.Download(ctx, bin, o, progress)
+		if berr == nil {
+			log.Printf("yt-dlp: %s: download with the browser's cookies: %v; done without them, as the site is asked for %v", page, err, cookieRest)
+			cookiesRefused(page)
+			return bare, nil
+		}
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
+		log.Printf("yt-dlp: %s: download with the browser's cookies: %v; without them: %v", page, err, berr)
+		return "", err
+	}
+	log.Printf("yt-dlp: %s: download: %v", page, err)
+	return file, err
 }
 
 // placeSite moves yt-dlp's file to the download's .odmpart, giving the

@@ -41,7 +41,43 @@ type BrowserCookie struct {
 var siteCookies = struct {
 	sync.Mutex
 	bySite map[string][]BrowserCookie
-}{bySite: map[string][]BrowserCookie{}}
+	// refused are the sites where yt-dlp failed with the cookies and did
+	// without them, until when their runs leave the cookies out.
+	refused map[string]time.Time
+}{bySite: map[string][]BrowserCookie{}, refused: map[string]time.Time{}}
+
+// cookieRest is how long a site where yt-dlp failed with the person's
+// cookies, and read the page without them, is asked without them. YouTube
+// can refuse yt-dlp a signed-in session (cookies the browser has rotated,
+// a session it limits for a while) and still shows the same video to
+// anyone.
+var cookieRest = 30 * time.Minute
+
+// cookiesRefused notes that yt-dlp failed on page's site with the
+// cookies and did without them.
+func cookiesRefused(page string) {
+	key := siteKey(page)
+	if key == "" {
+		return
+	}
+	siteCookies.Lock()
+	siteCookies.refused[key] = time.Now().Add(cookieRest)
+	siteCookies.Unlock()
+}
+
+// cookiesResting reports whether page's site is asked without cookies for
+// now (cookiesRefused).
+func cookiesResting(page string) bool {
+	key := siteKey(page)
+	siteCookies.Lock()
+	defer siteCookies.Unlock()
+	until, ok := siteCookies.refused[key]
+	if ok && time.Now().After(until) {
+		delete(siteCookies.refused, key)
+		return false
+	}
+	return ok
+}
 
 // SetSiteCookies keeps the cookies the extension sent with a video site's
 // page for yt-dlp's next runs on that site, when Settings.YtDlpCookies is
@@ -62,6 +98,7 @@ func (m *Manager) SetSiteCookies(page string, cookies []BrowserCookie) {
 func forgetSiteCookies() {
 	siteCookies.Lock()
 	clear(siteCookies.bySite)
+	clear(siteCookies.refused)
 	siteCookies.Unlock()
 }
 
@@ -89,6 +126,9 @@ func siteKey(page string) string {
 // extension sent for the site, in a cookie file that done removes.
 func siteCookieArgs(page string) (c ytdlp.Cookies, done func()) {
 	done = func() {}
+	if cookiesResting(page) {
+		return c, done
+	}
 	switch b := cookiesFrom(); b {
 	case "", CookiesNone:
 		return c, done

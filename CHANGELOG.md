@@ -76,6 +76,11 @@ All notable changes to ODM are documented here. The format is based on
   torrent file names are made safe, and a folder outside the download
   folder, the folder last chosen and the categories' folders becomes the
   download folder.
+- A playlist server whose name gave ODM's check a local address and the
+  connection a moment later a public one (DNS rebinding) had the
+  local-network guard switched off for the whole stream, so its playlist
+  could send ODM to the router or a NAS. A playlist taken as local is now
+  read only from the local network.
 
 ### Fixed
 
@@ -136,6 +141,29 @@ All notable changes to ODM are documented here. The format is based on
   sends a notification. The Scheduler's *Start now* no longer starts
   another queue when Apply refuses an edit there: it starts the queue on
   screen, and nothing until the edit is put right.
+- Recording an internet radio's `.m3u` link (served as `audio/x-mpegurl`)
+  counted the bytes while it ran, then finished as an empty file when
+  stopped: its stream was taken for one segment of a playlist, which never
+  ended and was thrown away. The stream it names is now recorded as it
+  comes, like a TikTok live stream, and Stop keeps it (joined into an MP4
+  when ffmpeg is there).
+- A stream made of byte ranges (HLS `EXT-X-BYTERANGE`, a DASH SegmentList)
+  from a server or proxy that ignores ranges finished with the wrong
+  content: every piece held the file's first bytes. Each piece is now
+  taken from its place in the file; more than 8 MiB into the file, it
+  fails with "the server sent the whole file instead of bytes … (it
+  ignores ranges)" instead.
+- Two downloads of video pages with one name (two qualities of a video, a
+  video and its audio alone, two videos with the same title) shared
+  yt-dlp's work folder: the first to finish deleted the other's files and
+  it failed, and either could end up with the other's file. A page's
+  download now claims its name as other downloads do, so its work folder
+  and file are its own, and its file no longer replaces another
+  download's partial file of the same name.
+- *Show in folder* on Windows opened Documents with nothing selected when
+  the file's path had a space or a comma in it: Explorer got the path
+  quoted together with its `/select` switch. It now opens the file's
+  folder with the file selected.
 - A download from a server that caps each response (sending a part of the
   range asked for, 1 MiB say) failed with "connection closed early" after
   8 responses. Each part now counts as progress, and only attempts that

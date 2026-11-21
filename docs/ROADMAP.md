@@ -22,6 +22,15 @@ dikerjakan.
       crash saat membaca pengaturan, `settings.json` tidak atomik, proxy baru
       tidak berlaku, tanpa timeout koneksi/header, nama file Windows, stall
       pada segmen stream.
+- [x] Review seluruh kode (2026-11-21), 4 temuan kritis dan 15 tinggi
+      diperbaiki, dirilis di v0.7.0: cookie dan login terkirim ke situs
+      lain lewat redirect, resume dan import yang berakhir dengan file
+      berisi nol, magnet yang menimpa file milik pengguna, dua ODM jalan
+      bersamaan, crash lewat ZIP preview, torrent macet karena balasan
+      `odm-libtorrent` terlalu panjang, DNS rebinding pada penjaga jaringan
+      lokal, rekaman radio `.m3u` kosong, segmen byte-range yang salah, dan
+      beberapa bug UI (tombol menu, tray, Show in folder). Temuan sedang dan
+      rendah belum dikerjakan.
 
 ## Langkah 0: persiapan
 

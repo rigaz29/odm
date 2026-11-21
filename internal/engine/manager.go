@@ -750,7 +750,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 		if st.URL == "" {
 			continue
 		}
-		if st.ID == "" {
+		if !validID(st.ID) {
 			st.ID = newID()
 		}
 		m.mu.Lock()
@@ -760,7 +760,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 		if exists {
 			continue
 		}
-		st.Status = StatusPaused
+		importState(&st, stt)
 		st.Queue = stt.canonicalQueue(st.Queue)
 		d := Restore(st, nil) // the client is set when it joins the list
 		d.Categories = stt.Categories
@@ -768,6 +768,7 @@ func (m *Manager) Import(data []byte) (int, error) {
 		d.SetLimiter(m.limiter)
 		d.SetAuthLookup(m.credentials)
 		d.SetOnUpdate(m.updated)
+		d.twin = m.torrentTwin
 
 		m.mu.Lock()
 		// Under mu, so a proxy change cannot slip in between: d is not
@@ -784,6 +785,80 @@ func (m *Manager) Import(data []byte) (int, error) {
 	}
 	m.pump()
 	return added, nil
+}
+
+// importState makes a download of an exported list one to fetch anew. The
+// list is a file anyone can write, and its progress counted bytes in an
+// .odmpart of another computer, or of an earlier download: kept, resuming
+// "finished" at once with a file of zeros. Its names and folders are not
+// trusted either, as they become paths on this computer.
+func importState(st *State, s Settings) {
+	st.Status, st.Err = StatusPaused, ""
+	st.FileName = SanitizeName(st.FileName)
+	st.Dir, st.BaseDir = importDirs(st.Dir, st.BaseDir, s)
+	// What the server was found to send belongs to that file too; the
+	// first probe finds it again.
+	st.FinalURL, st.Total, st.RangeOK, st.ETag, st.LastModified = "", 0, false, "", ""
+	st.Single, st.Restarted, st.Alone, st.Replace = false, false, false, false
+	st.Chunks = nil
+	if j := st.Stream; j != nil {
+		j.Done, j.Counts, j.Recording = 0, nil, false
+	}
+	if j := st.Site; j != nil {
+		j.Done = 0
+	}
+	if j := st.Torrent; j != nil {
+		j.Name = SanitizeName(j.Name)
+		j.Done, j.Seeding, j.Uploaded, j.SeedTime, j.Final = 0, false, 0, 0, false
+		nameFiles(j.Files) // a file's place comes from its path, made safe again
+	}
+}
+
+// importDirs keeps an imported download's folders where ODM saves on this
+// computer: in the download folder, the folder last chosen or a category's
+// folder. Another one (a folder of another computer, or one a list names to
+// put a program in the Startup folder) becomes the download folder.
+func importDirs(dir, base string, s Settings) (string, string) {
+	roots := []string{s.Dir, s.LastDir}
+	for _, d := range s.CategoryDirs {
+		roots = append(roots, d)
+	}
+	inside := func(p string) bool {
+		if p == "" || !filepath.IsAbs(p) {
+			return false
+		}
+		for _, root := range roots {
+			if strings.TrimSpace(root) == "" {
+				continue
+			}
+			rel, err := filepath.Rel(root, p)
+			if err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) && !filepath.IsAbs(rel) {
+				return true
+			}
+		}
+		return false
+	}
+	if !inside(base) {
+		base = ""
+	}
+	if !inside(dir) {
+		dir = s.Dir
+	}
+	return dir, base
+}
+
+// validID reports whether id can name a download's files (its state, its
+// .torrent and resume data): letters, digits, '-' and '_' only.
+func validID(id string) bool {
+	if id == "" || len(id) > 64 {
+		return false
+	}
+	for _, r := range id {
+		if !(r >= '0' && r <= '9' || r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r == '-' || r == '_') {
+			return false
+		}
+	}
+	return true
 }
 
 /* ---------- lifecycle ---------- */

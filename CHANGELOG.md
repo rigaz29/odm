@@ -8,6 +8,12 @@ All notable changes to ODM are documented here. The format is based on
 
 ### Fixed
 
+- A download the browser handed over that ODM could not fetch itself was
+  lost: the browser's copy was cancelled as ODM took it, and ODM then
+  failed, for instance with "410 Gone" on a 1fichier free link, which
+  works once and which the browser's own request had used. ODM now tries
+  the address before it takes a download the browser holds, and refuses
+  one it cannot fetch, so that the browser goes on with its own.
 - In the download list, the edge between Name and Size could not be
   dragged, and dragging another column's edge moved the edge between Name
   and Size instead of the one dragged: Name took the width the other

@@ -204,7 +204,14 @@ type addRequest struct {
 	// .torrent.
 	Torrent     bool `json:"torrent"`
 	TorrentLink bool `json:"torrent_link"`
+	// Check marks a download the browser has started and holds while ODM
+	// answers: ODM tries the address first, and refuses it (409) when it
+	// cannot fetch it, so that the browser goes on with its own.
+	Check bool `json:"check"`
 }
+
+// handOffCheck bounds that try, well within the native host's wait.
+var handOffCheck = 6 * time.Second
 
 func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 	var req addRequest
@@ -272,6 +279,21 @@ func (s *Server) handleAdd(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		opts.Torrent = &engine.TorrentJob{}
+	}
+	// The browser's own request for this file was answered. A server that
+	// refuses ODM the same address (a file host's free link works once, and
+	// that request used it; a session only the browser has; a link that
+	// expired meanwhile) would fail it in ODM after the browser's copy was
+	// cancelled, and neither would download it. Refused, the browser keeps
+	// its download instead.
+	if req.Check && opts.Stream == nil && opts.Site == nil && opts.Torrent == nil {
+		ctx, cancel := context.WithTimeout(r.Context(), handOffCheck)
+		_, err := s.mgr.Probe(ctx, req.URL, req.Headers)
+		cancel()
+		if err != nil {
+			writeJSON(w, http.StatusConflict, map[string]string{"error": "ODM cannot download it: " + err.Error()})
+			return
+		}
 	}
 	if req.Prompt && s.OnPrompt != nil && !s.mgr.Settings().NoStartDialog && s.OnPrompt(opts) {
 		// The person decides in the window (it also handles duplicates).

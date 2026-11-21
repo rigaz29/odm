@@ -187,6 +187,10 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	if len(m.SiteCookies) > 0 {
 		payload["site_cookies"] = m.SiteCookies
 	}
+	if m.Held {
+		// The browser goes on with its own download if ODM cannot fetch it.
+		payload["check"] = true
+	}
 	if m.Kind == "live" {
 		// One endless response (FLV): recorded as it comes, from the
 		// click until Stop.
@@ -224,7 +228,8 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 	}
 	defer resp.Body.Close()
 	var info struct {
-		ID string `json:"id"`
+		ID    string `json:"id"`
+		Error string `json:"error"`
 	}
 	_ = json.NewDecoder(resp.Body).Decode(&info)
 	switch resp.StatusCode {
@@ -234,6 +239,11 @@ func relayDownload(client *http.Client, m native.Message) native.Reply {
 		return native.Reply{OK: true, ID: info.ID, Message: "queued"}
 	case http.StatusOK:
 		return native.Reply{OK: true, ID: info.ID, Message: "already in the list"}
+	case http.StatusConflict:
+		// ODM cannot fetch what the browser holds: the browser keeps it.
+		if info.Error != "" {
+			return native.Reply{Error: info.Error}
+		}
 	}
 	return native.Reply{Error: fmt.Sprintf("ODM returned %s", resp.Status)}
 }

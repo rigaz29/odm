@@ -475,9 +475,12 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
     try { await chrome.downloads.pause(item.id); } catch { /* may already be done */ }
     // The name the server gave (Chromium adds " (1)" to its own when its
     // folder has the file already); ODM reads the name from the server too.
+    // held: ODM tries the address first and refuses one it cannot fetch (a
+    // file host's free link works once, and the browser's request used it),
+    // so that the browser goes on with its own download rather than lose it.
     const reply = await handOff({
       url, referrer: item.referrer || "", filename: waitName ? item.filename || "" : name,
-      mime: item.mime || "", size: item.totalBytes > 0 ? item.totalBytes : 0,
+      mime: item.mime || "", size: item.totalBytes > 0 ? item.totalBytes : 0, held: true,
     });
     if (!reply.ok) {
       try { await chrome.downloads.resume(item.id); } catch { /* finished meanwhile */ }

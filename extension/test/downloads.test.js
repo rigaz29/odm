@@ -86,6 +86,7 @@ test("a file host's link with no file type goes to ODM before the browser's Save
   assert.equal(downloads.length, 1);
   assert.equal(downloads[0].url, "https://dl.filehost.example/dl/5HzKRR");
   assert.equal(downloads[0].filename, "Game_--_.part01.rar");
+  assert.equal(downloads[0].held, true, "ODM was not told the browser holds a copy to fall back on");
   assert.deepEqual(fake.calls, [["pause", 43], ["cancel", 43], ["erase", 43]]);
   assert.equal(suggested, 0, "the browser went on to name it (and ask where to save it)");
 });

@@ -52,6 +52,27 @@ func TestRelayStream(t *testing.T) {
 	}
 }
 
+// A download the browser holds asks ODM to try the address first, and ODM's
+// refusal comes back as an error, so that the browser keeps its download.
+func TestRelayHeldDownload(t *testing.T) {
+	var got map[string]any
+	client := &http.Client{Transport: roundTrip(func(r *http.Request) (*http.Response, error) {
+		if err := json.NewDecoder(r.Body).Decode(&got); err != nil {
+			t.Fatal(err)
+		}
+		return &http.Response{StatusCode: http.StatusConflict,
+			Body: io.NopCloser(strings.NewReader(`{"error":"ODM cannot download it: unexpected status: 410 Gone"}`))}, nil
+	})}
+	reply := relayDownload(client, native.Message{Type: "download", URL: "https://a-18.host.example/c1285416347", Held: true})
+	if got["check"] != true || reply.OK || !strings.Contains(reply.Error, "410 Gone") {
+		t.Fatalf("posted %+v, reply %+v", got, reply)
+	}
+	got, _ = relayed(t, native.Message{Type: "download", URL: "https://h.example/f.zip"})
+	if _, ok := got["check"]; ok {
+		t.Fatalf("a download the browser does not hold asked for a check: %+v", got)
+	}
+}
+
 func TestRelayStreamUnsupported(t *testing.T) {
 	_, reply := relayed(t, native.Message{Kind: "stream", URL: "https://cdn.example/x.ism/Manifest"})
 	if reply.OK || reply.Error == "" {

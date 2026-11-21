@@ -53,6 +53,10 @@ type Message struct {
 	// Browser is the browser the extension runs in ("chrome", "edge",
 	// "firefox", ...), sent with every message; empty from older ones.
 	Browser string `json:"browser"`
+	// Held marks a download the browser has started and holds (paused)
+	// while ODM answers: ODM takes it only if it can fetch it itself, and
+	// else the browser goes on with its own.
+	Held bool `json:"held"`
 }
 
 // Reply is the response sent back to the extension.

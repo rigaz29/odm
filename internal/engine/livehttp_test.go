@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -201,6 +202,104 @@ func TestHTTPLiveStopsAfterAWholeFile(t *testing.T) {
 	}
 	if hits != 1 {
 		t.Fatalf("fetched %d times", hits)
+	}
+}
+
+// radioServer serves an internet radio's playlist at /listen.m3u, as
+// stations serve their "listen" links, naming /stream: "[r]" chunks until
+// the client goes.
+func radioServer(t *testing.T) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/listen.m3u", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/x-mpegurl")
+		fmt.Fprintf(w, "#EXTM3U\n#EXTINF:-1,Radio One\nhttp://%s/stream\n", r.Host)
+	})
+	mux.HandleFunc("/stream", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "audio/mpeg")
+		for {
+			if _, err := fmt.Fprint(w, "[r]"); err != nil {
+				return
+			}
+			w.(http.Flusher).Flush()
+			select {
+			case <-r.Context().Done():
+				return
+			case <-time.After(5 * time.Millisecond):
+			}
+		}
+	})
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// A radio's playlist names its stream as an entry without a length. It is
+// recorded as the endless response it is, and Stop keeps what came: read
+// as a playlist's segment, it never ended, and Stop threw it all away,
+// leaving an empty file.
+func TestHTTPLiveRecordsARadioPlaylist(t *testing.T) {
+	fastLive(t)
+	srv := radioServer(t)
+	m := NewManager(Settings{Dir: t.TempDir()}, "")
+	fakeFFmpeg(t, "copy") // after the manager, which sets the configured one
+	c, err := m.ProbeStream(context.Background(), srv.URL+"/listen.m3u", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Live || c.Single || c.Note != liveNote || len(c.Qualities) != 1 {
+		t.Fatalf("choices %+v", c)
+	}
+	job, err := c.Job(srv.URL+"/listen.m3u", 0, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	d := newStreamDownload(t, srv.Client(), 1, job)
+	d.FileName = "radio"
+	done := make(chan struct{})
+	go func() {
+		d.Start(context.Background())
+		close(done)
+	}()
+	waitFor(t, "the stream to be recorded", func() bool { return d.Info().Done >= 30 })
+	d.Pause()
+	<-done
+	got := string(readResult(t, d))
+	if d.Info().FileName != "radio.mp4" || !strings.HasPrefix(got, "remuxed:[r][r][r]") || strings.Trim(got[len("remuxed:"):], "[r]") != "" {
+		t.Fatalf("%s: %q", d.Info().FileName, got)
+	}
+	if st := d.State().Stream; st.Kind != media.KindHTTPLive || st.Manifest != srv.URL+"/listen.m3u" || st.Entry != srv.URL+"/stream" {
+		t.Fatalf("job %+v", st)
+	}
+}
+
+// The stream a radio's playlist names is held to the playlist's site, as a
+// segment is: one on a public server cannot send ODM into the local
+// network.
+func TestHTTPLiveRadioPlaylistStaysOffTheLocalNetwork(t *testing.T) {
+	fastLive(t)
+	fakeDNS(t, map[string][]string{"radio.example": {"93.184.216.34"}})
+	var mu sync.Mutex
+	var asked []string
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		mu.Lock()
+		asked = append(asked, r.URL.Host)
+		mu.Unlock()
+		return &http.Response{StatusCode: http.StatusOK, Request: r,
+			Header: http.Header{"Content-Type": {"audio/x-mpegurl"}},
+			Body:   io.NopCloser(strings.NewReader("#EXTM3U\n#EXTINF:-1,Radio\nhttp://127.0.0.1:1/stream\n"))}, nil
+	})}
+	d := newStreamDownload(t, client, 1, StreamJob{Kind: media.KindHLS, Manifest: "https://radio.example/listen.m3u"})
+	d.Start(context.Background())
+	if info := d.Info(); info.Status != StatusError || !strings.Contains(info.Error, "local network") {
+		t.Fatalf("%s %q", info.Status, info.Error)
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	for _, h := range asked {
+		if h != "radio.example" {
+			t.Fatalf("asked %s", h)
+		}
 	}
 }
 

@@ -160,6 +160,13 @@ func (d *Download) probeHLS(ctx context.Context, base *url.URL, data []byte) (*S
 		if err := checkHLSMedia(p.Media); err != nil {
 			return nil, err
 		}
+		if endlessEntry(p.Media) != "" {
+			// An internet radio's list: the stream it names is recorded
+			// as it is sent, from now until the download is stopped.
+			c.Live, c.Note = true, liveNote
+			c.Qualities = []StreamQuality{{Label: "As sent (one quality)"}}
+			return c, nil
+		}
 		c.Qualities = []StreamQuality{{Label: "As found (one quality)"}}
 		c.Single = true
 		c.Note = "This address is one quality of a stream, and its audio may be separate. " +

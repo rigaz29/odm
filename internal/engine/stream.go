@@ -90,6 +90,11 @@ type StreamJob struct {
 	// broadcast). yt-dlp is asked again for a fresh Manifest when its
 	// signed address expires.
 	Page string `json:"page,omitempty"`
+	// Entry is the stream an internet radio's playlist (Manifest) names,
+	// recorded as one endless response (see endlessEntry). Manifest stays
+	// the playlist: its site decides where cookies go and whether the local
+	// network may be reached.
+	Entry string `json:"entry,omitempty"`
 }
 
 // ffmpegSetting is the configured ffmpeg path (Settings.FFmpegPath). Like
@@ -150,10 +155,13 @@ func (d *Download) runStream(ctx context.Context) {
 	default:
 		var tracks []*streamTrack
 		tracks, err = d.loadStream(ctx)
-		if errors.Is(err, errLiveStream) {
+		switch {
+		case errors.Is(err, errLiveStream):
 			live = true
 			err = d.recordLive(ctx)
-		} else {
+		case errors.As(err, new(endlessStream)):
+			// Recorded below.
+		default:
 			if err == nil {
 				err = d.prepareStream(tracks)
 			}
@@ -164,6 +172,13 @@ func (d *Download) runStream(ctx context.Context) {
 				err = d.assembleStream(ctx, tracks)
 			}
 		}
+	}
+	// An internet radio's playlist names one endless stream: it is
+	// recorded as such, not as a playlist (endlessEntry).
+	var endless endlessStream
+	if errors.As(err, &endless) {
+		live = true
+		err = d.recordEndless(ctx, endless.entry)
 	}
 	// finish may move the result to a free name; the work folder keeps
 	// the name it was created under.
@@ -365,6 +380,9 @@ func (d *Download) loadHLS(ctx context.Context, job StreamJob) ([]*streamTrack, 
 				return nil, errors.New("expected a media playlist, got a master playlist")
 			}
 			m = p.Media
+		}
+		if entry := endlessEntry(m); entry != "" && audioURL == "" {
+			return nil, endlessStream{entry}
 		}
 		switch {
 		case m.Protected:

@@ -206,7 +206,7 @@ func (d *Download) useSiteManifest(manifest string, headers map[string]string) {
 	d.mu.Lock()
 	defer d.mu.Unlock()
 	if d.Stream != nil {
-		d.Stream.Manifest = manifest
+		d.Stream.Manifest, d.Stream.Entry = manifest, ""
 	}
 	d.URL, d.FinalURL = manifest, ""
 	next := make(map[string]string, len(d.Headers)+len(headers))

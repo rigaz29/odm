@@ -172,6 +172,9 @@ func (d *Download) livePlaylists(ctx context.Context, job StreamJob) ([]string, 
 		return nil, err
 	}
 	if p.Master == nil {
+		if entry := endlessEntry(p.Media); entry != "" {
+			return nil, endlessStream{entry}
+		}
 		return []string{base.String()}, nil
 	}
 	v, a, err := pickHLS(p.Master, job.Variant, job.AudioKey)
@@ -206,6 +209,14 @@ func (d *Download) recordLive(ctx context.Context) error {
 		return d.recordDASHLive(ctx, job)
 	}
 	urls, err := d.livePlaylists(ctx, job)
+	if errors.As(err, new(endlessStream)) {
+		if job.Recording {
+			// Recorded as a playlist so far: going on as an endless
+			// response would leave those pieces out of the file.
+			return errors.New("the stream changed since this recording started; remove it and add it again")
+		}
+		return err // a radio's playlist: runStream records its stream
+	}
 	if err != nil && job.Page != "" && ctx.Err() == nil {
 		// A playlist found by yt-dlp may have expired since (a Resume
 		// hours later): ask it for the broadcast's current one.

@@ -46,6 +46,49 @@ import (
 //     its frames) is dropped and counts as no data, so the recording ends.
 //     Its timestamps run on from the broadcast's start, which is also why
 //     ffmpeg.Concat copies each part on its own before joining them.
+//   - An internet radio's .m3u (served as audio/x-mpegurl, read as an HLS
+//     playlist) names its stream as an entry without a length. Recorded
+//     as a playlist, that entry was one segment that never ended, and Stop
+//     threw it away; it is recorded here instead (endlessEntry).
+
+// endlessEntry is the stream an internet radio's playlist names: an .m3u
+// whose entries have no length ("#EXTINF:-1,Station") and which has no
+// target duration, as every HLS media playlist has. Such an entry is not a
+// segment but a whole stream sent as one endless response. "" for any
+// other playlist, and for an entry that is itself a playlist.
+func endlessEntry(m *media.HLSMedia) string {
+	if m == nil || m.TargetDuration > 0 || !m.Live() || len(m.Segments) == 0 {
+		return ""
+	}
+	for _, s := range m.Segments {
+		if s.Duration > 0 || s.Range != nil || s.Key != nil || s.Map != nil {
+			return ""
+		}
+	}
+	entry := m.Segments[0].URL
+	if media.Detect("", entry, nil).IsManifest() {
+		return ""
+	}
+	return entry
+}
+
+// endlessStream tells runStream that a playlist is an internet radio's:
+// its entry is recorded as an endless response (recordEndless).
+type endlessStream struct{ entry string }
+
+func (endlessStream) Error() string { return "the playlist names one endless stream" }
+
+// recordEndless records the stream entry, which the job's playlist names
+// (endlessEntry), as an endless response. The playlist stays the job's
+// Manifest, so the stream is held to its site's rules (decorate,
+// streamClient): a public list does not reach into the local network.
+func (d *Download) recordEndless(ctx context.Context, entry string) error {
+	d.mu.Lock()
+	d.Stream.Kind, d.Stream.Live, d.Stream.Entry = media.KindHTTPLive, true, entry
+	d.mu.Unlock()
+	d.notify(true)
+	return d.recordHTTPLive(ctx)
+}
 
 // httpLiveExt is the container a part is saved as: what the response's
 // URL ends in, FLV by default (TikTok's).
@@ -118,6 +161,9 @@ func (d *Download) recordHTTPLive(ctx context.Context) error {
 
 	next := len(parts) + 1
 	address := job.Manifest
+	if job.Entry != "" {
+		address = job.Entry // a radio's stream; Manifest is its playlist
+	}
 	lastData := time.Now()
 	// recorded is the furthest frame of the last part kept, in the
 	// stream's own clock (an FLV's milliseconds); -1 while not known.

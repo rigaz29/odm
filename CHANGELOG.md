@@ -6,6 +6,17 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- In the download list, the edge between Name and Size could not be
+  dragged, and dragging another column's edge moved the edge between Name
+  and Size instead of the one dragged: Name took the width the other
+  columns left, so a wider column only made Name narrower. Every column's
+  edge, Name's too, now follows the pointer as in Explorer, and the
+  columns to its right move with it. Once a width is set, the space left
+  over goes to an empty column at the end; a double click on Name's edge
+  has Name take that space again.
+
 ## [0.7.1] - 2026-11-21
 
 ### Fixed

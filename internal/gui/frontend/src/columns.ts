@@ -1,7 +1,12 @@
 // The list's columns: which show, how wide each is, and the order the list
 // is sorted in. The window keeps the choices (localStorage, in WebView2's
 // profile next to ODM's state), as the Fyne UI keeps them in its
-// preferences. Name always shows and takes the width the others leave.
+// preferences. Name always shows. Until it is given a width it takes the
+// width the others leave; once a column's edge is dragged it has one, and
+// the space left over goes to an empty column at the end, so that every
+// edge dragged follows the pointer (as in Explorer). With Name taking what
+// was left, a wider column to its right only made Name narrower: the edge
+// held still and Name's moved.
 
 import { markT } from "./i18n";
 
@@ -12,11 +17,14 @@ export interface Column {
   label: string; // English, shown through t
   width: number; // the default, in px; Name's is its minimum
   min: number;
+  max?: number; // the widest it may be dragged, MAX_WIDTH when unset
   hidden?: boolean; // hidden until shown from the column menu
 }
 
+const MAX_WIDTH = 1000;
+
 export const COLUMNS: Column[] = [
-  { id: "name", label: markT("Name"), width: 220, min: 160 },
+  { id: "name", label: markT("Name"), width: 220, min: 160, max: 2000 },
   { id: "queue", label: markT("Queue"), width: 96, min: 56, hidden: true },
   { id: "size", label: markT("Size"), width: 84, min: 60 },
   { id: "progress", label: markT("Progress"), width: 152, min: 96 },
@@ -54,7 +62,7 @@ export function readColumns(saved: unknown): ColumnState {
   if (s.widths && typeof s.widths === "object") {
     for (const [id, w] of Object.entries(s.widths as Record<string, unknown>)) {
       const c = byId.get(id as ColumnId);
-      if (c && c.id !== "name" && typeof w === "number" && w >= c.min && w <= 1000) out.widths[c.id] = Math.round(w);
+      if (c && typeof w === "number" && w >= c.min && w <= (c.max ?? MAX_WIDTH)) out.widths[c.id] = Math.round(w);
     }
   }
   return out;
@@ -70,11 +78,17 @@ export function toggleColumn(s: ColumnState, id: ColumnId): ColumnState {
 
 export const widthOf = (s: ColumnState, id: ColumnId) => s.widths[id] ?? byId.get(id)!.width;
 
-// resized sets a column's width, kept at its minimum or above.
+// nameFits reports whether Name takes the width the other columns leave
+// (it has none of its own yet); else the space left goes to an empty
+// column at the end.
+export const nameFits = (s: ColumnState) => s.widths.name === undefined;
+
+// resized sets a column's width, kept between its minimum and maximum.
+// Name given a width no longer takes the space left.
 export function resized(s: ColumnState, id: ColumnId, w: number): ColumnState {
   const c = byId.get(id);
-  if (!c || id === "name") return s;
-  return { ...s, widths: { ...s.widths, [id]: Math.max(c.min, Math.round(w)) } };
+  if (!c) return s;
+  return { ...s, widths: { ...s.widths, [id]: Math.min(c.max ?? MAX_WIDTH, Math.max(c.min, Math.round(w))) } };
 }
 
 export function resetWidth(s: ColumnState, id: ColumnId): ColumnState {
@@ -84,14 +98,17 @@ export function resetWidth(s: ColumnState, id: ColumnId): ColumnState {
 }
 
 // gridTemplate is the CSS grid of a row: the checkbox, the shown columns
-// with Name taking what is left, and the menu.
+// with Name taking what is left (or, once Name has a width, an empty column
+// after them taking it), and the menu.
 export function gridTemplate(s: ColumnState): string {
-  const cols = s.shown.map((id) => (id === "name" ? `minmax(${byId.get("name")!.min}px,1fr)` : `${widthOf(s, id)}px`));
-  return [`${EDGE}px`, ...cols, `${EDGE}px`].join(" ");
+  const fits = nameFits(s);
+  const cols = s.shown.map((id) => (id === "name" && fits ? `minmax(${byId.get("name")!.min}px,1fr)` : `${widthOf(s, id)}px`));
+  return [`${EDGE}px`, ...cols, ...(fits ? [] : ["minmax(0,1fr)"]), `${EDGE}px`].join(" ");
 }
 
 // minWidth is the narrowest the list can be before it scrolls sideways.
-export const minWidth = (s: ColumnState) => 2 * EDGE + s.shown.reduce((n, id) => n + (id === "name" ? byId.get("name")!.min : widthOf(s, id)), 0);
+export const minWidth = (s: ColumnState) =>
+  2 * EDGE + s.shown.reduce((n, id) => n + (id === "name" && nameFits(s) ? byId.get("name")!.min : widthOf(s, id)), 0);
 
 // The list's order: by one column, either way, or as added (null; a
 // queue's run order when the sidebar shows a queue).

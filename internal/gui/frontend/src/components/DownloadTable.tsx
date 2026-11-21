@@ -19,7 +19,7 @@ import { useVirtualizer } from "@tanstack/react-virtual";
 import { ArrowDown, ArrowUp, Columns3, MoreHorizontal } from "lucide-react";
 import { type ReactNode, type Ref, useEffect, useImperativeHandle, useRef, useState } from "react";
 import type { Item } from "../bindings/odm/internal/gui/models";
-import { COLUMNS, type ColumnId, type ColumnState, type Sort, gridTemplate, minWidth, resetWidth, resized, widthOf } from "../columns";
+import { COLUMNS, type ColumnId, type ColumnState, type Sort, gridTemplate, minWidth, nameFits, resetWidth, resized, widthOf } from "../columns";
 import { added, displayName, etaText, host, humanBytes, percent, speedText, statusKind } from "../format";
 import { t, tf } from "../i18n";
 import { cn } from "../lib/utils";
@@ -51,6 +51,11 @@ const label = (id: ColumnId) => t(COLUMNS.find((c) => c.id === id)!.label);
 // The element id of a download's row, for aria-activedescendant.
 const rowID = (id: string) => `row-${id}`;
 
+// A drag of a column's right edge: the column's width so far, and Name's,
+// when Name took the space left until this drag gave it one.
+type Drag = { id: ColumnId; w: number; name?: number };
+const dragged = (s: ColumnState, d: Drag) => resized(d.name !== undefined ? resized(s, "name", d.name) : s, d.id, d.w);
+
 // TableHandle lets the page move the list: scroll a row into view, focus
 // it, and learn how many rows a page (Page Up, Page Down) holds.
 export interface TableHandle {
@@ -80,10 +85,12 @@ export function DownloadTable(props: {
   const { items, selected } = props;
   const scroll = useRef<HTMLDivElement>(null);
   // The width of the column being dragged, kept here until the drag ends.
-  const [drag, setDrag] = useState<{ id: ColumnId; w: number } | null>(null);
-  const cols = drag ? resized(props.columns, drag.id, drag.w) : props.columns;
+  const [drag, setDrag] = useState<Drag | null>(null);
+  const cols = drag ? dragged(props.columns, drag) : props.columns;
   const grid = gridTemplate(cols);
   const shown = cols.shown;
+  // The empty column that takes the space left once Name has a width.
+  const filler = nameFits(cols) ? null : <div aria-hidden className="self-stretch" />;
   // Whether columns are scrolled out of view to the left or the right.
   const [edges, setEdges] = useState({ left: false, right: false });
   const measure = () => {
@@ -127,24 +134,35 @@ export function DownloadTable(props: {
     el.dispatchEvent(new MouseEvent("contextmenu", { bubbles: true, clientX: x, clientY: r.bottom, button: 2 }));
   };
 
+  // A drag of a column's right edge sets that column's width, and the edge
+  // follows the pointer: the columns to its right move with it, and the
+  // space left over goes to the empty column at the end. Name, while it
+  // takes the space left, keeps the width it shows from the first move on;
+  // else a wider column to its right only made Name narrower, and the edge
+  // between them moved instead of the one dragged.
   const startDrag = (id: ColumnId, e: React.PointerEvent<HTMLElement>) => {
     e.preventDefault();
     e.stopPropagation();
     const el = e.currentTarget;
     const x0 = e.clientX;
-    const w0 = widthOf(props.columns, id);
+    let name: number | undefined;
+    if (nameFits(props.columns)) {
+      const cell = scroll.current?.querySelector<HTMLElement>('[data-col="name"]');
+      name = Math.round(cell ? cell.getBoundingClientRect().width : widthOf(props.columns, "name"));
+    }
+    const w0 = id === "name" && name !== undefined ? name : widthOf(props.columns, id);
     el.setPointerCapture(e.pointerId);
     let w = w0;
     const move = (ev: PointerEvent) => {
       w = w0 + ev.clientX - x0;
-      setDrag({ id, w });
+      setDrag({ id, w, name });
     };
     const up = () => {
       el.removeEventListener("pointermove", move);
       el.removeEventListener("pointerup", up);
       el.removeEventListener("pointercancel", up);
       setDrag(null);
-      if (w !== w0) props.onColumns(resized(props.columns, id, w));
+      if (w !== w0) props.onColumns(dragged(props.columns, { id, w, name }));
     };
     el.addEventListener("pointermove", move);
     el.addEventListener("pointerup", up);
@@ -213,6 +231,7 @@ export function DownloadTable(props: {
                     <div
                       key={id}
                       role="columnheader"
+                      data-col={id}
                       aria-sort={sorted === "asc" ? "ascending" : sorted === "desc" ? "descending" : undefined}
                       className={cn("relative flex h-full min-w-0 items-center pr-3", id === "name" && cn(stickName, edges.left && edgeLeft))}
                     >
@@ -224,20 +243,21 @@ export function DownloadTable(props: {
                         {sorted === "asc" && <ArrowUp className="size-3 shrink-0" />}
                         {sorted === "desc" && <ArrowDown className="size-3 shrink-0" />}
                       </button>
-                      {id !== "name" && (
-                        <span
-                          aria-hidden // the mouse's: the Columns menu restores widths
-                          title={t("Drag to resize, double-click to restore")}
-                          onPointerDown={(e) => startDrag(id, e)}
-                          onDoubleClick={() => props.onColumns(resetWidth(props.columns, id))}
-                          className="group absolute -right-1 top-0 z-10 flex h-full w-2 cursor-col-resize justify-center"
-                        >
-                          <span className={cn("my-2 w-px bg-border group-hover:bg-ring", drag?.id === id && "bg-ring")} />
-                        </span>
-                      )}
+                      {/* Every column's right edge, Name's too; a double click
+                          restores the width (Name takes the space left again). */}
+                      <span
+                        aria-hidden // the mouse's
+                        title={t("Drag to resize, double-click to restore")}
+                        onPointerDown={(e) => startDrag(id, e)}
+                        onDoubleClick={() => props.onColumns(resetWidth(props.columns, id))}
+                        className="group absolute -right-1 top-0 z-10 flex h-full w-2 cursor-col-resize justify-center"
+                      >
+                        <span className={cn("my-2 w-px bg-border group-hover:bg-ring", drag?.id === id && "bg-ring")} />
+                      </span>
                     </div>
                   );
                 })}
+                {filler}
                 <div role="columnheader" className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
                   <DropdownMenu>
                     <DropdownMenuTrigger
@@ -310,6 +330,7 @@ export function DownloadTable(props: {
                         {shown.map((id) => (
                           <Cell key={id} id={id} d={d} className={id === "name" ? cn(stickName, edges.left && edgeLeft) : undefined} />
                         ))}
+                        {filler}
                         <div role="gridcell" data-no-select className={cn(stickRight, "flex items-center justify-center", edges.right && edgeRight)}>
                           <button
                             aria-label={t("More")}

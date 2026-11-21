@@ -3,7 +3,6 @@ package osutil
 
 import (
 	"os/exec"
-	"path/filepath"
 	"runtime"
 )
 
@@ -33,12 +32,5 @@ func Shutdown() error {
 
 // Reveal shows the file in the OS file manager, selecting it when supported.
 func Reveal(path string) error {
-	switch runtime.GOOS {
-	case "windows":
-		return exec.Command("explorer", "/select,"+path).Start()
-	case "darwin":
-		return exec.Command("open", "-R", path).Start()
-	default:
-		return exec.Command("xdg-open", filepath.Dir(path)).Start()
-	}
+	return revealCommand(path).Start()
 }

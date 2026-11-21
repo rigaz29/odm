@@ -260,13 +260,7 @@ func (d *Download) decorate(req *http.Request) {
 	}
 	d.mu.Unlock()
 	if !sameSite(manifest, req.URL) {
-		safe := make(map[string]string, len(headers))
-		for k, v := range headers {
-			if !strings.EqualFold(k, "Cookie") && !strings.EqualFold(k, "Authorization") {
-				safe[k] = v
-			}
-		}
-		headers, cookies = safe, nil
+		headers, cookies = withoutCredentials(headers), nil
 	}
 	applyHeaders(req, headers)
 	if len(cookies) > 0 && req.Header.Get("Cookie") == "" {

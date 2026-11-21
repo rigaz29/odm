@@ -3,6 +3,7 @@ package engine
 import (
 	"archive/zip"
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -46,11 +47,102 @@ var errNoZipPreview = errors.New("the server does not send parts of the file, so
 // many thousand entries is a few megabytes).
 const maxZipPreviewBytes = 32 << 20
 
+var errZipListTooLarge = errors.New("the archive's list of contents is too large to preview")
+
+// Sizes and signatures of the ZIP records checkZipDirectory reads.
+const (
+	zipEndLen          = 22 // end of central directory record
+	zipEnd64LocLen     = 20 // ZIP64 end of central directory locator
+	zipEnd64Len        = 56 // ZIP64 end of central directory record
+	zipDirHeaderMinLen = 46 // a central directory entry with empty name, extra and comment
+	zipEndSig          = 0x06054b50
+	zipEnd64LocSig     = 0x07064b50
+	zipEnd64Sig        = 0x06064b50
+)
+
+// checkZipDirectory refuses an archive whose end record claims more than a
+// preview can read, before archive/zip sizes its list of files by that claim:
+// a server naming 2^57 entries in a file it says is 2^62 bytes long made it
+// allocate for all of them, and ODM stopped with an out-of-memory error. The
+// end record is looked for where archive/zip looks; one that is not found,
+// or not read, is left for archive/zip to refuse.
+func checkZipDirectory(r io.ReaderAt, size int64) error {
+	var buf []byte
+	endAt := int64(-1)
+	for _, n := range []int64{1024, 65 * 1024} {
+		n = min(n, size)
+		b := make([]byte, n)
+		if _, err := r.ReadAt(b, size-n); err != nil && err != io.EOF {
+			return err
+		}
+		if p := zipEndInBlock(b); p >= 0 {
+			buf, endAt = b[p:], size-n+int64(p)
+			break
+		}
+		if n == size {
+			break
+		}
+	}
+	if endAt < 0 {
+		return nil
+	}
+	records := uint64(binary.LittleEndian.Uint16(buf[10:]))
+	dirSize := uint64(binary.LittleEndian.Uint32(buf[12:]))
+	dirOffset := uint64(binary.LittleEndian.Uint32(buf[16:]))
+	// The same test as archive/zip's for a ZIP64 archive.
+	if records == 0xffff || dirSize == 0xffff || dirOffset == 0xffffffff {
+		locAt := endAt - zipEnd64LocLen
+		if locAt < 0 {
+			return nil
+		}
+		loc := make([]byte, zipEnd64LocLen)
+		if _, err := r.ReadAt(loc, locAt); err != nil {
+			return nil
+		}
+		if binary.LittleEndian.Uint32(loc) != zipEnd64LocSig ||
+			binary.LittleEndian.Uint32(loc[4:]) != 0 || binary.LittleEndian.Uint32(loc[16:]) != 1 {
+			return nil
+		}
+		end := make([]byte, zipEnd64Len)
+		if _, err := r.ReadAt(end, int64(binary.LittleEndian.Uint64(loc[8:]))); err != nil {
+			return nil
+		}
+		if binary.LittleEndian.Uint32(end) != zipEnd64Sig {
+			return nil
+		}
+		records = binary.LittleEndian.Uint64(end[32:])
+		dirSize = binary.LittleEndian.Uint64(end[40:])
+	}
+	if dirSize > maxZipPreviewBytes {
+		return errZipListTooLarge
+	}
+	if records > dirSize/zipDirHeaderMinLen {
+		return errors.New("not a ZIP archive this preview can read: its end record names more files than its list of contents can hold")
+	}
+	return nil
+}
+
+// zipEndInBlock is where the end of central directory record starts in b,
+// searched from the end as archive/zip does, or -1.
+func zipEndInBlock(b []byte) int {
+	for i := len(b) - zipEndLen; i >= 0; i-- {
+		if binary.LittleEndian.Uint32(b[i:]) == zipEndSig {
+			comment := int(binary.LittleEndian.Uint16(b[i+zipEndLen-2:]))
+			if comment+zipEndLen+i > len(b) {
+				return -1 // a cut comment; archive/zip gives up here too
+			}
+			return i
+		}
+	}
+	return -1
+}
+
 // PreviewZip lists a ZIP archive at rawURL by reading only its end, where
 // ZIP keeps the list of contents, with range requests.
 func (m *Manager) PreviewZip(ctx context.Context, rawURL string, headers map[string]string) (*ZipListing, error) {
 	client := m.HTTPClient()
-	p, err := inspectWith(ctx, client, strings.TrimSpace(rawURL), headers, m.authz)
+	rawURL = strings.TrimSpace(rawURL)
+	p, err := inspectWith(ctx, client, rawURL, headers, m.authz)
 	if err != nil {
 		return nil, err
 	}
@@ -58,7 +150,11 @@ func (m *Manager) PreviewZip(ctx context.Context, rawURL string, headers map[str
 		return nil, errNoZipPreview
 	}
 	r := &rangeReaderAt{ctx: ctx, client: client, url: p.FinalURL, size: p.Total,
-		headers: headers, cookies: p.Cookies, authz: m.authz, blocks: map[int64][]byte{}}
+		headers: headersFor(headers, rawURL, p.FinalURL), cookies: p.Cookies, authz: m.authz,
+		blocks: map[int64][]byte{}}
+	if err := checkZipDirectory(r, p.Total); err != nil {
+		return nil, err
+	}
 	zr, err := zip.NewReader(r, p.Total)
 	if err != nil {
 		if r.err != nil {
@@ -154,7 +250,7 @@ func (r *rangeReaderAt) block(i int64) ([]byte, error) {
 		end = r.size - 1
 	}
 	if r.fetched+end-start+1 > maxZipPreviewBytes {
-		r.err = errors.New("the archive's list of contents is too large to preview")
+		r.err = errZipListTooLarge
 		return nil, r.err
 	}
 	b, err := r.fetch(start, end)
@@ -175,9 +271,7 @@ func (r *rangeReaderAt) fetch(start, end int64) ([]byte, error) {
 	applyHeaders(req, r.headers)
 	req.Header.Set("Accept-Encoding", "identity")
 	req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", start, end))
-	if len(r.cookies) > 0 {
-		req.Header.Set("Cookie", cookieHeader(r.cookies))
-	}
+	addCookies(req, r.cookies)
 	resp, err := r.authz.do(req, r.client.Do)
 	if err != nil {
 		return nil, err

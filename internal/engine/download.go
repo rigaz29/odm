@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -720,7 +721,8 @@ func representationDiffers(etag, modified string, total int64, ranged bool, done
 // openTarget opens the .odmpart file. A fresh download (first probe) claims
 // a name nobody uses yet, because finishing used to delete whatever file
 // already had the name, and two downloads with one name shared an .odmpart.
-// A resumed download keeps the name it claimed.
+// A resumed download keeps the name it claimed, and the folder its stored
+// bytes are in.
 func (d *Download) openTarget(fresh bool) error {
 	d.mu.Lock()
 	if d.FileName == "" {
@@ -730,12 +732,14 @@ func (d *Download) openTarget(fresh bool) error {
 	d.discardPart = false
 	existing := d.file
 	dir := d.targetDirLocked(d.category())
-	d.Dir = dir
-	final := filepath.Join(dir, d.FileName)
-	tmp := final + ".odmpart"
+	started, name := d.Dir, d.FileName
 	// A stream assembles its file at the end; pre-sizing it would only
 	// double the disk space used while the segments are on disk too.
 	rangeOK, total := d.RangeOK && d.Stream == nil, d.Total
+	// A file's progress is its chunks, which count the bytes in its
+	// .odmpart; a stream, a page or a torrent keeps its own elsewhere.
+	plain := d.Stream == nil && d.Site == nil && d.Torrent == nil
+	stored := d.storedEndLocked()
 	d.mu.Unlock()
 
 	if existing != nil && !fresh {
@@ -750,21 +754,56 @@ func (d *Download) openTarget(fresh bool) error {
 		return nil
 	}
 
+	if !fresh && started != "" && started != dir && startedIn(started, name) {
+		// The download keeps the folder it started in, where its bytes are.
+		// A category folder that changed since (renamed, given another
+		// place, or applied after a restart) is for downloads that have not
+		// started; resuming there left the bytes behind and opened an empty
+		// file in their place.
+		dir = started
+	}
+	d.mu.Lock()
+	d.Dir = dir
+	d.mu.Unlock()
+	final := filepath.Join(dir, name)
+	tmp := final + ".odmpart"
+
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	var f *os.File
 	var err error
-	if fresh {
-		var name string
-		name, f, err = claimName(dir, filepath.Base(final))
+	if !fresh && plain && stored > 0 {
+		f, err = os.OpenFile(tmp, os.O_RDWR, 0)
+		switch {
+		case errors.Is(err, fs.ErrNotExist):
+			// The .odmpart is gone, and the bytes it held with it: deleted,
+			// or taken with the finished file by an antivirus program after
+			// finishing failed. Created again empty, every stored byte was a
+			// zero and the download complete at once.
+			d.forgetProgress()
+		case err != nil:
+			return err
+		default:
+			if st, serr := f.Stat(); serr == nil && st.Size() < stored {
+				// Shorter than the bytes counted in it: it is not the file
+				// they were stored in.
+				d.forgetProgress()
+				discard = true
+			}
+		}
+	}
+	switch {
+	case fresh:
+		var claimed string
+		claimed, f, err = claimName(dir, filepath.Base(final))
 		if err != nil {
 			return err
 		}
 		d.mu.Lock()
-		d.FileName = name
+		d.FileName = claimed
 		d.mu.Unlock()
-	} else {
+	case f == nil:
 		f, err = os.OpenFile(tmp, os.O_CREATE|os.O_RDWR, 0o644)
 		if err != nil {
 			return err
@@ -786,6 +825,48 @@ func (d *Download) openTarget(fresh bool) error {
 	d.file = f
 	d.mu.Unlock()
 	return nil
+}
+
+// startedIn reports whether a download named name keeps its bytes in dir:
+// its .odmpart there, or the folder a stream keeps its pieces in.
+func startedIn(dir, name string) bool {
+	for _, p := range []string{name + ".odmpart", name + ".odmparts"} {
+		if _, err := os.Stat(filepath.Join(dir, p)); err == nil {
+			return true
+		}
+	}
+	return false
+}
+
+// storedEndLocked is one past the last byte the chunks count as written.
+// The caller holds d.mu.
+func (d *Download) storedEndLocked() int64 {
+	var end int64
+	for _, c := range d.Chunks {
+		if c.Done > 0 && c.Start+c.Done > end {
+			end = c.Start + c.Done
+		}
+	}
+	return end
+}
+
+// forgetProgress plans the download again from its first byte, for a
+// partial file whose bytes are gone. Unlike restartFromZero it is not the
+// one restart a server that disagrees with itself is given.
+func (d *Download) forgetProgress() {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	d.witnesses = nil
+	d.syncedAt = time.Time{} // progress went back: save it at the next update
+	conns := max(d.Connections, 1)
+	switch {
+	case d.RangeOK && d.Total > 0:
+		d.Chunks = NewPlan(d.Total, conns)
+	case d.Total > 0:
+		d.Chunks = []*Chunk{{ID: 0, Start: 0, End: d.Total - 1}}
+	default:
+		d.Chunks = []*Chunk{{ID: 0, Start: 0, End: -1}}
+	}
 }
 
 // idleRecheck is how often a connection with nothing to do looks again for
@@ -965,7 +1046,7 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 	rangeOK := d.RangeOK
 	conns := d.Connections
 	finalURL := d.FinalURL
-	headers := d.Headers
+	headers := headersFor(d.Headers, d.URL, d.FinalURL)
 	cookies := d.cookies
 	etag, modified := d.ETag, d.LastModified
 	total := d.Total
@@ -999,9 +1080,8 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		}
 		req.Header.Set("Range", fmt.Sprintf("bytes=%d-%d", reqStart, end))
 	}
-	if len(cookies) > 0 {
-		req.Header.Set("Cookie", cookieHeader(cookies))
-	}
+	// The probe's cookies come from the final address's own answer.
+	addCookies(req, cookies)
 
 	resp, err := d.authorizer().do(req, func(r *http.Request) (*http.Response, error) {
 		return d.exchange(ctx, client, r)
@@ -1072,8 +1152,20 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 		default:
 			return fmt.Errorf("server ignored Range (status %s)", resp.Status)
 		}
-	} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
-		return fmt.Errorf("unexpected status: %s", resp.Status)
+	} else {
+		if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusPartialContent {
+			return fmt.Errorf("unexpected status: %s", resp.Status)
+		}
+		// Without ranges every answer is the whole file. One of another
+		// length, or with another validator, is another file (a page in
+		// its place, or a new version); written over the stored bytes it
+		// would be cut at the old size or mixed with them.
+		if total > 0 && resp.ContentLength >= 0 && resp.ContentLength != total {
+			return errRepresentationChanged
+		}
+		if validatorMismatch(etag, modified, resp) {
+			return errRepresentationChanged
+		}
 	}
 
 	if overlap > 0 && resp.StatusCode == http.StatusPartialContent {
@@ -1187,8 +1279,11 @@ func (d *Download) fetch(ctx context.Context, ch *Chunk) error {
 	// worker takes the chunk up again from its last byte, so a server that
 	// caps each 206 (at 1 MiB, say) still finishes a large chunk. Only a
 	// response that wrote nothing counts against MaxRetries, with the usual
-	// backoff, rather than being asked again at once forever.
-	if !complete && pos == start {
+	// backoff, rather than being asked again at once forever. Without
+	// ranges the next attempt starts again at the first byte, so a short
+	// answer is no progress either: asked again at once, it was asked for
+	// ever, thousands of times a second.
+	if !complete && (pos == start || !rangeOK) {
 		return errShortBody
 	}
 	return nil

@@ -1,5 +1,6 @@
 // Package ipc is ODM's local control channel: plain HTTP carried over a Unix
-// domain socket in the user's config directory.
+// domain socket in the user's config directory, and the lock beside it
+// that lets one ODM run at a time (TakeLock).
 //
 // Why a socket and not TCP loopback: any web page can send requests to
 // 127.0.0.1, so a loopback API is reachable from the browser (CSRF, DNS
@@ -32,18 +33,20 @@ const BaseURL = "http://odm"
 // browsers have its extension.
 const BrowserHeader = "X-ODM-Browser"
 
-// ErrRunning reports that another ODM instance already owns the socket.
+// ErrRunning reports that another ODM instance already runs: it holds the
+// lock, or answers on the socket.
 var ErrRunning = errors.New("ODM is already running")
 
 // SocketPath returns the socket location for a config directory.
 func SocketPath(configDir string) string { return filepath.Join(configDir, SocketName) }
 
-// Listen claims the socket, which doubles as the single-instance lock.
-//
-// A socket file left behind by a crash refuses connections, so a failed dial
-// means the file is stale and can be replaced. Two instances starting in the
-// same instant could both see it as stale; the window is milliseconds and the
-// loser only fails to receive browser hand-offs, so no lock file is added.
+// Listen claims the socket. The caller holds the single-instance lock
+// (TakeLock), so no other ODM is starting: a socket file that refuses
+// connections was left behind by a crash and is replaced. One that answers
+// belongs to an ODM older than the lock, which never takes it (ErrRunning).
+// A Listen that fails otherwise (a path too long for a socket, Windows
+// older than 10 1803) leaves the lock holder without hand-offs, still the
+// only ODM running.
 func Listen(path string) (net.Listener, error) {
 	if c, err := net.DialTimeout("unix", path, 500*time.Millisecond); err == nil {
 		_ = c.Close()
@@ -63,6 +66,24 @@ func Listen(path string) (net.Listener, error) {
 		_ = os.Chmod(path, 0o600)
 	}
 	return ln, nil
+}
+
+// Wait reports whether an ODM answers on the socket at path, dialing again
+// until it does or within has passed. The ODM holding the lock binds its
+// socket right after taking it, so a second start that lost the lock may
+// get there first.
+func Wait(path string, within time.Duration) bool {
+	deadline := time.Now().Add(within)
+	for {
+		if c, err := net.DialTimeout("unix", path, time.Second); err == nil {
+			_ = c.Close()
+			return true
+		}
+		if !time.Now().Before(deadline) {
+			return false
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
 }
 
 // Client returns an HTTP client whose every request goes to the socket.

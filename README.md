@@ -369,10 +369,12 @@ open it (UPnP, NAT-PMP). *Options → Torrents* turns either off, and it stops
 a minute after the last torrent. Trackers and web seeds on this computer
 or the local network are dropped from a torrent that came from the
 internet, so a torrent cannot make ODM reach local services. The browser relay
-uses this socket, and it also stops a second copy of ODM from starting. Web
-pages can send requests to `127.0.0.1` but cannot reach a socket file, so
-websites you visit cannot reach the API. The socket needs Windows 10 version
-1803 or later. Without it, ODM still runs, but browser hand-off is disabled.
+uses this socket. A second copy of ODM does not start: a lock the system holds
+on `odm.lock`, beside the socket, lets one copy run, and a second start hands
+its request to that copy and exits. Web pages can send requests to
+`127.0.0.1` but cannot reach a socket file, so websites you visit cannot reach
+the API. The socket needs Windows 10 version 1803 or later. Without it, ODM
+still runs, but browser hand-off is disabled.
 
 `-serve` exposes the web UI and API over TCP. That listener requires a random
 token generated at each start and printed at start-up. Opening `/?token=…`

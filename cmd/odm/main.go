@@ -85,38 +85,40 @@ func main() {
 		os.Exit(runBrowserRegistration(*regBrowser, baseDir))
 	}
 
+	// The single-instance lock comes before anything touches state, the log
+	// included: a second ODM must not resume the same downloads even
+	// briefly. Starting ODM again (from the Start menu while it sits in the
+	// tray, or the browser starting it for two requests at once) hands this
+	// start's request to the ODM that holds the lock.
+	lock, lerr := ipc.TakeLock(baseDir)
+	if errors.Is(lerr, ipc.ErrRunning) {
+		handOff(ipc.SocketPath(baseDir), openURL, *hidden)
+		return
+	}
+	defer lock.Release()
+
 	if f, err := os.OpenFile(filepath.Join(baseDir, "odm.log"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644); err == nil {
 		log.SetOutput(f)
 		defer f.Close()
 	}
+	if lerr != nil {
+		// No lock here (a folder ODM cannot write in, a system without file
+		// locks): the socket alone tells a running ODM apart, as before.
+		log.Println("instance lock:", lerr)
+	}
 
-	// Claim the control socket before anything touches state: it is the
-	// single-instance lock, and a second instance must not resume the same
-	// downloads even briefly.
+	// The control socket. With the lock held, a socket file left by a crash
+	// is replaced; an ODM older than the lock answers on it instead.
 	sock, err := ipc.Listen(ipc.SocketPath(baseDir))
 	if errors.Is(err, ipc.ErrRunning) {
-		// Launching ODM again (e.g. from the Start menu while it sits in the
-		// tray) should bring the running window forward, not do nothing.
-		// -hidden (login, a browser download) asks for no window.
-		if openURL != "" {
-			// The running ODM opens its New Download window for it.
-			body, _ := json.Marshal(map[string]any{"url": openURL, "prompt": true})
-			resp, perr := ipc.Client(ipc.SocketPath(baseDir), 10*time.Second).Post(ipc.BaseURL+"/api/downloads", "application/json", bytes.NewReader(body))
-			if perr == nil {
-				resp.Body.Close()
-			}
-		} else if !*hidden {
-			resp, perr := ipc.Client(ipc.SocketPath(baseDir), 3*time.Second).Post(ipc.BaseURL+"/api/show", "", nil)
-			if perr == nil {
-				resp.Body.Close()
-			}
-		}
-		fmt.Fprintln(os.Stderr, "ODM is already running.")
+		lock.Release()
+		handOff(ipc.SocketPath(baseDir), openURL, *hidden)
 		return
 	}
 	if err != nil {
-		// Without the socket ODM still works; only browser hand-off and the
-		// single-instance check are lost (e.g. Windows older than 10 1803).
+		// Without the socket ODM still works, and is still the only one
+		// running; only browser hand-off is lost (e.g. Windows older than
+		// 10 1803, or a config folder whose path is too long for a socket).
 		fmt.Fprintln(os.Stderr, "control socket unavailable, browser integration disabled:", err)
 		log.Println("control socket:", err)
 	}
@@ -356,6 +358,47 @@ func openOptions(u string) engine.AddOptions {
 		o.Torrent = &engine.TorrentJob{}
 	}
 	return o
+}
+
+// handOffWait bounds how long a start that found ODM running waits for it
+// to answer on its socket: the ODM holding the lock binds the socket right
+// after taking it, so a start a moment behind it can get there first.
+const handOffWait = 5 * time.Second
+
+// handOff gives this start's request to the ODM already running, at the
+// socket sock, and says so: see toRunningODM.
+func handOff(sock, openURL string, hidden bool) {
+	if err := toRunningODM(sock, openURL, hidden, handOffWait); err != nil {
+		fmt.Fprintln(os.Stderr, "ODM is already running, and did not take the request:", err)
+		return
+	}
+	fmt.Fprintln(os.Stderr, "ODM is already running.")
+}
+
+// toRunningODM asks the ODM answering at sock to open its New Download
+// window for a magnet link or .torrent file (openURL), or else to bring its
+// window forward, which a hidden start (login, a browser download) does
+// not ask for. It waits up to wait for that ODM to answer.
+func toRunningODM(sock, openURL string, hidden bool, wait time.Duration) error {
+	if openURL == "" && hidden {
+		return nil
+	}
+	if !ipc.Wait(sock, wait) {
+		return errors.New("it does not answer on its control socket")
+	}
+	var resp *http.Response
+	var err error
+	if openURL != "" {
+		body, _ := json.Marshal(map[string]any{"url": openURL, "prompt": true})
+		resp, err = ipc.Client(sock, 10*time.Second).Post(ipc.BaseURL+"/api/downloads", "application/json", bytes.NewReader(body))
+	} else {
+		resp, err = ipc.Client(sock, 3*time.Second).Post(ipc.BaseURL+"/api/show", "", nil)
+	}
+	if err != nil {
+		return err
+	}
+	resp.Body.Close()
+	return nil
 }
 
 // libtorrentProgram is the odm-libtorrent to run: ODM_LIBTORRENT when set

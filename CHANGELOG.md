@@ -6,6 +6,8 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+## [0.7.1] - 2026-11-21
+
 ### Fixed
 
 - A download from a link that names no file type (a file host's
@@ -954,7 +956,8 @@ All notable changes to ODM are documented here. The format is based on
   instance); no TCP port is opened unless `-serve` is given, and that
   listener requires a per-run token and rejects foreign origins.
 
-[Unreleased]: https://github.com/rigaz29/odm/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/rigaz29/odm/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/rigaz29/odm/releases/tag/v0.7.1
 [0.7.0]: https://github.com/rigaz29/odm/releases/tag/v0.7.0
 [0.6.0]: https://github.com/rigaz29/odm/releases/tag/v0.6.0
 [0.5.1]: https://github.com/rigaz29/odm/releases/tag/v0.5.1

@@ -325,18 +325,24 @@ func TestTorrentMagnetIsHeldUntilItsFilesAreNamed(t *testing.T) {
 	}
 	a := f.waitAdd(t)
 	dir := m.Settings().Dir
-	if !a.Hold || a.Magnet != magnet || a.Names != nil || a.File != "" || a.SavePath != dir {
+	// It waits in a folder of its own, not in the download's under the
+	// torrent's own names, where it would take the person's files.
+	hold := filepath.Join(TorrentDir, "hold", info.ID)
+	if !a.Hold || a.Magnet != magnet || a.Names != nil || a.File != "" || a.SavePath != hold {
 		t.Fatalf("add: %+v", a)
+	}
+	if fi, err := os.Stat(hold); err != nil || !fi.IsDir() {
+		t.Fatalf("the folder it waits in: %v", err)
 	}
 	meta := f.meta
 	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventMetadata, Meta: &meta})
-	waitUntil(t, "files named", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return len(f.setFiles) == 1 })
-	f.mu.Lock()
-	got, save := f.setFiles[0], f.save[info.ID]
-	f.mu.Unlock()
-	if !reflect.DeepEqual(got, map[int]string{0: "e1.mkv", 1: "e2.mkv"}) || save != filepath.Join(dir, "Show.odmpart") {
-		t.Fatalf("named %v in %s", got, save)
+	// Then it is added again where its files go, under their names.
+	placed := f.waitAdd(t)
+	if placed.Hold || !reflect.DeepEqual(placed.Names, map[int]string{0: "e1.mkv", 1: "e2.mkv"}) ||
+		placed.SavePath != filepath.Join(dir, "Show.odmpart") {
+		t.Fatalf("placed: %+v", placed)
 	}
+	waitUntil(t, "its folder gone", func() bool { _, err := os.Stat(hold); return errors.Is(err, os.ErrNotExist) })
 	d := m.get(info.ID)
 	if i := d.Info(); i.FileName != "Show" || i.Total != 1100 {
 		t.Fatalf("after the metadata: %+v", i)
@@ -345,6 +351,22 @@ func TestTorrentMagnetIsHeldUntilItsFilesAreNamed(t *testing.T) {
 	waitStatus(t, d, StatusComplete)
 	if _, err := os.Stat(filepath.Join(dir, "Show", "e2.mkv")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+// A magnet link removed while it waits for its metadata leaves nothing of
+// the folder it waited in.
+func TestTorrentHeldMagnetRemoved(t *testing.T) {
+	f := newFakeTorrents(t, TorrentMeta{Name: "Show", InfoHash: "de", Files: []TorrentFile{{Path: "Show/e1.mkv", Size: 500}}})
+	m := torrentManager(t, Settings{})
+	info := m.Create(AddOptions{URL: "magnet:?xt=urn:btih:de", Start: true})
+	a := f.waitAdd(t)
+	if _, err := os.Stat(a.SavePath); err != nil {
+		t.Fatalf("the folder it waits in: %v", err)
+	}
+	m.RemoveWithFile(info.ID, false)
+	if _, err := os.Stat(a.SavePath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("%s is left: %v", a.SavePath, err)
 	}
 }
 
@@ -616,7 +638,9 @@ func TestTorrentTakesWhatTheWindowRead(t *testing.T) {
 	f.waitAdd(t)
 	meta := f.meta
 	f.send(t, info.ID, TorrentEvent{Kind: TorrentEventMetadata, Meta: &meta})
-	waitUntil(t, "files named", func() bool { f.mu.Lock(); defer f.mu.Unlock(); return len(f.setFiles) == 1 })
+	if a := f.waitAdd(t); a.Hold || len(a.Names) != 2 {
+		t.Fatalf("not placed: %+v", a)
+	}
 	d := m.get(info.ID)
 	if i := d.Info(); i.FileName != "Chosen" || i.Total != 6 {
 		t.Fatalf("info: %+v", i)

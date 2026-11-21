@@ -5,10 +5,13 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"maps"
 	"math/rand/v2"
 	"net/http"
 	"net/url"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -38,7 +41,8 @@ type Session struct {
 	c        *Client
 	starting chan struct{} // closed when a start under way ends
 	stopping chan struct{} // closed when a program stopped as idle has exited
-	added    map[string]bool
+	// added are the torrents c has, with where it has their files.
+	added map[string]*layout
 	// active are the torrents of added that download or seed (not paused).
 	active   map[string]bool
 	idle     *time.Timer
@@ -46,6 +50,14 @@ type Session struct {
 	waiters  map[*waiter]bool
 	port     int
 	closed   bool
+}
+
+// layout is where the program has a torrent's files: their folder, and the
+// names ODM gave them by index (the others have the torrent's own). The
+// program's moved and renamed events keep it current.
+type layout struct {
+	save  string
+	names map[int]string
 }
 
 // DefaultSettings: listen on every interface at a port the system picks,
@@ -149,6 +161,14 @@ func (s *Session) client(ctx context.Context) (*Client, error) {
 		case s.c != nil:
 			c := s.c
 			s.mu.Unlock()
+			select {
+			case <-c.Done():
+				// It has just stopped on its own: let it go now, before
+				// watchExit does, and start another.
+				s.exited(c)
+				continue
+			default:
+			}
 			return c, nil
 		case s.stopping != nil:
 			// A program stopped as idle saves its torrents first: wait, so
@@ -181,7 +201,7 @@ func (s *Session) client(ctx context.Context) (*Client, error) {
 			if s.closed {
 				err = errClosed
 			} else {
-				s.c, s.added, s.active = c, map[string]bool{}, map[string]bool{}
+				s.c, s.added, s.active = c, map[string]*layout{}, map[string]bool{}
 			}
 		}
 		s.mu.Unlock()
@@ -292,6 +312,12 @@ func (s *Session) stopIdle(c *Client) {
 // watchExit tells the torrents of a program that stopped on its own.
 func (s *Session) watchExit(c *Client) {
 	<-c.Done()
+	s.exited(c)
+}
+
+// exited lets go of the program c, which stopped on its own, and gives its
+// torrents an error, unless c was let go already (or stopped as idle).
+func (s *Session) exited(c *Client) {
 	s.mu.Lock()
 	if s.c != c {
 		s.mu.Unlock()
@@ -323,6 +349,19 @@ func (s *Session) watchExit(c *Client) {
 // dispatch takes the program's events.
 func (s *Session) dispatch(ev Event) {
 	s.mu.Lock()
+	// Before the waiters hear of it: Move and Rename read the layout once
+	// they have.
+	if l := s.added[ev.Key]; l != nil {
+		switch ev.Event {
+		case "moved":
+			l.save = filepath.FromSlash(ev.Path)
+		case "renamed":
+			if l.names == nil {
+				l.names = map[int]string{}
+			}
+			l.names[ev.Index] = ev.Path
+		}
+	}
 	for w := range s.waiters {
 		if w.key == ev.Key && w.match(ev) {
 			select {
@@ -433,10 +472,20 @@ func (w *waiter) next(ctx context.Context) (Event, error) {
 func (s *Session) in(id string) *Client {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.c == nil || !s.added[id] {
+	if s.c == nil || s.added[id] == nil {
 		return nil
 	}
 	return s.c
+}
+
+// layoutOf is a copy of where the program has the torrent id's files.
+func (s *Session) layoutOf(id string) layout {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if l := s.added[id]; l != nil {
+		return layout{save: l.save, names: maps.Clone(l.names)}
+	}
+	return layout{}
 }
 
 // Inspect reads a .torrent file or a magnet link.
@@ -463,6 +512,11 @@ func (s *Session) Add(ctx context.Context, a engine.TorrentAdd) error {
 		return err
 	}
 	if s.in(a.ID) == c {
+		// Its files may belong elsewhere now: a magnet link leaving the
+		// folder it waited in for its metadata, or stopped on its way.
+		if err := s.place(ctx, a.ID, a.SavePath, a.Names); err != nil {
+			return err
+		}
 		// The files to download may have changed while it was paused.
 		if a.Priorities != nil && !a.Hold {
 			if err := c.Call(ctx, "priorities", map[string]any{"key": a.ID, "priorities": a.Priorities}, nil); err != nil {
@@ -506,16 +560,62 @@ func (s *Session) Add(ctx context.Context, a engine.TorrentAdd) error {
 		fields["drop_web_seeds"] = a.DropWebSeeds
 	}
 	if err := c.Call(ctx, "add", fields, nil); err != nil {
+		// odm-libtorrent's words for names on a magnet link whose resume
+		// data holds no metadata.
+		if len(a.Names) > 0 && strings.HasPrefix(err.Error(), "names need the torrent's metadata") {
+			return fmt.Errorf("%w (%v)", engine.ErrNoMetadata, err)
+		}
 		return err
 	}
 	s.mu.Lock()
 	if s.c == c {
-		s.added[a.ID] = true
+		s.added[a.ID] = &layout{save: a.SavePath, names: maps.Clone(a.Names)}
 		s.setActiveLocked(a.ID, true)
 	}
 	s.mu.Unlock()
 	return nil
 }
+
+// place has the program keep the torrent id's files in the folder save
+// under names, by index ("" and nil leave them where they are). Only what
+// differs is moved or renamed: libtorrent fails a move onto files of the
+// torrent's names, its own included, and a rename onto a file that exists.
+func (s *Session) place(ctx context.Context, id, save string, names map[int]string) error {
+	l := s.layoutOf(id)
+	if save != "" && !samePath(l.save, save) {
+		// A magnet link that waited for its metadata comes from a folder of
+		// its own, with no data and the torrent's own names. A file of
+		// such a name in save, the download's folder for a torrent of one
+		// file, would stop the move: the file first takes a name nothing
+		// has (a file not on the disk is renamed by name only).
+		if len(names) == 1 {
+			free := "." + id + ".odmhold"
+			for i := range names {
+				if l.names[i] != free {
+					if err := s.Rename(ctx, id, map[int]string{i: free}); err != nil {
+						return err
+					}
+				}
+			}
+		}
+		if err := s.Move(ctx, id, save); err != nil {
+			return err
+		}
+		l = s.layoutOf(id)
+	}
+	rename := map[int]string{}
+	for i, n := range names {
+		if n != "" && l.names[i] != n {
+			rename[i] = n
+		}
+	}
+	if len(rename) == 0 {
+		return nil
+	}
+	return s.Rename(ctx, id, rename)
+}
+
+func samePath(a, b string) bool { return filepath.Clean(a) == filepath.Clean(b) }
 
 func names(m map[int]string) map[string]string {
 	out := make(map[string]string, len(m))

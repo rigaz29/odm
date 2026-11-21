@@ -570,3 +570,193 @@ func TestSessionSeedsUntilTheRatio(t *testing.T) {
 		t.Fatal("the torrent is still in the session after seeding")
 	}
 }
+
+// A magnet link's file never takes the person's own of its name: the
+// torrent waits for its metadata in a folder of its own, then downloads
+// under the name ODM chose, data.bin being taken.
+func TestSessionMagnetLeavesTheFileOfItsNameAlone(t *testing.T) {
+	dir := t.TempDir()
+	src := filepath.Join(dir, "seed", "data.bin")
+	want := makeFile(t, src, 1<<20)
+	tf := filepath.Join(dir, "data.torrent")
+	ih := createTorrent(t, src, tf)
+	sd := seed(t, tf, filepath.Dir(src), 0)
+	got := filepath.Join(dir, "got")
+	mine := filepath.Join(got, "data.bin")
+	own := []byte("the person's own data.bin\n")
+	if err := os.MkdirAll(got, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mine, own, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), got)
+	info := h.m.Create(engine.AddOptions{URL: "magnet:?xt=urn:btih:" + ih + "&dn=data.bin", Start: true})
+	done := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
+	if done.FileName != "data (2).bin" {
+		t.Fatalf("info: %+v", done)
+	}
+	sameFile(t, filepath.Join(got, "data (2).bin"), want)
+	sameFile(t, mine, own)
+	if left, _ := os.ReadDir(got); len(left) != 2 {
+		t.Fatalf("%s holds %d entries, want data.bin and data (2).bin", got, len(left))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "torrents", "hold", info.ID)); !os.IsNotExist(err) {
+		t.Fatalf("the folder it waited in: %v", err)
+	}
+}
+
+// Nor do its files take those of a folder of the torrent's name: the
+// person's Album/a.bin stays, the download is Album (2).
+func TestSessionMagnetLeavesTheFolderOfItsNameAlone(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "seed", "Album")
+	a := makeFile(t, filepath.Join(root, "a.bin"), 200000)
+	b := makeFile(t, filepath.Join(root, "b.bin"), 300001)
+	tf := filepath.Join(dir, "album.torrent")
+	ih := createTorrent(t, root, tf)
+	sd := seed(t, tf, filepath.Join(dir, "seed"), 0)
+	got := filepath.Join(dir, "got")
+	mine := filepath.Join(got, "Album", "a.bin")
+	own := []byte("the person's own Album/a.bin\n")
+	if err := os.MkdirAll(filepath.Dir(mine), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(mine, own, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	h := newHarness(t, nil, filepath.Join(dir, "torrents"), got)
+	info := h.m.Create(engine.AddOptions{URL: "magnet:?xt=urn:btih:" + ih + "&dn=Album", Start: true})
+	done := h.wait(info.ID, sd, 60*time.Second, "the download", complete)
+	if done.FileName != "Album (2)" {
+		t.Fatalf("info: %+v", done)
+	}
+	sameFile(t, filepath.Join(got, "Album (2)", "a.bin"), a)
+	sameFile(t, filepath.Join(got, "Album (2)", "b.bin"), b)
+	sameFile(t, mine, own)
+}
+
+// Added again while the program holds it, a torrent takes the folder and
+// names it is given: a magnet link stopped on its way out of the folder it
+// waited in (one file renamed, nothing moved) downloads where ODM puts it,
+// not under the torrent's own paths.
+func TestSessionAddAgainPlacesTheTorrent(t *testing.T) {
+	dir := t.TempDir()
+	root := filepath.Join(dir, "seed", "Set")
+	data := map[string][]byte{
+		"a.bin": makeFile(t, filepath.Join(root, "a.bin"), 100000),
+		"b.bin": makeFile(t, filepath.Join(root, "b.bin"), 100001),
+	}
+	tf := filepath.Join(dir, "set.torrent")
+	createTorrent(t, root, tf)
+	sd := seed(t, tf, filepath.Join(dir, "seed"), 0)
+	prog := program(t)
+	s := &Session{Program: func(context.Context) (string, error) { return prog, nil }, Settings: local, Log: t.Logf}
+	defer s.Close()
+	ctx := context.Background()
+	meta, err := s.Inspect(ctx, tf, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	names, prio, first := map[int]string{}, make([]int, len(meta.Files)), -1
+	for i, f := range meta.Files {
+		if !f.Pad {
+			names[i], prio[i] = "odm-"+path.Base(f.Path), engine.PriorityNormal
+			if first < 0 {
+				first = i
+			}
+		}
+	}
+	hold := filepath.Join(dir, "hold")
+	events, stop := s.Watch("p")
+	defer stop()
+	if err := s.Add(ctx, engine.TorrentAdd{ID: "p", File: tf, SavePath: hold, Hold: true}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Rename(ctx, "p", map[int]string{first: names[first]}); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Pause(ctx, "p"); err != nil {
+		t.Fatal(err)
+	}
+	save := filepath.Join(dir, "got", "Set.odmpart")
+	if err := s.Add(ctx, engine.TorrentAdd{ID: "p", File: tf, SavePath: save, Names: names, Priorities: prio}); err != nil {
+		t.Fatal(err)
+	}
+	deadline := time.After(60 * time.Second)
+	for finished := false; !finished; {
+		sd.connect(t, s)
+		select {
+		case ev := <-events:
+			finished = ev.Kind == engine.TorrentEventFinished
+		case <-time.After(time.Second):
+		case <-deadline:
+			t.Fatal("not finished")
+		}
+	}
+	for _, n := range names {
+		sameFile(t, filepath.Join(save, n), data[strings.TrimPrefix(n, "odm-")])
+	}
+	for _, p := range []string{filepath.Join(save, "Set"), filepath.Join(hold, "Set")} {
+		if _, err := os.Stat(p); !os.IsNotExist(err) {
+			t.Errorf("%s: %v", p, err)
+		}
+	}
+	// Where it is already, a resume moves and renames nothing (libtorrent
+	// would refuse to move it onto its own files).
+	if err := s.Pause(ctx, "p"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Add(ctx, engine.TorrentAdd{ID: "p", File: tf, SavePath: save, Names: names, Priorities: prio}); err != nil {
+		t.Fatalf("resumed in its place: %v", err)
+	}
+}
+
+// deepTorrent is a v2 .torrent of n one-byte files under depth folders of
+// 200-character names: under half a megabyte, but its files take a line
+// of about n × 12 KB in the program's replies, each path in full.
+func deepTorrent(depth, n int) []byte {
+	str := func(s string) string { return strconv.Itoa(len(s)) + ":" + s }
+	var files strings.Builder
+	files.WriteString("d")
+	for i := 0; i < n; i++ {
+		files.WriteString(str(fmt.Sprintf("f%05d", i)) + "d" + str("") + "d" + str("length") + "i1e" +
+			str("pieces root") + str(strings.Repeat("r", 32)) + "ee")
+	}
+	files.WriteString("e")
+	tree := files.String()
+	for i := depth - 1; i >= 0; i-- {
+		tree = "d" + str(fmt.Sprintf("%03d", i)+strings.Repeat("d", 197)) + tree + "e"
+	}
+	info := "d" + str("file tree") + tree + str("meta version") + "i2e" + str("name") + str("x") +
+		str("piece length") + "i16384e" + "e"
+	return []byte("d" + str("info") + info + str("piece layers") + "dee")
+}
+
+// A torrent whose reply is over the 64 MiB a line may have ends the
+// program with an error that says so, instead of every call waiting for
+// good; the next torrent starts it again.
+func TestSessionOverlongReply(t *testing.T) {
+	prog := program(t)
+	dir := t.TempDir()
+	deep := filepath.Join(dir, "deep.torrent")
+	if err := os.WriteFile(deep, deepTorrent(60, 6000), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	src := filepath.Join(dir, "seed", "data.bin")
+	makeFile(t, src, 100000)
+	tf := filepath.Join(dir, "data.torrent")
+	createTorrent(t, src, tf)
+	s := &Session{Program: func(context.Context) (string, error) { return prog, nil }, Settings: local, Log: t.Logf}
+	defer s.Close()
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+	if _, err := s.Inspect(ctx, deep, ""); err == nil || ctx.Err() != nil || !strings.Contains(err.Error(), "over 64 MiB") {
+		t.Fatalf("the deep torrent: %v", err)
+	}
+	if m, err := s.Inspect(ctx, tf, ""); err != nil || m.Name != "data.bin" {
+		t.Fatalf("a torrent after it: %+v %v", m, err)
+	}
+}

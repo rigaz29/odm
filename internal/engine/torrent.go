@@ -10,7 +10,10 @@ package engine
 //     renamed to <name> once complete;
 //   - a torrent of several files downloads into the folder
 //     <dir>/<name>.odmpart, without the torrent's own top folder, and the
-//     folder is moved to <dir>/<name> once complete.
+//     folder is moved to <dir>/<name> once complete;
+//   - a magnet link waits for its metadata in a folder of its own in
+//     TorrentDir, where nothing is written, and moves to its place once
+//     its files have their names.
 //
 // <name> is the torrent's name, sanitized and made unique in <dir>; every
 // path inside the folder is sanitized part by part, so a torrent cannot
@@ -49,16 +52,18 @@ type TorrentBackend interface {
 	// Inspect reads a .torrent file, or a magnet link (which names no
 	// files), without adding it.
 	Inspect(ctx context.Context, file, magnet string) (TorrentMeta, error)
-	// Add adds a torrent, or resumes it when it is in the session already.
+	// Add adds a torrent, or resumes it when it is in the session already,
+	// after moving it to SavePath and giving its files Names where they are
+	// not there yet. It returns ErrNoMetadata when Names need metadata the
+	// torrent does not have.
 	Add(ctx context.Context, a TorrentAdd) error
 	// Watch delivers the torrent's metadata, status, finished and error
 	// events until stop is called. Status events may be dropped when the
 	// reader falls behind.
 	Watch(id string) (events <-chan TorrentEvent, stop func())
 	Pause(ctx context.Context, id string) error
-	// SetFiles names the files and gives their priorities: once the
-	// metadata of a torrent added with Hold is in (it returns when they are
-	// renamed), or with no names when the files to download change.
+	// SetFiles gives the files their priorities, after naming them when
+	// names is not empty (it returns when they are renamed).
 	SetFiles(ctx context.Context, id string, names map[int]string, priorities []int) error
 	// Rename and Move return once the files are renamed or moved.
 	Rename(ctx context.Context, id string, names map[int]string) error
@@ -333,6 +338,10 @@ func torrentDrops(source string, m TorrentMeta) (trackers, webSeeds []string) {
 // errNoTorrents is a torrent download's error where ODM cannot run torrents.
 var errNoTorrents = errors.New("this ODM cannot download torrents")
 
+// ErrNoMetadata is TorrentBackend.Add's error for Names given to a torrent
+// whose metadata is not in: a magnet link whose resume data lost it.
+var ErrNoMetadata = errors.New("the torrent's metadata is not in")
+
 // MaxTorrentFile bounds a .torrent file.
 const MaxTorrentFile = 16 << 20
 
@@ -375,6 +384,15 @@ func magnetName(link string) string {
 
 func torrentPath(id, ext string) string {
 	return filepath.Join(TorrentDir, id+ext)
+}
+
+// holdDir is the folder of its own in TorrentDir where the download id's
+// magnet link waits for its metadata. Nothing is written there: in the
+// download's folder, under the torrent's own names, moving and naming its
+// files once the metadata came would take the person's files of those
+// names for the torrent's.
+func holdDir(id string) string {
+	return filepath.Join(TorrentDir, "hold", id)
 }
 
 // MagnetLink is a magnet link to the torrent: the one it came from, else
@@ -532,25 +550,28 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 
 	events, stop := b.Watch(id)
 	defer stop()
-	resume := torrentPath(id, ".resume")
+	resume, hold := torrentPath(id, ".resume"), holdDir(id)
 	add := TorrentAdd{ID: id, File: file, Magnet: magnet, Resume: resume, DownloadLimit: limit}
 	add.DropTrackers, add.DropWebSeeds = torrentDrops(source, meta)
 	if known {
 		add.SavePath, add.Names, add.Priorities = d.torrentLayout(false)
-	} else {
-		// A magnet link before its metadata: nothing is written until the
-		// files have their names.
-		add.SavePath, add.Hold = d.torrentDir(), true
-	}
-	err = b.Add(ctx, add)
-	if err != nil && known && file == "" {
-		// A magnet link whose resume data lost the metadata: fetch it
-		// again, then name the files as before.
-		add.Names, add.Priorities, add.SavePath, add.Hold = nil, nil, d.torrentDir(), true
 		err = b.Add(ctx, add)
+	}
+	if !known || (errors.Is(err, ErrNoMetadata) && file == "") {
+		// A magnet link before its metadata, or whose resume data lost it,
+		// waits for it in a folder of its own (holdDir); then its files are
+		// named and moved to the download's place.
+		add.Names, add.Priorities, add.SavePath, add.Hold = nil, nil, hold, true
+		if err = os.MkdirAll(hold, 0o755); err == nil {
+			err = b.Add(ctx, add)
+		}
 	}
 	if err != nil {
 		return err
+	}
+	if !add.Hold {
+		// Left by a run stopped while the files were being placed.
+		_ = os.RemoveAll(hold)
 	}
 	d.setInSession(true)
 	d.notify(true)
@@ -583,16 +604,14 @@ func (d *Download) transferTorrent(ctx context.Context, b TorrentBackend) error 
 					}
 					known = true
 				}
-				save, names, prio := d.torrentLayout(false)
-				if save != add.SavePath {
-					if err := b.Move(ctx, id, save); err != nil {
-						return err
-					}
-				}
-				if err := b.SetFiles(ctx, id, names, prio); err != nil {
+				// The backend moves the torrent out of its folder of its own
+				// and names its files, as for a torrent added again.
+				add.SavePath, add.Names, add.Priorities = d.torrentLayout(false)
+				add.Hold = false
+				if err := b.Add(ctx, add); err != nil {
 					return err
 				}
-				add.Hold = false
+				_ = os.RemoveAll(hold)
 				d.notify(true)
 			case TorrentEventStatus:
 				st := ev.Status
@@ -810,13 +829,6 @@ func folderName(name string, n int) string {
 		return name
 	}
 	return fmt.Sprintf("%s (%d)", name, n)
-}
-
-// torrentDir is the folder the download goes to, as far as it is known.
-func (d *Download) torrentDir() string {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	return d.targetDirLocked(d.category())
 }
 
 // torrentLayout is where the backend puts the files: while they download,
@@ -1192,6 +1204,7 @@ func (d *Download) removeTorrent(deleteFiles bool) {
 	}
 	_ = os.Remove(torrentPath(id, ".torrent"))
 	_ = os.Remove(torrentPath(id, ".resume"))
+	_ = os.RemoveAll(holdDir(id))
 }
 
 // removeEmptyDirs removes the folders of a folder torrent that deleting its

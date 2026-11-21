@@ -171,9 +171,12 @@ func Start(ctx context.Context, program string, o Options) (*Client, error) {
 // Hello is the program's hello: its protocol and versions.
 func (c *Client) Hello() Event { return c.hello }
 
+// maxLine bounds a line of the program's output.
+const maxLine = 64 << 20
+
 func (c *Client) read(stdout io.Reader, hello chan<- Event) {
 	sc := bufio.NewScanner(stdout)
-	sc.Buffer(make([]byte, 64<<10), 64<<20)
+	sc.Buffer(make([]byte, 64<<10), maxLine)
 	for sc.Scan() {
 		line := sc.Bytes()
 		var head struct {
@@ -211,8 +214,20 @@ func (c *Client) read(stdout io.Reader, hello chan<- Event) {
 			c.onEvent(ev)
 		}
 	}
+	serr := sc.Err()
+	if serr != nil {
+		// The rest of its output cannot be read (a line over maxLine): no
+		// reply would reach its call, and the program would block writing.
+		// It ends, so that its torrents fail and the next one starts anew.
+		_ = c.cmd.Process.Kill()
+	}
 	err := c.cmd.Wait()
-	if err == nil {
+	switch {
+	case errors.Is(serr, bufio.ErrTooLong):
+		err = fmt.Errorf("it sent a line over %d MiB", maxLine>>20)
+	case serr != nil:
+		err = fmt.Errorf("reading its output: %w", serr)
+	case err == nil:
 		err = errors.New("exited")
 	}
 	c.mu.Lock()

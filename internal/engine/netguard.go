@@ -39,11 +39,18 @@ var errLocalNetwork = errors.New("the playlist points into the local network")
 //     actually being connected to. A lookup of our own followed by the
 //     transport's would be two answers, and a server that changes its
 //     answer in between (DNS rebinding) would pass.
+//   - The manifest itself is judged by a lookup of its host, which is such
+//     a first answer. So while it is taken as local, the dialer keeps a
+//     direct connection to its host only when that reached a local
+//     address: the playlist is read from where it was judged to be. A name
+//     that gives the lookup a local address and the transport a public one
+//     cannot have a public server's playlist trusted with the local network.
 //   - Through a proxy the dialer only sees the proxy, which is often local
 //     itself, and the proxy resolves the name. There RoundTrip refuses
 //     address literals and names that resolve locally here; a name that
 //     does not resolve here is left to the proxy (some networks only
-//     resolve through it).
+//     resolve through it). Where the proxy reads a manifest taken as local
+//     from is up to the proxy, as is all its resolving.
 //
 // Gotchas:
 //   - Trusting the manifest takes every address of its host being local;
@@ -60,7 +67,8 @@ type localGuard struct {
 	next  http.RoundTripper
 	proxy func(*http.Request) (*url.URL, error) // nil: never a proxy
 	// checkNames: no dialer of ours sees direct connections (next is not
-	// an *http.Transport), so names are looked up here, as for a proxy.
+	// an *http.Transport), so names are looked up here, as for a proxy,
+	// and a manifest taken as local is not held to a local address.
 	checkNames bool
 	manifest   string // canonical host of the manifest
 	lookup     func(ctx context.Context, host string) ([]net.IPAddr, error)
@@ -72,6 +80,22 @@ type localGuard struct {
 // strictDial marks a request context whose direct connections must not
 // reach a local address; the guard's dialer reads it.
 type strictDial struct{}
+
+// localDial marks a request to the host of a manifest taken as local: its
+// direct connections must reach a local address. The guard's dialer reads
+// it.
+type localDial struct{}
+
+// leftLocalError refuses a connection to the host of a manifest taken as
+// local that reached a public address. It is errLocalNetwork to callers,
+// which do not retry it.
+type leftLocalError struct{ addr string }
+
+func (e *leftLocalError) Error() string {
+	return "the playlist's address now leads outside the local network (" + e.addr + ")"
+}
+
+func (e *leftLocalError) Is(target error) bool { return target == errLocalNetwork }
 
 // proxyChoice carries the guard's answer from the proxy function to the
 // transport, so both act on the same one. The system proxy is re-read
@@ -129,8 +153,11 @@ func guardLocal(client *http.Client, manifestURL string) *http.Client {
 			},
 		}
 		t.DialContext = func(ctx context.Context, network, addr string) (net.Conn, error) {
-			if ctx.Value(strictDial{}) != nil {
+			switch {
+			case ctx.Value(strictDial{}) != nil:
 				return strict.DialContext(ctx, network, addr)
+			case ctx.Value(localDial{}) != nil:
+				return dialLocal(ctx, base, network, addr)
 			}
 			return base(ctx, network, addr)
 		}
@@ -161,6 +188,10 @@ func (g *localGuard) RoundTrip(req *http.Request) (*http.Response, error) {
 		return nil, err
 	}
 	if !public {
+		// The manifest's own host is read only over local connections.
+		if !viaProxy && canonicalHost(req.URL.Hostname()) == g.manifest {
+			req = req.WithContext(context.WithValue(ctx, localDial{}, true))
+		}
 		return g.next.RoundTrip(req)
 	}
 	host := canonicalHost(req.URL.Hostname())
@@ -193,7 +224,8 @@ func (g *localGuard) RoundTrip(req *http.Request) (*http.Response, error) {
 // manifestPublic decides once whether the manifest's host is public: it is
 // local only when every address it has is local. Through a proxy a name
 // that does not resolve here counts as public (the strict side): only the
-// proxy may be able to resolve it.
+// proxy may be able to resolve it. The first verdict stands: two requests
+// looking up the host at once could get different answers.
 func (g *localGuard) manifestPublic(ctx context.Context, viaProxy bool) (bool, error) {
 	g.mu.Lock()
 	if g.public != nil {
@@ -211,9 +243,32 @@ func (g *localGuard) manifestPublic(ctx context.Context, viaProxy bool) (bool, e
 	}
 	public := !local
 	g.mu.Lock()
-	g.public = &public
-	g.mu.Unlock()
-	return public, nil
+	defer g.mu.Unlock()
+	if g.public == nil {
+		g.public = &public
+	}
+	return *g.public, nil
+}
+
+// dialLocal connects as base does and keeps the connection only when it
+// reached a local address. It dials the host of a manifest taken as local:
+// that verdict came from the guard's own lookup, and base resolves the
+// name again, which a server that changes its answer could point at a
+// public address. Nothing is sent before the check.
+func dialLocal(ctx context.Context, base func(context.Context, string, string) (net.Conn, error), network, addr string) (net.Conn, error) {
+	conn, err := base(ctx, network, addr)
+	if err != nil {
+		return nil, err
+	}
+	far := "unknown"
+	if ra := conn.RemoteAddr(); ra != nil {
+		far = ra.String()
+		if ap, err := netip.ParseAddrPort(far); err == nil && localAddr(ap.Addr()) {
+			return conn, nil
+		}
+	}
+	_ = conn.Close()
+	return nil, &leftLocalError{addr: far}
 }
 
 func (g *localGuard) allLocal(ctx context.Context, host string) (bool, error) {

@@ -10,6 +10,7 @@ import (
 	"net/netip"
 	"net/url"
 	"strings"
+	"sync/atomic"
 	"testing"
 )
 
@@ -156,6 +157,100 @@ func TestLocalGuardDial(t *testing.T) {
 	}
 	if !errors.Is(err, errLocalNetwork) {
 		t.Fatalf("rebound name: %v", err)
+	}
+}
+
+// remoteAs reports addr as the far end of its connection: a connection to
+// a test server standing for one to another address.
+type remoteAs struct {
+	net.Conn
+	addr net.Addr
+}
+
+func (c remoteAs) RemoteAddr() net.Addr { return c.addr }
+
+// fetchPlaylist gets a playlist as a stream does and then each address it
+// lists, returning the playlist's error.
+func fetchPlaylist(client *http.Client, manifest string) error {
+	resp, err := client.Get(manifest)
+	if err != nil {
+		return err
+	}
+	body, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	for _, line := range strings.Split(string(body), "\n") {
+		if strings.HasPrefix(line, "http") {
+			if r, err := client.Get(line); err == nil {
+				r.Body.Close()
+			}
+		}
+	}
+	return nil
+}
+
+// A DNS server that changes its answer (DNS rebinding) gives the guard's
+// lookup of the manifest's host a local address, and the transport's, a
+// moment later, a public server's. That server's playlist must not reach
+// the local network: a manifest taken as local is read only from there.
+func TestLocalGuardManifestRebinding(t *testing.T) {
+	var lanHits, publicHits int64
+	lan := httpServer(t, func(w http.ResponseWriter, r *http.Request) { atomic.AddInt64(&lanHits, 1) })
+	public := httpServer(t, func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt64(&publicHits, 1)
+		_, _ = io.WriteString(w, "#EXTM3U\n#EXTINF:1,\nhttp://192.168.1.1/cgi-bin/reboot\n")
+	})
+	fakeDNS(t, map[string][]string{"rebind.example": {"192.168.1.1"}}) // the guard's lookup
+	publicAddr := &net.TCPAddr{IP: net.ParseIP("203.0.113.7"), Port: 80}
+	tr := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		var d net.Dialer
+		switch {
+		case strings.HasPrefix(addr, "rebind.example:"): // the transport's lookup
+			c, err := d.DialContext(ctx, network, strings.TrimPrefix(public.URL, "http://"))
+			if err != nil {
+				return nil, err
+			}
+			return remoteAs{c, publicAddr}, nil
+		case strings.HasPrefix(addr, "192.168.1.1:"): // the router
+			return d.DialContext(ctx, network, strings.TrimPrefix(lan.URL, "http://"))
+		}
+		return d.DialContext(ctx, network, addr)
+	}}
+	client := guardLocal(&http.Client{Transport: tr}, "http://rebind.example/live.m3u8")
+
+	err := fetchPlaylist(client, "http://rebind.example/live.m3u8")
+	if n := atomic.LoadInt64(&lanHits); n != 0 {
+		t.Fatalf("a playlist from a public server reached the local network (%d requests)", n)
+	}
+	if !errors.Is(err, errLocalNetwork) || atomic.LoadInt64(&publicHits) != 0 {
+		t.Fatalf("playlist read from a public server as a local one: %v, %d requests there", err, atomic.LoadInt64(&publicHits))
+	}
+}
+
+// A playlist that really is on the local network is read from there, and
+// its segments may use local addresses.
+func TestLocalGuardLocalManifestOverTransport(t *testing.T) {
+	var lanHits int64
+	nas := httpServer(t, func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, "#EXTM3U\n#EXTINF:1,\nhttp://192.168.1.21/s1.ts\n")
+	})
+	lan := httpServer(t, func(w http.ResponseWriter, r *http.Request) { atomic.AddInt64(&lanHits, 1) })
+	fakeDNS(t, map[string][]string{"nas.example": {"192.168.1.20"}})
+	tr := &http.Transport{DialContext: func(ctx context.Context, network, addr string) (net.Conn, error) {
+		var d net.Dialer
+		switch {
+		case strings.HasPrefix(addr, "nas.example:"): // a server on this computer: local
+			return d.DialContext(ctx, network, strings.TrimPrefix(nas.URL, "http://"))
+		case strings.HasPrefix(addr, "192.168.1.21:"):
+			return d.DialContext(ctx, network, strings.TrimPrefix(lan.URL, "http://"))
+		}
+		return d.DialContext(ctx, network, addr)
+	}}
+	client := guardLocal(&http.Client{Transport: tr}, "http://nas.example/m.m3u8")
+	if err := fetchPlaylist(client, "http://nas.example/m.m3u8"); err != nil {
+		t.Fatalf("local playlist: %v", err)
+	}
+	if n := atomic.LoadInt64(&lanHits); n != 1 {
+		t.Fatalf("the local playlist's local segment was fetched %d times, want 1", n)
 	}
 }
 

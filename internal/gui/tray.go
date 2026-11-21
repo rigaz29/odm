@@ -35,14 +35,21 @@ type desk struct {
 
 	items struct{ show, add, pause, resume, limiter, exit *application.MenuItem }
 
+	// menuMu has the menu's items changed one goroutine at a time: relabel
+	// runs on the one that saved the Options, syncLimiter on watch's and on
+	// a click's. shown is the limiter label shown, to change it only when
+	// it changes.
+	menuMu sync.Mutex
+	shown  string
+
 	mu     sync.Mutex
-	hinted bool   // told once that ODM keeps running in the tray
-	shown  string // the limiter label shown, to change it only when it changes
+	hinted bool // told once that ODM keeps running in the tray
 	seq    int
 }
 
-func newDesk(app *application.App, win *application.WebviewWindow, svc *Service, notes *notifier) *desk {
-	d := &desk{app: app, win: win, svc: svc, notes: notes}
+// newTray makes the tray icon and its menu, for newDesk.
+func newTray(app *application.App, svc *Service) *desk {
+	d := &desk{app: app, svc: svc}
 	d.menu = application.NewMenu()
 	d.items.show = d.menu.Add("").OnClick(func(*application.Context) { d.showMain() })
 	d.items.add = d.menu.Add("").OnClick(func(*application.Context) {
@@ -69,6 +76,12 @@ func newDesk(app *application.App, win *application.WebviewWindow, svc *Service,
 	}
 	d.tray.SetMenu(d.menu)
 	d.tray.OnClick(d.showMain) // a left click shows the window, the right the menu
+	return d
+}
+
+func newDesk(app *application.App, win *application.WebviewWindow, svc *Service, notes *notifier) *desk {
+	d := newTray(app, svc)
+	d.win, d.notes = win, notes
 
 	// Closing the main window hides it in the tray, where downloads carry
 	// on, unless the Options say to quit.
@@ -93,21 +106,28 @@ func newDesk(app *application.App, win *application.WebviewWindow, svc *Service,
 }
 
 // relabel puts the menu in the page's language and names the speed limit.
+//
+// Only the items change, never the menu as a whole (Menu.Update): on
+// Windows and Linux the tray shows a menu of its own, built from the items
+// as it starts, which their new labels and ticks reach. Menu.Update would
+// build a second menu from them, which they would follow from then on,
+// while the tray went on showing the first.
 func (d *desk) relabel() {
 	tr := d.svc.translator()
+	d.menuMu.Lock()
 	d.items.show.SetLabel(tr("Show ODM"))
 	d.items.add.SetLabel(tr("Add URL…"))
 	d.items.pause.SetLabel(tr("Pause all"))
 	d.items.resume.SetLabel(tr("Resume all"))
 	d.items.exit.SetLabel(tr("Exit"))
-	d.mu.Lock()
 	d.shown = "" // the limiter item too
-	d.mu.Unlock()
+	d.menuMu.Unlock()
 	d.syncLimiter()
-	d.menu.Update()
 }
 
 // syncLimiter ticks the limiter item while the limit applies and names it.
+// A click ticks or unticks the item itself before toggleLimiter runs, also
+// when nothing changes (no limit saved): the tick is put right too.
 func (d *desk) syncLimiter() {
 	rate := d.svc.mgr.Settings().EffectiveSpeedLimit()
 	tr := d.svc.translator()
@@ -115,16 +135,14 @@ func (d *desk) syncLimiter() {
 	if rate > 0 {
 		label = fmt.Sprintf(tr("Speed limiter (%s/s)"), formatBytes(rate, d.svc.Appearance().Language))
 	}
-	d.mu.Lock()
-	same := label == d.shown
-	d.shown = label
-	d.mu.Unlock()
-	if same {
+	d.menuMu.Lock()
+	defer d.menuMu.Unlock()
+	if label == d.shown && d.items.limiter.Checked() == (rate > 0) {
 		return
 	}
+	d.shown = label
 	d.items.limiter.SetLabel(label)
 	d.items.limiter.SetChecked(rate > 0)
-	d.menu.Update()
 }
 
 // toggleLimiter switches the limit off, or on again with the one saved;

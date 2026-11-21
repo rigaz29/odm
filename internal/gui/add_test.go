@@ -2,6 +2,7 @@ package gui
 
 import (
 	"bytes"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"odm/internal/engine"
+	"odm/internal/media"
 )
 
 // fileServer serves files by path with Range support, and records the
@@ -115,6 +117,56 @@ func TestCreateAsksBeforeAddingAnAddressAgain(t *testing.T) {
 	}
 	if _, err := svc.Create(CreateRequest{URL: " "}); err == nil {
 		t.Fatal("an empty address was added")
+	}
+}
+
+// Start pressed before the check answered (the form does not wait for
+// it): a page of a site yt-dlp reads, and a playlist known by its
+// extension, are added as the check would have them, in their best
+// quality, not as a file of the page or of the playlist's text. Other
+// addresses stay files, and the browser's pick for its own address stays.
+func TestCreateBeforeTheCheckAnswers(t *testing.T) {
+	svc, mgr := newTestService(t)
+	add := func(r CreateRequest) engine.Info {
+		t.Helper()
+		res, err := svc.Create(r)
+		if err != nil || res.ID == "" {
+			t.Fatalf("create %s: %+v %v", r.URL, res, err)
+		}
+		d, _ := mgr.Get(res.ID)
+		return d
+	}
+	if d := add(CreateRequest{URL: "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}); !d.Site {
+		t.Errorf("a video page was added as a file: %+v", d)
+	}
+	if d := add(CreateRequest{URL: "https://cdn.example.com/live/master.m3u8"}); d.Stream != string(media.KindHLS) {
+		t.Errorf("an HLS playlist was added as %q", d.Stream)
+	}
+	if d := add(CreateRequest{URL: "https://cdn.example.com/vod/manifest.mpd"}); d.Stream != string(media.KindDASH) {
+		t.Errorf("a DASH playlist was added as %q", d.Stream)
+	}
+	if d := add(CreateRequest{URL: "https://example.com/files/setup.exe"}); d.Site || d.Stream != "" {
+		t.Errorf("a file was added as %+v", d)
+	}
+
+	page := "https://www.youtube.com/watch?v=aqz-KE-bpKQ"
+	token := svc.keepPrefill(engine.AddOptions{URL: page, Site: &engine.SiteJob{Format: "137+140"}})
+	d := add(CreateRequest{Token: token, URL: page})
+	data, err := mgr.Export()
+	if err != nil {
+		t.Fatal(err)
+	}
+	var states []struct {
+		ID   string          `json:"id"`
+		Site *engine.SiteJob `json:"site"`
+	}
+	if err := json.Unmarshal(data, &states); err != nil {
+		t.Fatal(err)
+	}
+	for _, st := range states {
+		if st.ID == d.ID && (st.Site == nil || st.Site.Format != "137+140") {
+			t.Errorf("the browser's pick was not kept: %+v", st.Site)
+		}
 	}
 }
 

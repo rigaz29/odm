@@ -212,6 +212,26 @@ func (s *Service) probedFor(addr string) *probed {
 	return s.probes[addr]
 }
 
+// unchecked is what Create goes by for an address the check has not
+// answered about yet: Start does not wait for it, and yt-dlp takes a while
+// to read a video page. It is what a check that failed leaves: a page of a
+// site yt-dlp reads downloads in yt-dlp's best quality, and an address
+// whose extension says it is an HLS or DASH playlist has its best quality
+// picked when it runs. What the browser sent with its own address says
+// more, and Create takes that.
+func unchecked(addr string, pre engine.AddOptions, fromBrowser bool) *probed {
+	switch {
+	case fromBrowser && (pre.Site != nil || pre.Stream != nil):
+	case ytdlp.Site(addr) != "":
+		return &probed{site: true}
+	default:
+		if k := media.Detect("", addr, nil); k == media.KindHLS || k == media.KindDASH {
+			return &probed{kind: k}
+		}
+	}
+	return &probed{}
+}
+
 // Probe checks address: a file's size and name, a playlist's qualities, a
 // video page's qualities through yt-dlp. token is the browser's prefill,
 // whose headers the check sends and whose quality it selects.
@@ -404,7 +424,7 @@ func (s *Service) Create(r CreateRequest) (CreateResult, error) {
 	fromBrowser := pre.URL != "" && addr == strings.TrimSpace(pre.URL)
 	pr := s.probedFor(addr)
 	if pr == nil {
-		pr = &probed{}
+		pr = unchecked(addr, pre, fromBrowser)
 	}
 
 	var siteJob *engine.SiteJob

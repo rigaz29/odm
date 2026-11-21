@@ -161,6 +161,10 @@ export function DownloadTable(props: {
         ref={scroll}
         tabIndex={0}
         onKeyDown={(e) => {
+          // Only keys pressed while the list itself has the focus. The
+          // header's buttons keep theirs, and so do the row and column
+          // menus: portals, whose keys still bubble here through React.
+          if (e.target !== e.currentTarget) return;
           const row = props.lead ? document.getElementById(rowID(props.lead)) : null;
           if (row && (e.key === "ContextMenu" || (e.shiftKey && e.key === "F10"))) {
             e.preventDefault();
@@ -169,6 +173,16 @@ export function DownloadTable(props: {
             return;
           }
           props.onKeyDown(e);
+        }}
+        // A press on a button in the list (a header's, Select all, Columns, a
+        // row's box or menu button) leaves the keyboard on the list, as a
+        // press on a row does; Tab still reaches the header's buttons.
+        onMouseDown={(e) => {
+          const button = (e.target as Element).closest("button");
+          if (e.button === 0 && button && e.currentTarget.contains(button)) {
+            e.preventDefault();
+            e.currentTarget.focus({ preventScroll: true });
+          }
         }}
         onScroll={measure}
         data-odm-list

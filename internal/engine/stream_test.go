@@ -205,6 +205,58 @@ func TestStreamFMP4ByteRanges(t *testing.T) {
 	}
 }
 
+// rangeIgnoredServer serves the byte-range playlist of
+// TestStreamFMP4ByteRanges from a server that ignores Range: every answer
+// is 200 with the whole file.
+func rangeIgnoredServer(t *testing.T, content []byte) *httptest.Server {
+	t.Helper()
+	mux := http.NewServeMux()
+	mux.HandleFunc("/v.m3u8", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, "#EXTM3U\n#EXT-X-TARGETDURATION:2\n#EXT-X-MAP:URI=\"all.mp4\",BYTERANGE=\"4@0\"\n"+
+			"#EXTINF:2,\n#EXT-X-BYTERANGE:6@4\nall.mp4\n#EXTINF:2,\n#EXT-X-BYTERANGE:6\nall.mp4\n"+
+			"#EXTINF:2,\n#EXT-X-BYTERANGE:5\nall.mp4\n#EXT-X-ENDLIST\n")
+	})
+	mux.HandleFunc("/all.mp4", func(w http.ResponseWriter, r *http.Request) { w.Write(content) })
+	srv := httptest.NewServer(mux)
+	t.Cleanup(srv.Close)
+	return srv
+}
+
+// A server that ignores Range sends a piece's whole resource with 200: the
+// bytes before the piece are skipped. Read as they came, the file's first
+// bytes were stored as every piece, and the download finished with them.
+func TestStreamRangeIgnoredByTheServer(t *testing.T) {
+	content := []byte("INITAAAAAABBBBBBCCCCC")
+	srv := rangeIgnoredServer(t, content)
+	d := newStreamDownload(t, srv.Client(), 2, StreamJob{Kind: media.KindHLS, Manifest: srv.URL + "/v.m3u8"})
+	d.Start(context.Background())
+	if got := readResult(t, d); !bytes.Equal(got, content) {
+		t.Fatalf("output %q, want %q", got, content)
+	}
+}
+
+// Far into the resource each piece would fetch it again from its start:
+// such a piece fails with an error that says why, and nothing is stored.
+func TestStreamRangeIgnoredFarIntoTheFile(t *testing.T) {
+	old := maxRangeSkip
+	maxRangeSkip = 5 // the first segment, at 4, is still skipped to
+	t.Cleanup(func() { maxRangeSkip = old })
+	srv := rangeIgnoredServer(t, []byte("INITAAAAAABBBBBBCCCCC"))
+	d := newStreamDownload(t, srv.Client(), 1, StreamJob{Kind: media.KindHLS, Manifest: srv.URL + "/v.m3u8"})
+	d.retryBase = time.Millisecond
+	d.Start(context.Background())
+	info := d.Info()
+	if info.Status != StatusError || !strings.Contains(info.Error, "ignores ranges") {
+		t.Fatalf("%s: %q", info.Status, info.Error)
+	}
+	if _, err := os.Stat(filepath.Join(info.Dir, info.FileName)); !os.IsNotExist(err) {
+		t.Fatalf("a file was finished: %v", err)
+	}
+	if b, _ := os.ReadFile(filepath.Join(info.Dir, info.FileName+".odmparts", "t0", "0.seg")); string(b) != "AAAAAA" {
+		t.Fatalf("the piece skipped to holds %q", b)
+	}
+}
+
 const twoTrackMPD = `<?xml version="1.0"?>
 <MPD xmlns="urn:mpeg:dash:schema:mpd:2011" type="static" mediaPresentationDuration="PT4S">
   <Period>

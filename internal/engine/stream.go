@@ -895,7 +895,7 @@ type streamRun struct {
 
 func (s *streamRun) fetchWithRetry(ctx context.Context, j pieceJob) error {
 	var err error
-	backoff := 300 * time.Millisecond
+	backoff := s.d.retryDelay()
 	for attempt := 0; attempt < MaxRetries; attempt++ {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -1004,9 +1004,19 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 		if cs, _, _, ok := ParseContentRange(resp.Header.Get("Content-Range")); ok && cs != p.rng.Offset {
 			return fmt.Errorf("range mismatch: asked %d, got %d", p.rng.Offset, cs)
 		}
-	case p.rng != nil && resp.StatusCode == http.StatusOK && p.rng.Offset == 0:
-		// The server ignored Range but the piece starts the file: read
-		// just its length below.
+	case p.rng != nil && resp.StatusCode == http.StatusOK:
+		// The server ignored Range and sent the whole resource: the piece
+		// is its Length bytes from Offset, read below once the bytes before
+		// them are skipped. Each such piece fetches the resource again from
+		// its start, so one far into it fails instead (and is tried again:
+		// a cache may answer the range next time).
+		if p.rng.Offset > maxRangeSkip {
+			return fmt.Errorf("the server sent the whole file instead of bytes %d-%d of it (it ignores ranges)",
+				p.rng.Offset, p.rng.Offset+p.rng.Length-1)
+		}
+		if err := d.skipBody(ctx, resp.Body, p.rng.Offset); err != nil {
+			return err
+		}
 	case resp.StatusCode >= 400 && resp.StatusCode < 500 &&
 		resp.StatusCode != http.StatusRequestTimeout && resp.StatusCode != http.StatusTooManyRequests:
 		return permanentError{resp.Status}
@@ -1061,6 +1071,43 @@ func (s *streamRun) fetch(ctx context.Context, j pieceJob) error {
 type limitedBody struct {
 	io.Reader
 	io.Closer
+}
+
+// maxRangeSkip is how far into a resource a piece may start when the
+// server ignores ranges and sends all of it. Every such piece fetches the
+// resource from its first byte, so a playlist of ranges far into one large
+// file would fetch it over and over; past this the piece fails instead.
+var maxRangeSkip int64 = 8 << 20
+
+// skipBody reads and drops the first n bytes of body: the part of a whole
+// resource before the piece that was asked for. They use the bandwidth
+// (the speed limit applies) but are not the piece's, so they do not count
+// as progress.
+func (d *Download) skipBody(ctx context.Context, body io.ReadCloser, n int64) error {
+	buf := make([]byte, 64*1024)
+	idle := d.readStall()
+	for n > 0 {
+		k, err := readWithIdle(ctx, body, buf[:min(int64(len(buf)), n)], idle)
+		n -= int64(k)
+		if k > 0 {
+			d.mu.Lock()
+			lim := d.limiter
+			d.mu.Unlock()
+			if werr := lim.Wait(ctx, k); werr != nil {
+				return werr
+			}
+		}
+		if err == io.EOF {
+			if n > 0 {
+				return errors.New("the server sent the whole file, and it ends before the piece")
+			}
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // copyCounted copies r to w, counting progress and honouring the limiter.

@@ -1563,13 +1563,16 @@ func (a *application) showUpdate(rel update.Release) {
 
 /* ---------- scheduler completion ---------- */
 
-// handleAction carries out a scheduler request in the UI.
+// handleAction carries out a scheduler request in the UI. Its dialogs show
+// the main window first: with ODM in the tray it is hidden, and a dialog on
+// it would go unseen.
 func (a *application) handleAction(act engine.Action) {
 	switch act.Kind {
 	case engine.ActionOpen:
 		openPath(act.Path)
 	case engine.ActionLimit:
 		lim := a.mgr.Settings().Limits
+		a.showWindow()
 		dialog.ShowInformation(T("Download limit reached"), Tf(
 			T("More than %d MB were downloaded in the last %d hours, so downloads were stopped.\nThey can start again once the window has passed."),
 			lim.MB, lim.Hours), a.win)
@@ -1609,7 +1612,15 @@ func (a *application) confirmWhenDone(action string) {
 	nowBtn := widget.NewButton(T("Now"), func() { finish(true) })
 	nowBtn.Importance = widget.DangerImportance
 	dlg.SetButtons([]fyne.CanvasObject{widget.NewButton(T("Cancel"), func() { finish(false) }), nowBtn})
+	// The countdown is on the main window, which is hidden while ODM sits
+	// in the tray: show it, and say it in a notification too, in case the
+	// window opens behind another.
+	a.showWindow()
 	dlg.Show()
+	if a.notify != nil {
+		// One line: Windows' notifications show a "\n" as typed.
+		a.notify(fyne.NewNotification(T("Queues finished"), strings.ReplaceAll(msg.Text, "\n", " ")))
+	}
 
 	go func() {
 		t := time.NewTicker(time.Second)

@@ -158,8 +158,14 @@ func (v *schedulerView) build() {
 	right := container.NewBorder(v.title, nil, nil, nil, v.body)
 
 	v.startBtn = widget.NewButtonWithIcon(T("Start now"), theme.MediaPlayIcon(), func() {
-		v.apply() // start with what is on screen
-		v.a.mgr.StartQueue(v.current)
+		// Start the queue on screen with what is on screen. An edit apply
+		// refuses, in this queue or another, starts nothing; apply then
+		// shows that queue, which is why v.current is read first.
+		q := v.current
+		if !v.apply() {
+			return
+		}
+		v.a.mgr.StartQueue(q)
 		v.a.refresh()
 		v.updateButtons()
 	})

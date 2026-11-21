@@ -50,8 +50,92 @@ All notable changes to ODM are documented here. The format is based on
   they are in, instead of closing at once), and in the main window's
   status bar, also for the downloads and updates ODM does by itself.
 
+### Security
+
+- A download handed over with a site's cookies or login, whose address
+  redirects to another site, sent them to that site with every range
+  request (and the ZIP preview with every read). Go drops them on the
+  redirect itself, but transfers are fresh requests to the final address.
+  They now go only to hosts of the site they came with, as a stream's
+  already did. The New Download window also kept the browser's cookies
+  for an address of another site typed or pasted over the browser's, and
+  saved them with it; they now stay with their own site.
+- A server could stop ODM through the ZIP preview: an archive whose end
+  record claimed billions of entries made it allocate for all of them,
+  ending in a panic or an out-of-memory error no recovery catches. The
+  preview reads the end record first and refuses what its list of
+  contents cannot hold.
+- A torrent whose file list came to over 64 MiB in odm-libtorrent's reply
+  (a crafted `.torrent` of half a megabyte, which the New Download window
+  reads by itself) left every torrent waiting until ODM was closed.
+  odm-libtorrent now starts again, and that torrent fails with an error.
+- An imported list was trusted as paths: an ID made of `..\` and a file
+  name with separators reached the state folder and "Remove + delete
+  file", a folder anywhere (the Startup folder, say) was kept, and a
+  torrent's file names were taken as the list gave them. IDs, names and
+  torrent file names are made safe, and a folder outside the download
+  folder, the folder last chosen and the categories' folders becomes the
+  download folder.
+
 ### Fixed
 
+- A magnet link waited for its metadata in the download folder under the
+  torrent's own names, so a file or folder of the same name already there
+  was taken into the download and overwritten (a single file first failed
+  with "File exists", and went into the person's file on Retry). It now
+  waits in a folder of its own and moves to its place once its files have
+  their names; a torrent resumed on its way out of that folder lands under
+  ODM's names too.
+- Resuming a download whose `.odmpart` was gone made a new, empty one and
+  finished at once with a file of zeros: after the antivirus scan took
+  the finished file and finishing failed, or after a category's folder
+  changed while it was paused (the stored bytes stayed in the old folder).
+  A download now resumes in the folder it started in, and one whose
+  partial file is gone, or shorter than the bytes counted in it, starts
+  again from the first byte. An imported list did the same, its progress
+  counting bytes of another computer; imported downloads start afresh.
+- A server that sets a cookie of its own on the file's answer (a load
+  balancer's, say) took the login the browser handed over away from every
+  transfer, which then failed with 403. The server's cookies are now added
+  to the browser's, replacing only those of the same name.
+- A server without ranges that answered a transfer with a short page (an
+  expired link) was asked for the whole file again at once, thousands of
+  times a second, for as long as the download ran. An answer of another
+  length or validator is now another file, as with ranges, and a short
+  answer is retried with the usual pause and limit. A longer answer was
+  cut to the old size and kept as complete; it now starts the download
+  again.
+- Two copies of ODM could run at once when they started at the same
+  moment, for instance when the browser started ODM for two requests while
+  it was closed (a video menu asking about two playlists); both resumed
+  the same downloads into the same files. A lock on `odm.lock` in ODM's
+  folder now lets one copy run, and the other hands its request to it and
+  exits, also when ODM cannot bind its socket.
+- The tray menu stopped following ODM after its first change: once a
+  speed limit had been set and turned off, the tray still showed it
+  ticked, and clicking it turned the limit back on; a second change of
+  language never reached the tray. With no limit saved, a click on the
+  limiter also left it ticked.
+- Start Download pressed in New Download while the address was still
+  being checked added a YouTube or TikTok page, or an `.m3u8` or `.mpd`
+  playlist, as a plain file of the page's HTML or the playlist's text. It
+  now downloads the video in its best quality, as when the check fails.
+- Keys pressed in a download's menu or a column menu also reached the
+  main list. Walking the menu with the arrows moved the selection, so the
+  item chosen (Resume, Remove + delete file…) acted on another download;
+  Enter also opened that download and Esc cleared the selection. Space or
+  Enter on the list's header buttons paused, resumed or opened the
+  selected downloads. The list now takes only the keys pressed while it
+  has the focus, and pressing a box or button in it leaves the focus on
+  the list.
+- In the Fyne build, the 30-second countdown before a queue's finish
+  action (exit, sleep, hibernate, shut down) and the notice that the
+  download limit stopped downloads went to the main window while it was
+  hidden in the tray, so nobody saw them and the action ran with no chance
+  to cancel it. They now show the main window, and the countdown also
+  sends a notification. The Scheduler's *Start now* no longer starts
+  another queue when Apply refuses an edit there: it starts the queue on
+  screen, and nothing until the edit is put right.
 - A download from a server that caps each response (sending a part of the
   range asked for, 1 MiB say) failed with "connection closed early" after
   8 responses. Each part now counts as progress, and only attempts that

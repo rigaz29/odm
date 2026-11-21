@@ -805,7 +805,7 @@ func importState(st *State, s Settings) {
 		j.Done, j.Counts, j.Recording = 0, nil, false
 	}
 	if j := st.Site; j != nil {
-		j.Done = 0
+		j.Done, j.Claimed = 0, false
 	}
 	if j := st.Torrent; j != nil {
 		j.Name = SanitizeName(j.Name)

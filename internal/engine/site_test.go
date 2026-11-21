@@ -14,7 +14,8 @@ import (
 
 // TestMain lets the test binary stand in for yt-dlp when FAKE_YTDLP is set
 // (see fakeYtDlp): it reports progress for each format of -f and writes
-// the joined file to -o, or, for -J, describes a two-quality video; with
+// the joined file to -o (FAKE_YTDLP=formats: after a while, the audio
+// alone as .m4a for one format), or, for -J, describes a two-quality video; with
 // FAKE_YTDLP=live, a broadcast whose master playlist is
 // FAKE_LIVE_MANIFEST (its DASH manifest with FAKE_LIVE_KIND=dash, its
 // endless FLV with FAKE_LIVE_KIND=flv). With FAKE_FFMPEG set it stands in
@@ -82,6 +83,20 @@ func TestMain(m *testing.M) {
 		if os.Getenv("FAKE_YTDLP") == "slow" {
 			time.Sleep(time.Minute)
 		}
+	}
+	if os.Getenv("FAKE_YTDLP") == "formats" {
+		// The video and audio joined soon, the audio alone a while later,
+		// each named for what it holds: two downloads of a video at once.
+		ext, wait := ".mkv", 100*time.Millisecond
+		if !strings.Contains(value("-f"), "+") {
+			ext, wait = ".m4a", 600*time.Millisecond
+		}
+		time.Sleep(wait)
+		if err := os.WriteFile(out+ext, []byte("format "+value("-f")), 0o644); err != nil {
+			fmt.Fprintln(os.Stderr, "ERROR:", err)
+			os.Exit(1)
+		}
+		os.Exit(0)
 	}
 	os.WriteFile(out+".mkv", []byte("joined video"), 0o644)
 	os.Exit(0)
@@ -284,6 +299,110 @@ func TestSiteDownloadNamedAfterTheVideo(t *testing.T) {
 			t.Errorf("given %q: status %s, name %q, want %q (%s)", c.given, got.Status, got.FileName, c.want, got.Error)
 		}
 		m.RemoveWithFile(info.ID, true)
+	}
+}
+
+// Two downloads of one video at once (the video, and its audio alone) have
+// one name. Each claims a name of its own, so each has its own work folder
+// and file. Sharing one, the first to finish deleted the other's files and
+// it failed; either could take the other's file as its own.
+func TestSiteDownloadsOfOneTitle(t *testing.T) {
+	m := fakeYtDlp(t, "formats")
+	dir := t.TempDir()
+	page := "https://www.youtube.com/watch?v=abc"
+	ids := map[string]string{}
+	for _, f := range []string{"137+140", "140"} {
+		info := m.Create(AddOptions{URL: page, Dir: dir, FileName: "A talk.mp4", Start: true, Site: &SiteJob{Format: f}})
+		ids[f] = info.ID
+	}
+	waitFor(t, "both downloads to end", func() bool {
+		for _, id := range ids {
+			if i, _ := m.Get(id); i.Status != StatusComplete && i.Status != StatusError {
+				return false
+			}
+		}
+		return true
+	})
+	names := map[string]bool{}
+	for f, id := range ids {
+		i, _ := m.Get(id)
+		data, _ := os.ReadFile(filepath.Join(i.Dir, i.FileName))
+		if i.Status != StatusComplete || string(data) != "format "+f {
+			t.Errorf("%s: %s %q, %q holds %q", f, i.Status, i.Error, i.FileName, data)
+		}
+		names[i.FileName] = true
+	}
+	if len(names) != 2 {
+		t.Fatalf("one file for both: %v", names)
+	}
+	if left, _ := filepath.Glob(filepath.Join(dir, "*.odmpart*")); len(left) != 0 {
+		t.Fatalf("left behind: %v", left)
+	}
+}
+
+// yt-dlp's container gives the file another name than the one claimed; an
+// .odmpart of that name is another download's, which the move must not
+// replace.
+func TestSiteDownloadKeepsOffAnotherPart(t *testing.T) {
+	m := fakeYtDlp(t, "ok")
+	dir := t.TempDir()
+	other := filepath.Join(dir, "A talk.mkv.odmpart")
+	if err := os.WriteFile(other, []byte("a paused download"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	info := m.Create(AddOptions{URL: "https://www.youtube.com/watch?v=abc", Dir: dir, FileName: "A talk.mp4", Start: true,
+		Site: &SiteJob{Format: "137+140"}})
+	waitFor(t, "the download to end", func() bool {
+		i, _ := m.Get(info.ID)
+		return i.Status == StatusComplete || i.Status == StatusError
+	})
+	got, _ := m.Get(info.ID)
+	data, _ := os.ReadFile(filepath.Join(dir, got.FileName))
+	if got.Status != StatusComplete || got.FileName != "A talk (2).mkv" || string(data) != "joined video" {
+		t.Fatalf("%s %q: %q holds %q", got.Status, got.Error, got.FileName, data)
+	}
+	if b, err := os.ReadFile(other); err != nil || string(b) != "a paused download" {
+		t.Fatalf("the other download's file: %q %v", b, err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "A talk.mp4.odmpart")); !os.IsNotExist(err) {
+		t.Fatalf("the first name's claim was kept: %v", err)
+	}
+}
+
+// A site download that had fetched something before names were claimed
+// goes on in the work folder of its name, which a fresh claim would have
+// taken for a leftover.
+func TestSiteDownloadFromBeforeClaimsResumes(t *testing.T) {
+	t.Setenv("FAKE_YTDLP", "slow")
+	exe, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	setYtDlpPath(exe)
+	t.Cleanup(func() { setYtDlpPath("") })
+	dir := t.TempDir()
+	work := filepath.Join(dir, "A talk.mp4.odmparts")
+	if err := os.MkdirAll(work, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	partial := filepath.Join(work, "media.f137.mp4.part")
+	os.WriteFile(partial, []byte("partial"), 0o644)
+	d := Restore(State{ID: "s1", URL: "https://www.youtube.com/watch?v=abc", Dir: dir, FileName: "A talk.mp4",
+		Status: StatusPaused, Site: &SiteJob{Format: "137+140", Done: 7}}, nil)
+	ctx, cancel := context.WithCancel(context.Background())
+	done := make(chan struct{})
+	go func() {
+		d.Start(ctx)
+		close(done)
+	}()
+	waitFor(t, "yt-dlp to start in the folder", func() bool { return fileSize(filepath.Join(work, "args.txt")) > 0 })
+	cancel()
+	<-done
+	if b, err := os.ReadFile(partial); err != nil || string(b) != "partial" {
+		t.Fatalf("the earlier run's file: %q %v", b, err)
+	}
+	if st := d.State(); st.FileName != "A talk.mp4" || !st.Site.Claimed {
+		t.Fatalf("state %q %+v", st.FileName, st.Site)
 	}
 }
 

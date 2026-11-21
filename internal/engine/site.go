@@ -30,6 +30,10 @@ type SiteJob struct {
 	Estimate int64 `json:"estimate,omitempty"`
 	// Done is the bytes fetched when the state was saved.
 	Done int64 `json:"done,omitempty"`
+	// Claimed is set once the download holds its name (claimName) and so
+	// the work folder named after it: two downloads of one title do not
+	// share yt-dlp's files.
+	Claimed bool `json:"claimed,omitempty"`
 }
 
 // ErrNoYtDlp wraps ytdlp.ErrNotFound for video pages, so callers can tell
@@ -221,7 +225,16 @@ func (d *Download) useSiteManifest(manifest string, headers map[string]string) {
 
 // runSite is Start for a video page.
 func (d *Download) runSite(ctx context.Context) {
-	d.nameFromSite(ctx)
+	if err := d.claimSite(ctx); err != nil {
+		if ctx.Err() != nil {
+			d.mu.Lock()
+			d.Status = StatusPaused
+			d.mu.Unlock()
+			return
+		}
+		d.fail(err)
+		return
+	}
 	// finish may give the file another name; the work folder keeps the
 	// one it was created under.
 	work := d.workDir()
@@ -292,22 +305,72 @@ func siteTitleName(title string) string {
 	return strings.TrimRight(name, "_.")
 }
 
+// claimSite gives a site download, on its first run, a name of its own:
+// the video's title when the name it came with says nothing (nameFromSite),
+// claimed as a file's is (claimName), so the work folder named after it
+// and its .odmpart are its alone. Unclaimed, two downloads of one title
+// (two qualities of a video, two videos with one caption) shared yt-dlp's
+// files, and the first to finish deleted them under the other.
+//
+// A download that started before names were claimed keeps its name and
+// work folder when it fetched something there and the name is still free.
+func (d *Download) claimSite(ctx context.Context) error {
+	d.mu.Lock()
+	claimed, started := d.Site.Claimed, d.streamDone > 0
+	d.mu.Unlock()
+	if claimed {
+		return nil
+	}
+	keep := false
+	if started {
+		_, err := os.Stat(d.workDir())
+		keep = err == nil
+	}
+	if !keep {
+		d.nameFromSite(ctx)
+		if ctx.Err() != nil {
+			return ctx.Err() // stopped while yt-dlp read the title: name it next time
+		}
+	}
+	d.mu.Lock()
+	dir, name := d.Dir, d.FileName
+	if name == "" {
+		name = "video.mp4"
+	}
+	d.mu.Unlock()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	got, f, err := claimName(dir, name)
+	if err != nil {
+		return err
+	}
+	_ = f.Close() // yt-dlp's file takes its place (placeSite)
+	d.mu.Lock()
+	d.FileName = got
+	d.Site.Claimed = true
+	d.mu.Unlock()
+	if !keep || got != name {
+		// The name was just claimed: a work folder under it is a leftover
+		// of an unrelated download.
+		if err := os.RemoveAll(d.workDir()); err != nil {
+			return err
+		}
+	}
+	d.notify(true)
+	return nil
+}
+
 // nameFromSite names a site download after its video, as yt-dlp reads it,
 // when the name it came with says nothing of it (NeedsSiteTitle): the
 // extension sends yt-dlp's title, but an older one, or one that could not
-// ask ODM for the page's qualities, sends the page's. A download that
-// already fetched under its name keeps it, with its work folder.
+// ask ODM for the page's qualities, sends the page's.
 func (d *Download) nameFromSite(ctx context.Context) {
 	d.mu.Lock()
 	name, page := d.FileName, d.URL
 	d.mu.Unlock()
 	if !NeedsSiteTitle(name) {
 		return
-	}
-	if name != "" {
-		if _, err := os.Stat(d.workDir()); err == nil {
-			return
-		}
 	}
 	bin, err := locateYtDlp(ctx)
 	if err != nil {
@@ -404,21 +467,37 @@ func (d *Download) fetchSite(ctx context.Context, work string) (string, error) {
 }
 
 // placeSite moves yt-dlp's file to the download's .odmpart, giving the
-// name the container yt-dlp chose, so finish can name it.
+// name the container yt-dlp chose, so finish can name it. A name that
+// changes with the container is claimed as the first one was (claimSite),
+// and the first claim given back: the .odmpart of that name may be
+// another download's, which the move would replace.
 func (d *Download) placeSite(file string) error {
 	d.mu.Lock()
-	name := d.FileName
-	if name == "" {
-		name = "video"
-	}
-	name = strings.TrimSuffix(name, filepath.Ext(name)) + filepath.Ext(file)
-	d.FileName = name
-	target := filepath.Join(d.Dir, name) + ".odmpart"
+	dir, name := d.Dir, d.FileName
 	d.mu.Unlock()
-	if err := os.MkdirAll(filepath.Dir(target), 0o755); err != nil {
+	base := name
+	if base == "" {
+		base = "video"
+	}
+	want := strings.TrimSuffix(base, filepath.Ext(base)) + filepath.Ext(file)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := renameRetry(file, target); err != nil {
+	if want != name {
+		claimed, f, err := claimName(dir, want)
+		if err != nil {
+			return err
+		}
+		_ = f.Close()
+		if name != "" {
+			_ = os.Remove(filepath.Join(dir, name) + ".odmpart") // the first claim, still empty
+		}
+		want = claimed
+	}
+	d.mu.Lock()
+	d.FileName = want
+	d.mu.Unlock()
+	if err := renameRetry(file, filepath.Join(dir, want)+".odmpart"); err != nil {
 		return fmt.Errorf("moving the video into place: %w", err)
 	}
 	return nil

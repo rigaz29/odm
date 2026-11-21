@@ -85,10 +85,14 @@ the system tray first. Then:
 
 - **Click a file link.** Downloads whose type is in ODM's *Options → File
   types* go to ODM, which opens a *New Download* window to confirm (turn it
-  off in *Options → Downloads*). Sites listed there under "leaves downloads
-  from these sites alone" are skipped. **Alt-click** a link to let the
-  browser download it this once. If ODM cannot be reached or started, the
-  browser keeps the download. A `.torrent` file (by its name or its
+  off in *Options → Downloads*). The type comes from the address, the name
+  the server gives the file, or its media type, so a file host's link such
+  as `/dl/<token>` is recognised too. In Chrome, Edge, Brave and Opera ODM
+  takes the download before the browser asks where to save it (Brave asks
+  by default). Sites listed there under "leaves downloads from these sites
+  alone" are skipped. **Alt-click** a link to let the browser download it
+  this once, also when the link redirects. If ODM cannot be reached or
+  started, the browser keeps the download. A `.torrent` file (by its name or its
   `application/x-bittorrent` type) goes to ODM as a torrent, whatever the
   list says, unless ODM's *Options → Torrents* downloads such addresses
   as files.

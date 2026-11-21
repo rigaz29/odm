@@ -31,6 +31,16 @@ test("totalSize", () => {
   assert.equal(bg.totalSize([{ name: "Content-Range", value: "bytes 0-9/*" }, { name: "Content-Length", value: "10" }]), 10);
 });
 
+test("takes a download by its media type when its address and name say nothing", () => {
+  const cfg = { fileTypes: ["rar", "zip", "exe"], torrents: false };
+  assert.ok(bg.takes(cfg, "https://dl.host.example/dl/5HzKRR", "", "application/x-rar-compressed"));
+  assert.ok(bg.takes(cfg, "https://dl.host.example/dl/5HzKRR", "", "application/vnd.rar; charset=binary"));
+  assert.ok(bg.takes(cfg, "https://get.example/download.php?id=7", "", "application/x-msdownload"));
+  assert.ok(!bg.takes(cfg, "https://dl.host.example/dl/5HzKRR", "", "application/octet-stream"));
+  assert.ok(!bg.takes(cfg, "https://dl.host.example/dl/5HzKRR", "", ""));
+  assert.ok(!bg.takes({ fileTypes: ["zip"], torrents: false }, "https://dl.host.example/dl/x", "", "application/x-rar-compressed"));
+});
+
 test("torrents", () => {
   assert.ok(bg.isMagnet("magnet:?xt=urn:btih:abc"));
   assert.ok(bg.isMagnet("MAGNET:?xt=urn:btih:abc"));

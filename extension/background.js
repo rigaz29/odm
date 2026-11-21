@@ -54,12 +54,30 @@ function urlExt(url) {
   }
 }
 
-// hasType reports whether url (or the browser's file name) ends in one of
-// types, given without dots.
-function hasType(url, types, filename) {
+// MIME_EXT is the file type a download's media type names, for an address
+// that names none (a file host's /dl/<token>) before its file name is known.
+const MIME_EXT = {
+  "application/zip": "zip", "application/x-zip-compressed": "zip",
+  "application/vnd.rar": "rar", "application/x-rar-compressed": "rar", "application/x-rar": "rar",
+  "application/x-7z-compressed": "7z", "application/gzip": "gz", "application/x-gzip": "gz",
+  "application/x-tar": "tar", "application/x-xz": "xz", "application/x-bzip2": "bz2", "application/zstd": "zst",
+  "application/x-msdownload": "exe", "application/x-msdos-program": "exe",
+  "application/vnd.microsoft.portable-executable": "exe", "application/x-msi": "msi",
+  "application/x-iso9660-image": "iso", "application/x-apple-diskimage": "dmg",
+  "application/vnd.android.package-archive": "apk", "application/vnd.debian.binary-package": "deb",
+  "application/x-rpm": "rpm", "application/pdf": "pdf",
+  "video/mp4": "mp4", "video/x-matroska": "mkv", "video/webm": "webm", "video/quicktime": "mov",
+  "audio/mpeg": "mp3", "audio/flac": "flac",
+};
+
+// hasType reports whether url (or the browser's file name, or the media
+// type) names one of types, given without dots.
+function hasType(url, types, filename, mime) {
   const set = new Set(types.map((t) => String(t).toLowerCase().replace(/^\./, "")));
   const fromName = /\.([a-z0-9]{1,8})$/i.exec(filename || "");
-  return set.has(urlExt(url)) || (fromName !== null && set.has(fromName[1].toLowerCase()));
+  const fromMime = MIME_EXT[String(mime || "").split(";")[0].trim().toLowerCase()];
+  return set.has(urlExt(url)) || (fromName !== null && set.has(fromName[1].toLowerCase())) ||
+    (fromMime !== undefined && set.has(fromMime));
 }
 
 // isTorrentFile reports whether a download is a .torrent file, by its
@@ -72,7 +90,7 @@ function isTorrentFile(url, filename, mime) {
 // takes reports whether ODM takes a browser download: its type is on
 // ODM's list, or it is a .torrent file and ODM downloads those as torrents.
 function takes(cfg, url, filename, mime) {
-  return hasType(url, cfg.fileTypes, filename) || (cfg.torrents === true && isTorrentFile(url, filename, mime));
+  return hasType(url, cfg.fileTypes, filename, mime) || (cfg.torrents === true && isTorrentFile(url, filename, mime));
 }
 
 // isMagnet reports whether url is a magnet link.
@@ -433,36 +451,69 @@ if (typeof chrome !== "undefined" && chrome.runtime && chrome.runtime.id) {
   // Listeners are registered synchronously at load, as both a Chromium
   // service worker and a Firefox event page require.
 
-  chrome.downloads.onCreated.addListener(async (item) => {
-    if (!isNewDownload(item, Date.now())) return; // from the history
-    if (!(await isEnabled())) return;
+  // takeDownload hands a browser download to ODM when ODM takes its type,
+  // and reports whether it did. name is the file name the browser has for
+  // it so far, "" when it has none yet (then waitName says whether to wait
+  // for one).
+  async function takeDownload(item, name, waitName) {
+    if (!(await isEnabled())) return false;
     const url = item.finalUrl || item.url;
-    if (!url || !/^https?:/.test(url)) return;
+    if (!url || !/^https?:/.test(url)) return false;
     const { bypass = {} } = await chrome.storage.session.get("bypass");
-    if (bypass[url] && Date.now() - bypass[url] < BYPASS_MS) return; // Alt-click
+    // Alt-click marks the link the person clicked, which may redirect.
+    const now = Date.now();
+    if ([item.url, item.finalUrl].some((u) => u && bypass[u] && now - bypass[u] < BYPASS_MS)) return false;
     const cfg = await getConfig();
-    if (isExcluded(url, cfg.excludeSites)) return;
-    let filename = item.filename || "";
-    if (!filename && !takes(cfg, url, "", item.mime)) {
-      filename = await settledFilename(chrome.downloads, item.id, NAME_WAIT_MS);
+    if (isExcluded(url, cfg.excludeSites)) return false;
+    if (!name && waitName && !takes(cfg, url, "", item.mime)) {
+      name = await settledFilename(chrome.downloads, item.id, NAME_WAIT_MS);
     }
-    if (!takes(cfg, url, filename, item.mime)) return;
+    if (!takes(cfg, url, name, item.mime)) return false;
 
     // Hold the browser's copy until ODM confirms; it used to be cancelled
     // first, so with ODM closed or unregistered the download was lost.
     try { await chrome.downloads.pause(item.id); } catch { /* may already be done */ }
-    // Not the name awaited above: Chromium adds " (1)" when its own folder
-    // has the file already. ODM reads the name from the server.
+    // The name the server gave (Chromium adds " (1)" to its own when its
+    // folder has the file already); ODM reads the name from the server too.
     const reply = await handOff({
-      url, referrer: item.referrer || "", filename: item.filename || "",
+      url, referrer: item.referrer || "", filename: waitName ? item.filename || "" : name,
       mime: item.mime || "", size: item.totalBytes > 0 ? item.totalBytes : 0,
     });
-    if (reply.ok) {
-      chrome.downloads.cancel(item.id, () => chrome.downloads.erase({ id: item.id }));
-    } else {
+    if (!reply.ok) {
       try { await chrome.downloads.resume(item.id); } catch { /* finished meanwhile */ }
+      return false;
     }
-  });
+    const cancelled = await new Promise((resolve) => {
+      chrome.downloads.cancel(item.id, () => resolve(!chrome.runtime.lastError));
+    });
+    if (cancelled) chrome.downloads.erase({ id: item.id });
+    return cancelled;
+  }
+
+  const naming = chrome.downloads.onDeterminingFilename;
+  if (naming) {
+    // Chromium names a download here, before it asks where to save it when
+    // it is set to (as Brave is by default), with the name the server gave
+    // already known. A link that names no file type (a file host's
+    // /dl/<token>) waited for the name in onCreated, which came only after
+    // the browser's own Save As dialog: closing that dialog cancelled the
+    // download, and ODM never saw it. ODM takes it here, before the dialog
+    // opens; the browser names a download ODM does not take as usual.
+    naming.addListener((item, suggest) => {
+      const keep = () => {
+        try { suggest(); } catch { /* the download is gone */ }
+      };
+      takeDownload(item, item.filename || "", false).then((taken) => { if (!taken) keep(); }, keep);
+      return true; // the name is suggested once ODM has answered
+    });
+  } else {
+    // Firefox has no onDeterminingFilename: the download is created with
+    // its name, or the name comes soon after.
+    chrome.downloads.onCreated.addListener(async (item) => {
+      if (!isNewDownload(item, Date.now())) return; // from the history
+      await takeDownload(item, item.filename || "", true);
+    });
+  }
 
   chrome.runtime.onInstalled.addListener(() => {
     chrome.contextMenus.create({

@@ -6,6 +6,20 @@ All notable changes to ODM are documented here. The format is based on
 
 ## [Unreleased]
 
+### Fixed
+
+- A download from a link that names no file type (a file host's
+  `/dl/<token>` link) went to ODM only once the browser had named it, and
+  a browser that asks where to save each file (Brave does by default)
+  named it only after its own Save As dialog: closing that dialog
+  cancelled the download, and ODM never saw it. In Chrome, Edge, Brave and
+  Opera, ODM now takes the download before the browser asks, by the name
+  the server gave the file; its media type (`application/x-rar-compressed`,
+  …) also tells its type.
+- Alt-click on a link that redirects (a GitHub release asset, a mirror, a
+  `download.php?id=…` link) did not keep the download in the browser: ODM
+  took it, and the browser's copy was erased.
+
 ## [0.7.0] - 2026-11-21
 
 ### Added
